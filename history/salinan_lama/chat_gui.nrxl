@@ -1,0 +1,788 @@
+# chat_gui.nrxl: aplikasi chat AI lokal dengan tampilan window (seperti ChatGPT / Gemini).
+# Terhubung ke llama-server (atau LM Studio / Ollama) lewat API kompatibel OpenAI,
+# jawaban tampil mengalir (streaming) sambil diketik model.
+#
+# Jalankan:   nrxlang run chat_gui.nrxl        Jadikan .exe:   nrxlang build chat_gui.nrxl
+# Pengaturan: buat file chat_gui.json di folder yang sama (semua kolom opsional):
+#   {"alamat": "http://localhost:8080", "model": "qwen3-coder", "api_key": "", "tema": "gelap"}
+#   tema: "gelap" (bawaan) atau "terang"
+#
+# Kontrol: Enter atau tombol panah bulat = kirim, "Chat baru" di kanan atas = mulai ulang,
+#          scrollbar di kanan (klik/seret), PageUp/PageDown/Home/End kalau fokus tidak di kolom ketik.
+lib nrx_window.h
+lib nrx_http.h
+lib nrx_json.h
+lib nrx_crudfile.h
+lib nrx_keyboard.h
+
+# ------------------------------------------------------------ pengaturan
+be ALAMAT = "http://localhost:8080"
+be MODEL = "qwen3-coder-30b-a3b-instruct"
+be KUNCI = ""
+be TEMA = "gelap"
+lock SISTEM1 = "Kamu asisten AI yang ramah, jelas, dan teliti. Jawab dalam bahasa Indonesia kecuali diminta lain. Tulis kode di dalam blok kode (tiga tanda kutip terbalik) dengan nama bahasanya."
+lock SISTEM2 = "WAJIB: SEBELUM menjawab, selalu berpikir dulu di dalam tag <pikir> ... </pikir>: pahami permintaan, sebut asumsi, rencanakan langkah-langkahnya, pertimbangkan kasus tepi dan kemungkinan bug, dan untuk kode periksa ulang logikanya (telusuri satu contoh input) sebelum menulisnya. Tutup dengan </pikir>, lalu tulis jawaban final di luar tag. Jangan menulis kode final di dalam <pikir>."
+lock SISTEM = SISTEM1 + " " + SISTEM2
+lock BATAS_API = 24000            # batas isi riwayat yang dikirim ke server (karakter)
+
+# ------------------------------------------------------------ ukuran (piksel)
+lock LEBAR = 1000
+lock AREA_T = 60                  # batas atas area chat (di bawah header)
+lock AREA_B = 660                 # batas bawah area chat (tinggi canvas utama)
+lock KOL_X = 110                  # kolom isi chat
+lock KOL_W = 780
+lock UKURAN = 17
+lock LH = 27                      # tinggi satu baris teks
+lock PAD = 13
+lock GAP = 16                     # jarak antar pesan
+lock W_USER = 520                 # lebar teks maksimal gelembung user
+lock W_AI = 700                   # lebar teks maksimal jawaban AI
+
+# ------------------------------------------------------------ warna (diatur oleh pakaiTema)
+be C_BG = "#16171b"
+be C_HEADER = "#1b1c21"
+be C_LINE = "#2a2b33"
+be C_USER = "#2b3558"
+be C_TEKS = "#e9eaf0"
+be C_REDUP = "#8b8e9b"
+be C_AKSEN = "#6b8cff"
+be C_AKSEN2 = "#9b73ff"
+be C_KODE_BG = "#101114"
+be C_KODE_HEAD = "#1e1f26"
+be C_KODE = "#cfd6e4"
+be C_KOMEN = "#6f7a8c"
+be C_KW = "#c792ea"
+be C_CHIP = "#22232a"
+be C_CHIP_H = "#2d2f39"
+be C_TOMBOL_H = "#2d2f39"
+be C_MATI = "#3a3c47"
+
+func pakaiTema(nama string)
+    if nama == "terang"
+        be C_BG = "#f6f7fa"
+        be C_HEADER = "#ffffff"
+        be C_LINE = "#e2e4ec"
+        be C_USER = "#dfe7ff"
+        be C_TEKS = "#1d1e24"
+        be C_REDUP = "#6b6e7b"
+        be C_AKSEN = "#4f6df5"
+        be C_AKSEN2 = "#8a5cf5"
+        be C_KODE_BG = "#eef0f6"
+        be C_KODE_HEAD = "#e0e3ee"
+        be C_KODE = "#2a2f3d"
+        be C_KOMEN = "#7b8394"
+        be C_KW = "#9333ea"
+        be C_CHIP = "#ffffff"
+        be C_CHIP_H = "#eceffc"
+        be C_TOMBOL_H = "#e9ebf3"
+        be C_MATI = "#c9ccd8"
+
+# ------------------------------------------------------------ keadaan program
+be teks = ""                      # isi kolom ketik (terhubung ke newInput)
+be pesanRole list string
+be pesanTeks list string
+be pesanLay list string           # baris hasil pembungkusan, dipisah \n; huruf pertama = jenis baris
+be pesanTinggi list int
+be riwayatAPI json = fromJson("[]")
+be gulir = 0.0
+be maksGulir = 0.0
+be tempel = true                  # true = ikut ke pesan paling bawah
+be menunggu = false
+be jawab = ""
+be buf = ""
+be kotor = true
+be seret = false
+be detik = 0
+be hover = ""
+be tampilPikir = false            # true = tampilkan isi <pikir> model (redup)
+be adaTeks = false
+be chipTeks list string
+be chipL list int
+be chipT list int
+be chipW list int
+be chipH list int
+be kataKunci list string = split("func if else loop for return be print lib type im ex lock try catch throw options option delete int float double bool string def class import while const let var void struct include", " ")
+
+add(chipTeks, "Jelaskan cara kerja bahasa pemrograman nrxl")
+add(chipTeks, "Tulis program nrxl untuk menghitung faktorial")
+add(chipTeks, "Bantu aku mencari bug di kode C")
+for i in range(len(chipTeks))
+    add(chipL, 0)
+    add(chipT, 0)
+    add(chipW, 0)
+    add(chipH, 0)
+
+# ------------------------------------------------------------ ukuran teks (perkiraan)
+# Font window proporsional dan tidak ada fungsi pengukur, jadi lebar huruf diperkirakan.
+# Nilainya hasil kalibrasi dari tangkapan layar (kelipatan ukuran huruf).
+func lebarHuruf(c string) double
+    if c == " "
+        return 0.25
+    if contains("ijl.,:;'|!`I", c)
+        return 0.26
+    if contains("frt()[]{}-\"/\\", c)
+        return 0.34
+    if contains("mwMW@%", c)
+        return 0.86
+    if contains("ABCDEFGHJKLNOPQRSTUVXYZ", c)
+        return 0.70
+    if contains("0123456789", c)
+        return 0.56
+    return 0.52
+
+func lebar(t string, ukuran int) double
+    be jumlah = 0.0
+    for c in t
+        be jumlah += lebarHuruf(c)
+    return jumlah * ukuran * 1.03
+
+# ------------------------------------------------------------ pembungkusan teks
+func bersih(t string) string
+    be x = replace(t, "\r", "")
+    be x = replace(x, "\t", "    ")
+    be x = replace(x, "**", "")
+    return x
+
+# potong teks per huruf menjadi potongan selebar maks (untuk kata panjang dan baris kode)
+func potongHuruf(t string, ukuran int, maks double) list string
+    be hasil list string
+    be baris = ""
+    be lb = 0.0
+    for h in t
+        be wh = lebarHuruf(h) * ukuran * 1.03
+        if lb + wh > maks and baris != ""
+            add(hasil, baris)
+            be baris = ""
+            be lb = 0.0
+        be baris = baris + h
+        be lb += wh
+    add(hasil, baris)
+    return hasil
+
+func bungkus(t string, ukuran int, maks double) list string
+    be hasil list string
+    be sp = ukuran * 0.25 * 1.03
+    for para in split(t, "\n")
+        if trim(para) == ""
+            add(hasil, "")
+            continue
+        be baris = ""
+        be lb = 0.0
+        for kata in split(para, " ")
+            if kata == ""
+                continue
+            for bagian in potongHuruf(kata, ukuran, maks)
+                be wk = lebar(bagian, ukuran)
+                if baris == ""
+                    be baris = bagian
+                    be lb = wk
+                else if lb + sp + wk <= maks
+                    be baris = baris + " " + bagian
+                    be lb += sp + wk
+                else
+                    add(hasil, baris)
+                    be baris = bagian
+                    be lb = wk
+        add(hasil, baris)
+    return hasil
+
+# jadikan baris kode terakhir bertanda K (supaya sudut bawah kotak kode membulat)
+func tutupKode(keluar list string)
+    be n = len(keluar)
+    if n == 0
+        return
+    if substr(keluar[n - 1], 0, 1) == "h"
+        add(keluar, "K")
+    else if substr(keluar[n - 1], 0, 1) == "k"
+        be keluar[n - 1] = "K" + slice(keluar[n - 1], 1)
+
+# pisahkan balasan model menjadi [pikiran, jawaban]. Kalau </pikir> belum datang, semuanya masih pikiran.
+func pisah(t string) list string
+    be hasil list string
+    be a = indexOf(t, "<pikir>")
+    if a < 0
+        add(hasil, "")
+        add(hasil, t)
+        return hasil
+    be b = indexOf(t, "</pikir>")
+    if b < 0
+        add(hasil, trim(slice(t, a + 7)))
+        add(hasil, "")
+    else
+        add(hasil, trim(slice(t, a + 7, b)))
+        add(hasil, trim(slice(t, b + 8)))
+    return hasil
+
+# susun satu pesan menjadi baris-baris siap gambar.
+# Jenis baris (huruf pertama): t teks, s judul, b poin, c lanjutan poin,
+#                              h kepala blok kode, k isi kode, K baris kode terakhir
+func susun(role string, t string) string
+    be keluar list string
+    if role == "user"
+        for b in bungkus(bersih(t), UKURAN, W_USER)
+            add(keluar, "t" + b)
+    else
+        be bagian = pisah(t)
+        if tampilPikir and bagian[0] != ""
+            for b in bungkus(bersih(bagian[0]), UKURAN - 2, W_AI - 20)
+                add(keluar, "p" + b)
+            add(keluar, "t")
+        be t = bagian[1]
+        be dalamKode = false
+        for para in split(replace(t, "\r", ""), "\n")
+            be kepala = trim(para)
+            if slice(kepala, 0, 3) == "```"
+                if dalamKode
+                    tutupKode(keluar)
+                    be dalamKode = false
+                else
+                    be bahasa = trim(slice(kepala, 3))
+                    if bahasa == ""
+                        be bahasa = "kode"
+                    add(keluar, "h" + bahasa)
+                    be dalamKode = true
+                continue
+            if dalamKode
+                for b in potongHuruf(replace(para, "\t", "    "), UKURAN - 2, W_AI - 30)
+                    add(keluar, "k" + b)
+            else
+                be p = para
+                if slice(p, 0, 4) == "### " or slice(p, 0, 3) == "## " or slice(p, 0, 2) == "# "
+                    be p = trim(slice(p, indexOf(p, " ")))
+                    for b in bungkus(bersih(p), UKURAN + 3, W_AI)
+                        add(keluar, "s" + b)
+                else if slice(p, 0, 2) == "- " or slice(p, 0, 2) == "* "
+                    be pertama = true
+                    for b in bungkus(bersih(slice(p, 2)), UKURAN, W_AI - 26)
+                        if pertama
+                            add(keluar, "b" + b)
+                            be pertama = false
+                        else
+                            add(keluar, "c" + b)
+                else
+                    for b in bungkus(bersih(p), UKURAN, W_AI)
+                        add(keluar, "t" + b)
+        if dalamKode
+            tutupKode(keluar)
+    if len(keluar) == 0
+        add(keluar, "t")
+    return join(keluar, "\n")
+
+func tinggiLay(lay string) int
+    return len(split(lay, "\n")) * LH + 2 * PAD
+
+func tambahPesan(role string, t string)
+    add(pesanRole, role)
+    add(pesanTeks, t)
+    be lay = susun(role, t)
+    add(pesanLay, lay)
+    add(pesanTinggi, tinggiLay(lay))
+    be kotor = true
+
+func ubahPesan(i int, t string)
+    be pesanTeks[i] = t
+    be lay = susun(pesanRole[i], t)
+    be pesanLay[i] = lay
+    be pesanTinggi[i] = tinggiLay(lay)
+    be kotor = true
+
+# ------------------------------------------------------------ menggambar
+func kotakBulat(cv, x int, y int, w int, h int, r int, warna string)
+    drawRect(cv, x + r, y, w - 2 * r, h, warna)
+    drawRect(cv, x, y + r, w, h - 2 * r, warna)
+    drawCircle(cv, x + r, y + r, r, warna)
+    drawCircle(cv, x + w - r, y + r, r, warna)
+    drawCircle(cv, x + r, y + h - r, r, warna)
+    drawCircle(cv, x + w - r, y + h - r, r, warna)
+
+# logo bulat dua warna (pura-pura gradasi)
+func logo(cv, cx int, cy int, r int, huruf int)
+    drawCircle(cv, cx, cy, r, C_AKSEN2)
+    drawCircle(cv, cx - int(r / 6), cy - int(r / 6), r - int(r / 5), C_AKSEN)
+    drawText(cv, "N", cx - int(huruf * 0.36), cy - int(huruf * 0.62), "#ffffff", huruf)
+
+# baris kode dengan pewarnaan sederhana: komentar abu-abu, kata kunci di awal baris berwarna
+func gambarBarisKode(t string, x int, y int)
+    be ukuran = UKURAN - 2
+    be sp = 0
+    loop sp < len(t) and substr(t, sp, 1) == " "
+        be sp += 1
+    be isi = slice(t, sp)
+    if isi == ""
+        return
+    be x0 = x + int(sp * 0.25 * ukuran * 1.03)
+    if slice(isi, 0, 1) == "#" or slice(isi, 0, 2) == "//"
+        drawText(layar, isi, x0, y, C_KOMEN, ukuran)
+        return
+    be k = indexOf(isi, " ")
+    be kata = isi
+    if k >= 0
+        be kata = slice(isi, 0, k)
+    if contains(kataKunci, kata)
+        drawText(layar, kata, x0, y, C_KW, ukuran)
+        if k >= 0
+            drawText(layar, slice(isi, k), x0 + int(lebar(kata, ukuran)), y, C_KODE, ukuran)
+    else
+        drawText(layar, isi, x0, y, C_KODE, ukuran)
+
+func gambarTitik(x int, y int)
+    be fase = int(detik / 6) % 3
+    for k in range(3)
+        be warna = C_REDUP
+        if k == fase
+            be warna = C_AKSEN
+        drawCircle(layar, x + k * 18, y, 4, warna)
+
+func gambarPesan(i int, y int, h int)
+    be baris = split(pesanLay[i], "\n")
+    if pesanRole[i] == "user"
+        be maksW = 0.0
+        for b in baris
+            be w = lebar(slice(b, 1), UKURAN)
+            if w > maksW
+                be maksW = w
+        be bw = int(maksW) + 2 * PAD + 10
+        be bx = KOL_X + KOL_W - bw
+        kotakBulat(layar, bx, y, bw, h, 18, C_USER)
+        be ty = y + PAD
+        for b in baris
+            if ty + LH > AREA_T and ty < AREA_B
+                drawText(layar, slice(b, 1), bx + PAD + 5, ty + 1, C_TEKS, UKURAN)
+            be ty += LH
+    else
+        logo(layar, KOL_X + 14, y + 20, 14, 17)
+        if i == len(pesanRole) - 1 and menunggu
+            be bg = pisah(pesanTeks[i])
+            if bg[1] == "" and (not tampilPikir or bg[0] == "")
+                gambarTitik(KOL_X + 52, y + PAD + 14)
+                return
+        be ty = y + PAD
+        be kx = KOL_X + 40
+        be kw = W_AI + 12
+        for b in baris
+            if ty + LH > AREA_T and ty < AREA_B
+                be jenis = substr(b, 0, 1)
+                be isi = slice(b, 1)
+                if jenis == "p"
+                    drawRect(layar, KOL_X + 44, ty + 2, 3, LH - 4, C_MATI)
+                    drawText(layar, isi, KOL_X + 58, ty + 2, C_REDUP, UKURAN - 2)
+                else if jenis == "h"
+                    kotakBulat(layar, kx, ty, kw, LH, 10, C_KODE_HEAD)
+                    drawRect(layar, kx, ty + LH - 12, kw, 12, C_KODE_HEAD)
+                    drawText(layar, isi, kx + 14, ty + 6, C_REDUP, 13)
+                else if jenis == "k"
+                    drawRect(layar, kx, ty, kw, LH, C_KODE_BG)
+                    gambarBarisKode(isi, kx + 14, ty + 4)
+                else if jenis == "K"
+                    drawRect(layar, kx, ty, kw, LH - 10, C_KODE_BG)
+                    kotakBulat(layar, kx, ty + LH - 22, kw, 22, 10, C_KODE_BG)
+                    gambarBarisKode(isi, kx + 14, ty + 4)
+                else if jenis == "s"
+                    drawText(layar, isi, KOL_X + 44, ty - 2, C_TEKS, UKURAN + 3)
+                else if jenis == "b"
+                    drawCircle(layar, KOL_X + 54, ty + 13, 3, C_AKSEN)
+                    drawText(layar, isi, KOL_X + 70, ty, C_TEKS, UKURAN)
+                else if jenis == "c"
+                    drawText(layar, isi, KOL_X + 70, ty, C_TEKS, UKURAN)
+                else
+                    drawText(layar, isi, KOL_X + 44, ty, C_TEKS, UKURAN)
+            be ty += LH
+
+func gambarSambutan()
+    logo(layar, int(LEBAR / 2), 170, 34, 38)
+    be judul = "Apa yang bisa kubantu hari ini?"
+    drawText(layar, judul, int((LEBAR - lebar(judul, 30)) / 2), 228, C_TEKS, 30)
+    be sub = "Tulis pesan di bawah, atau pilih salah satu contoh."
+    drawText(layar, sub, int((LEBAR - lebar(sub, 17)) / 2), 278, C_REDUP, 17)
+    be y = 336
+    for i in range(len(chipTeks))
+        be w = int(lebar(chipTeks[i], 16)) + 56
+        be x = int((LEBAR - w) / 2)
+        be warna = C_CHIP
+        if hover == "chip" + str(i)
+            be warna = C_CHIP_H
+        kotakBulat(layar, x, y, w, 46, 23, C_LINE)
+        kotakBulat(layar, x + 1, y + 1, w - 2, 44, 22, warna)
+        drawText(layar, chipTeks[i], x + 28, y + 12, C_TEKS, 16)
+        be chipL[i] = x
+        be chipT[i] = y
+        be chipW[i] = w
+        be chipH[i] = 46
+        be y += 58
+
+func gambarScrollbar(viewH int, total int)
+    if maksGulir <= 0
+        return
+    be trackT = AREA_T + 8
+    be trackH = viewH - 16
+    be thumbH = int(max(44, trackH * viewH / total))
+    be thumbY = trackT + int((trackH - thumbH) * gulir / maksGulir)
+    kotakBulat(layar, LEBAR - 14, thumbY, 8, thumbH, 4, C_MATI)
+
+func gambarHeader()
+    drawRect(layar, 0, 0, LEBAR, AREA_T, C_HEADER)
+    drawLine(layar, 0, AREA_T - 1, LEBAR, AREA_T - 1, C_LINE, 1)
+    logo(layar, KOL_X + 16, 30, 16, 19)
+    drawText(layar, "Nerxelity AI", KOL_X + 42, 11, C_TEKS, 19)
+    be info = MODEL
+    if len(info) > 34
+        be info = slice(info, 0, 34)
+    drawText(layar, info, KOL_X + 42, 34, C_REDUP, 12)
+    # tombol "Chat baru"
+    be bx = KOL_X + KOL_W - 118
+    be warna = C_HEADER
+    if hover == "baru"
+        be warna = C_TOMBOL_H
+    kotakBulat(layar, bx, 14, 118, 34, 17, C_LINE)
+    kotakBulat(layar, bx + 1, 15, 116, 32, 16, warna)
+    drawText(layar, "+  Chat baru", bx + 19, 21, C_TEKS, 15)
+    # tombol tampilkan/sembunyikan pikiran
+    be px = bx - 238
+    be pw = C_HEADER
+    if hover == "pikir"
+        be pw = C_TOMBOL_H
+    kotakBulat(layar, px, 14, 128, 34, 17, C_LINE)
+    kotakBulat(layar, px + 1, 15, 126, 32, 16, pw)
+    be label = "Pikiran: tutup"
+    if tampilPikir
+        be label = "Pikiran: buka"
+    drawText(layar, label, px + 16, 22, C_TEKS, 14)
+    # status
+    be st = "siap"
+    be ws = "#3ecf8e"
+    if menunggu
+        be st = "menjawab"
+        be ws = "#f5b942"
+        if int(detik / 6) % 2 == 0
+            be ws = "#c98a1d"
+    drawCircle(layar, bx - 78, 31, 5, ws)
+    drawText(layar, st, bx - 66, 22, C_REDUP, 14)
+
+func gambarBawah()
+    clearCanvas(bL, C_BG)
+    clearCanvas(bT, C_BG)
+    clearCanvas(bB, C_BG)
+    clearCanvas(bR, C_BG)
+    drawLine(bL, 0, 0, 140, 0, C_LINE, 1)
+    drawLine(bT, 0, 0, 640, 0, C_LINE, 1)
+    drawLine(bR, 0, 0, 220, 0, C_LINE, 1)
+    be pesan = "Enter untuk kirim   -   AI bisa keliru, periksa kembali jawabannya"
+    drawText(bB, pesan, int((640 - lebar(pesan, 12)) / 2), 3, C_REDUP, 12)
+    # tombol kirim (bulat, panah ke atas)
+    be warna = C_MATI
+    if adaTeks and not menunggu
+        be warna = C_AKSEN
+        if hover == "kirim"
+            be warna = "#8aa4ff"
+    drawCircle(bR, 34, 36, 21, warna)
+    drawLine(bR, 34, 46, 34, 27, "#ffffff", 3)
+    drawLine(bR, 34, 26, 25, 35, "#ffffff", 3)
+    drawLine(bR, 34, 26, 43, 35, "#ffffff", 3)
+
+func gambar()
+    clearCanvas(layar, C_BG)
+    be total = 20
+    for h in pesanTinggi
+        be total += h + GAP
+    be viewH = AREA_B - AREA_T
+    be maksGulir = max(0, total - viewH)
+    if tempel
+        be gulir = maksGulir
+    if gulir > maksGulir
+        be gulir = maksGulir
+    if gulir < 0
+        be gulir = 0.0
+    if len(pesanRole) == 0
+        gambarSambutan()
+    else
+        be y = AREA_T + 12 - int(gulir)
+        for i in range(len(pesanRole))
+            be h = pesanTinggi[i]
+            if y + h > AREA_T and y < AREA_B
+                gambarPesan(i, y, h)
+            be y += h + GAP
+        gambarScrollbar(viewH, total)
+    # header digambar paling akhir supaya menutupi pesan yang bergulir ke atas
+    gambarHeader()
+    gambarBawah()
+
+# ------------------------------------------------------------ scroll dan mouse
+func gulirOleh(d)
+    be tempel = false
+    be gulir += d
+    if gulir < 0
+        be gulir = 0.0
+    if gulir >= maksGulir - 2
+        be tempel = true
+    be kotor = true
+
+func gulirKe(y)
+    be tempel = false
+    be rasio = (y - AREA_T) / (AREA_B - AREA_T)
+    if rasio < 0
+        be rasio = 0.0
+    if rasio > 1
+        be rasio = 1.0
+    be gulir = rasio * maksGulir
+    if gulir >= maksGulir - 2
+        be tempel = true
+    be kotor = true
+
+func tekan(k)
+    options k
+        option "pageup"
+            gulirOleh(-420)
+        option "pagedown"
+            gulirOleh(420)
+        option "up"
+            gulirOleh(-60)
+        option "down"
+            gulirOleh(60)
+        option "home"
+            gulirOleh(-1000000)
+        option "end"
+            gulirOleh(1000000)
+
+func aturHover(h string)
+    if h != hover
+        be hover = h
+        be kotor = true
+
+# apa yang ada di bawah kursor pada canvas utama? "baru", "chip0".., atau ""
+func targetDi(x, y) string
+    be bx = KOL_X + KOL_W - 118
+    if x >= bx and x <= bx + 118 and y >= 14 and y <= 48
+        return "baru"
+    be px = bx - 238
+    if x >= px and x <= px + 128 and y >= 14 and y <= 48
+        return "pikir"
+    if len(pesanRole) == 0
+        for i in range(len(chipTeks))
+            if x >= chipL[i] and x <= chipL[i] + chipW[i] and y >= chipT[i] and y <= chipT[i] + chipH[i]
+                return "chip" + str(i)
+    return ""
+
+func mouse(x, y, aksi, kv)
+    be nama = str(kv)
+    if nama == "bR"
+        if aksi == "move"
+            aturHover("kirim")
+        if aksi == "left"
+            kirim()
+        return
+    if nama != "layar"
+        aturHover("")
+        return
+    if aksi == "move"
+        if seret
+            gulirKe(y)
+        aturHover(targetDi(x, y))
+    if aksi == "left"
+        if x >= LEBAR - 24 and y >= AREA_T
+            be seret = true
+            gulirKe(y)
+        else
+            be sasaran = targetDi(x, y)
+            if sasaran == "baru"
+                chatBaru()
+            else if sasaran == "pikir"
+                be tampilPikir = not tampilPikir
+                for k in range(len(pesanRole))
+                    ubahPesan(k, pesanTeks[k])
+            else if len(sasaran) > 4 and slice(sasaran, 0, 4) == "chip" and not menunggu
+                be teks = chipTeks[int(slice(sasaran, 4))]
+                kirim()
+    if aksi == "release"
+        be seret = false
+
+# ------------------------------------------------------------ percakapan dan jaringan
+func rapikanAPI()
+    be total = 0
+    for m in riwayatAPI
+        be total += len(str(m["content"]))
+    loop total > BATAS_API and len(riwayatAPI) > 3
+        be total -= len(str(riwayatAPI[1]["content"]))
+        remove(riwayatAPI, 1)
+    loop len(riwayatAPI) > 2 and str(riwayatAPI[1]["role"]) != "user"
+        remove(riwayatAPI, 1)
+
+func kirim()
+    if menunggu
+        return
+    be t = trim(teks)
+    if t == ""
+        return
+    be teks = ""
+    tambahPesan("user", t)
+    add(riwayatAPI, {"role": "user", "content": t})
+    rapikanAPI()
+    tambahPesan("assistant", "")
+    be jawab = ""
+    be buf = ""
+    be menunggu = true
+    be tempel = true
+    be req json
+    be req["model"] = MODEL
+    be req["messages"] = riwayatAPI
+    be req["temperature"] = 0.4
+    be req["stream"] = true
+    be header = {"Content-Type": "application/json"}
+    if KUNCI != ""
+        be header["Authorization"] = "Bearer " + KUNCI
+    httpStart(ALAMAT + "/v1/chat/completions", toJson(req), "application/json", header)
+
+# proses potongan teks streaming (format SSE: baris "data: {json}")
+func proses(chunk string)
+    be buf = buf + chunk
+    be bagian = split(buf, "\n")
+    be n = len(bagian)
+    for i in range(n - 1)
+        be baris = trim(bagian[i])
+        if slice(baris, 0, 5) == "data:"
+            be isi = trim(slice(baris, 5))
+            if isi != "" and isi != "[DONE]"
+                try
+                    be paket json = fromJson(isi)
+                    if len(paket["choices"]) > 0
+                        be delta json = paket["choices"][0]["delta"]
+                        if contains(delta, "content")
+                            be jawab = jawab + str(delta["content"])
+                catch
+                    be abaikan = 1
+    be buf = bagian[n - 1]
+    if jawab != ""
+        ubahPesan(len(pesanRole) - 1, jawab)
+    if menunggu
+        be kotor = true
+
+func selesai()
+    proses("\n")
+    be hasil = ""
+    be galat = ""
+    try
+        be hasil = httpResult()
+    catch err
+        be galat = str(err)
+    be status = httpStatus()
+    if galat == "" and status != 200
+        be galat = "server membalas status " + str(status) + ": " + slice(hasil, 0, 200)
+    be idx = len(pesanRole) - 1
+    if galat != ""
+        ubahPesan(idx, "[Gagal] " + galat)
+        takeLast(riwayatAPI)
+    else
+        be final = pisah(jawab)[1]
+        if final == ""
+            be final = trim(replace(replace(jawab, "<pikir>", ""), "</pikir>", ""))
+        if final == ""
+            ubahPesan(idx, "(jawaban kosong)")
+            be final = "(kosong)"
+        # riwayat hanya menyimpan jawaban final (tanpa pikiran) supaya konteks tidak cepat penuh
+        add(riwayatAPI, {"role": "assistant", "content": final})
+    be menunggu = false
+    be kotor = true
+
+func chatBaru()
+    if menunggu
+        return
+    loop len(pesanRole) > 0
+        takeLast(pesanRole)
+        takeLast(pesanTeks)
+        takeLast(pesanLay)
+        takeLast(pesanTinggi)
+    be riwayatAPI json = fromJson("[]")
+    add(riwayatAPI, {"role": "system", "content": SISTEM})
+    be gulir = 0.0
+    be tempel = true
+    be kotor = true
+
+func tik()
+    be detik += 1
+    if menunggu
+        be potongan = httpPartial()
+        if potongan != ""
+            proses(potongan)
+        if httpDone()
+            selesai()
+        else if detik % 6 == 0
+            be kotor = true
+    else
+        if keyPressed("enter")
+            kirim()
+    be sekarangAda = trim(teks) != ""
+    if sekarangAda != adaTeks
+        be adaTeks = sekarangAda
+        be kotor = true
+    if kotor
+        be kotor = false
+        gambar()
+
+# ------------------------------------------------------------ mulai
+if fileExists("chat_gui.json")
+    try
+        be cfg json = fromJson(readFile("chat_gui.json"))
+        if contains(cfg, "alamat")
+            be ALAMAT = str(cfg["alamat"])
+        if contains(cfg, "model")
+            be MODEL = str(cfg["model"])
+        if contains(cfg, "api_key")
+            be KUNCI = str(cfg["api_key"])
+        if contains(cfg, "tema")
+            be TEMA = lower(str(cfg["tema"]))
+    catch err
+        print "chat_gui.json tidak terbaca: " err
+loop len(ALAMAT) > 8 and slice(ALAMAT, -1) == "/"
+    be ALAMAT = slice(ALAMAT, 0, len(ALAMAT) - 1)
+
+pakaiTema(TEMA)
+add(riwayatAPI, {"role": "system", "content": SISTEM})
+
+templateStyle jendelaGelap(
+    background: "#16171b"
+    color: "#e9eaf0"
+)
+templateStyle kolomGelap(
+    size: 19
+    background: "#25262d"
+    color: "#e9eaf0"
+    height: 40
+)
+templateStyle jendelaTerang(
+    background: "#f6f7fa"
+    color: "#1d1e24"
+)
+templateStyle kolomTerang(
+    size: 19
+    background: "#ffffff"
+    color: "#1d1e24"
+    height: 40
+)
+
+windowTemplate utamaGelap(
+    newCanvas(layar, 0, 0, 1000, 660)
+    newCanvas(bL, 0, 660, 140, 80)
+    newCanvas(bT, 140, 660, 640, 16)
+    newInput(teks, 140, 676, 640, 19, kolomGelap)
+    newCanvas(bB, 140, 716, 640, 24)
+    newCanvas(bR, 780, 660, 220, 80)
+    onMouse(mouse())
+    onKey(tekan())
+    onTimer(tik(), 0.05)
+)
+
+windowTemplate utamaTerang(
+    newCanvas(layar, 0, 0, 1000, 660)
+    newCanvas(bL, 0, 660, 140, 80)
+    newCanvas(bT, 140, 660, 640, 16)
+    newInput(teks, 140, 676, 640, 19, kolomTerang)
+    newCanvas(bB, 140, 716, 640, 24)
+    newCanvas(bR, 780, 660, 220, 80)
+    onMouse(mouse())
+    onKey(tekan())
+    onTimer(tik(), 0.05)
+)
+
+if TEMA == "terang"
+    newWindow("Nerxelity AI", 1000, 740, utamaTerang, jendelaTerang)
+else
+    newWindow("Nerxelity AI", 1000, 740, utamaGelap, jendelaGelap)

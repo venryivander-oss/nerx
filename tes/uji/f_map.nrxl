@@ -1,0 +1,40 @@
+be m = {"a": 1, "b": 2}
+print m
+print m["a"]
+be m["c"] = 3
+print len(m)
+print keys(m)
+print values(m)
+print contains(m, "a")
+print contains(m, "z")
+print remove(m, "a")
+print m
+be h map int
+be h["x"] += 1
+be h["x"] += 1
+print h["x"]
+be kata = split("a b a c b a")
+be hit map int
+for w in kata
+    be hit[w] += 1
+for k in hit
+    print k " " hit[k]
+be um map int
+be um["Budi"] = 21
+print um["Budi"]
+be sm map string
+be sm["k"] = "v"
+print sm
+be dm = {"p": 1.5, "q": 2.5}
+print dm
+be dm["p"] += 1
+print dm["p"]
+be e map int
+print e
+print len(e)
+for k in {"z": 1}
+    print k
+print "a" in m
+print "q" in m
+be sorted = sort(keys(hit))
+print sorted

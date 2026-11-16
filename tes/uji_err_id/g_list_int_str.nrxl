@@ -1,0 +1,2 @@
+errlang = id
+be xs list int = ["a"]

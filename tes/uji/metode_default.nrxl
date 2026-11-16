@@ -1,0 +1,20 @@
+type Hewan
+    nama string
+    umur int = 1
+
+    func sapa(salam = "Halo", ulang = 1)
+        be i = 0
+        loop i < ulang
+            print salam " " own.nama " (" own.umur ")"
+            be i += 1
+
+    func tambah(n = 5) int
+        be own.umur += n
+        return own.umur
+
+be h = Hewan("Kuci")
+h.sapa()
+h.sapa("Hai")
+h.sapa("Yo", 2)
+print h.tambah()
+print h.tambah(10)

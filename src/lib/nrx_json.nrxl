@@ -1,0 +1,721 @@
+# nrx_json.nrxl - tipe json (nilai dinamis) + toJson / fromJson, ditulis dalam nrxl.
+# Nilai json = blok 16 byte [tag][isi]. tag: 1 teks (penunjuk string), 2 int, 3 double (bit mentah), 4 bool,
+# 5 list (penunjuk list isi json), 6 objek (penunjuk map: key teks, nilai json). null dibaca sebagai teks kosong.
+
+func jBuat(tag int, v int) json
+    be p = alloc(16)
+    poke64(p, 0, tag)
+    poke64(p, 8, v)
+    return asJson(p)
+
+func jTag(j json) int
+    return peek64(asInt(j), 0)
+
+func jIsi(j json) int
+    return peek64(asInt(j), 8)
+
+func jObjBaru() json
+    return jBuat(6, mapBaru())
+
+func jListBaru() json
+    return jBuat(5, listBaru())
+
+func jNamaTipe(j json) string
+    be t = jTag(j)
+    if t == 1
+        return "text"
+    if t == 2 or t == 3
+        return "number"
+    if t == 4
+        return "true/false"
+    if t == 5
+        return "list"
+    return "map"
+
+# ---------------------------------------------------------------- nilai biasa -> json
+func toJ__string(s string) json
+    return jBuat(1, asInt(s))
+
+func toJ__int(i int) json
+    return jBuat(2, i)
+
+func toJ__double(d double) json
+    return jBuat(3, asInt(d))
+
+func toJ__bool(b bool) json
+    if b
+        return jBuat(4, 1)
+    return jBuat(4, 0)
+
+func toJ__list_string(xs list string) json
+    be r = jListBaru()
+    for x in xs
+        add(r, x)
+    return r
+
+func toJ__list_int(xs list int) json
+    be r = jListBaru()
+    for x in xs
+        add(r, x)
+    return r
+
+func toJ__list_double(xs list double) json
+    be r = jListBaru()
+    for x in xs
+        add(r, x)
+    return r
+
+func toJ__list_bool(xs list bool) json
+    be r = jListBaru()
+    for x in xs
+        add(r, x)
+    return r
+
+func toJ__list_json(xs list json) json
+    be r = jListBaru()
+    for x in xs
+        add(r, x)
+    return r
+
+func jDariMap(m int, tipe int) json
+    be r = jObjBaru()
+    be ks = asListS(peek64(m, 0))
+    be vs = asListI(peek64(m, 8))
+    for i in range(len(ks))
+        be v = vs[i]
+        if tipe == 1
+            jIsiK(r, ks[i], jBuat(1, v))
+        else if tipe == 2
+            jIsiK(r, ks[i], jBuat(2, v))
+        else if tipe == 3
+            jIsiK(r, ks[i], jBuat(3, v))
+        else if tipe == 4
+            jIsiK(r, ks[i], jBuat(4, v))
+        else
+            jIsiK(r, ks[i], asJson(v))
+    return r
+
+func toJ__map_string(m map string) json
+    return jDariMap(asInt(m), 1)
+
+func toJ__map_int(m map int) json
+    return jDariMap(asInt(m), 2)
+
+func toJ__map_double(m map double) json
+    return jDariMap(asInt(m), 3)
+
+func toJ__map_bool(m map bool) json
+    return jDariMap(asInt(m), 4)
+
+func toJ__map_json(m map json) json
+    return jDariMap(asInt(m), 5)
+
+# ---------------------------------------------------------------- json -> nilai biasa
+func fromJ__string(j json) string
+    if jTag(j) == 1
+        return asString(jIsi(j))
+    return jTeks(j)
+
+func fromJ__int(j json) int
+    be t = jTag(j)
+    if t == 2 or t == 4
+        return jIsi(j)
+    if t == 3
+        return int(asDouble(jIsi(j)))
+    if t == 1
+        return int(asString(jIsi(j)))
+    _lempar("cannot convert a " + jNamaTipe(j) + " to a number")
+    return 0
+
+func fromJ__double(j json) double
+    be t = jTag(j)
+    if t == 3
+        return asDouble(jIsi(j))
+    if t == 2
+        return float(jIsi(j))
+    _lempar("cannot convert a " + jNamaTipe(j) + " to a decimal number")
+    return 0.0
+
+func fromJ__bool(j json) bool
+    be t = jTag(j)
+    if t == 4
+        return jIsi(j) != 0
+    if t == 1
+        return asString(jIsi(j)) == "true"
+    _lempar("cannot convert a " + jNamaTipe(j) + " to true/false")
+    return false
+
+func int__json(j json) int
+    return fromJ__int(j)
+
+func str__json(j json) string
+    return jTeks(j)
+
+# ---------------------------------------------------------------- akses
+func jAmbilK(j json, k string) json
+    if jTag(j) != 6
+        _lempar("cannot look up key \"" k "\" in a " + jNamaTipe(j))
+    be m = jIsi(j)
+    be i = mapCari(m, k)
+    if i < 0
+        mapGalat(k)
+    return asJson(peek64(peek64(peek64(m, 8), 16), 8 * i))
+
+func jAmbilI(j json, i int) json
+    if jTag(j) != 5
+        _lempar("cannot index a " + jNamaTipe(j) + " with a number")
+    be l = jIsi(j)
+    if i < 0 or i >= peek64(l, 0)
+        idxGalat(i, peek64(l, 0))
+    return asJson(peek64(peek64(l, 16), 8 * i))
+
+func jIsiK(j json, k string, v json) int
+    if jTag(j) != 6
+        _lempar("cannot set key \"" k "\" in a " + jNamaTipe(j))
+    mapSet(jIsi(j), k, asInt(v))
+    return 0
+
+func jIsiI(j json, i int, v json) int
+    if jTag(j) != 5
+        _lempar("cannot index a " + jNamaTipe(j) + " with a number")
+    be l = jIsi(j)
+    if i < 0 or i >= peek64(l, 0)
+        idxGalat(i, peek64(l, 0))
+    poke64(peek64(l, 16), 8 * i, asInt(v))
+    return 0
+
+func jPanjang(j json) int
+    be t = jTag(j)
+    if t == 5
+        return peek64(jIsi(j), 0)
+    if t == 6
+        return peek64(peek64(jIsi(j), 0), 0)
+    if t == 1
+        return peek64(jIsi(j), 0)
+    _lempar("len(): a " + jNamaTipe(j) + " has no length")
+    return 0
+
+func jTambah(j json, x json) int
+    if jTag(j) != 5
+        _lempar("add(): a " + jNamaTipe(j) + " is not a list")
+    listTambah(jIsi(j), asInt(x))
+    return 0
+
+func jIter(j json) list json
+    be hasil list json
+    be t = jTag(j)
+    if t == 5
+        be l = asListJ(jIsi(j))
+        for i in range(len(l))
+            add(hasil, l[i])
+    else if t == 6
+        be ks = asListS(peek64(jIsi(j), 0))
+        for i in range(len(ks))
+            add(hasil, toJ__string(ks[i]))
+    else
+        _lempar("for ... in: a " + jNamaTipe(j) + " cannot be looped over")
+    return hasil
+
+func contains__json(j json, k string) bool
+    be t = jTag(j)
+    if t == 6
+        return mapCari(jIsi(j), k) >= 0
+    if t == 5
+        be l = asListJ(jIsi(j))
+        for i in range(len(l))
+            if jTag(l[i]) == 1 and asString(jIsi(l[i])) == k
+                return true
+        return false
+    if t == 1
+        return indexOf(asString(jIsi(j)), k) >= 0
+    return false
+
+func remove__json(j json, i int) json
+    if jTag(j) != 5
+        _lempar("remove(): a " + jNamaTipe(j) + " is not a list")
+    return asJson(remove__list(asListI(jIsi(j)), i))
+
+# ---------------------------------------------------------------- teks tampilan (print / str)
+func jTeks(j json) string
+    be t = jTag(j)
+    if t == 1
+        return asString(jIsi(j))
+    if t == 2
+        return str(jIsi(j))
+    if t == 3
+        return dblStr(asDouble(jIsi(j)))
+    if t == 4
+        if jIsi(j) != 0
+            return "true"
+        return "false"
+    be r = ""
+    if t == 5
+        be l = asListJ(jIsi(j))
+        be r = "["
+        for i in range(len(l))
+            if i > 0
+                be r = r + ", "
+            be r = r + jTeks(l[i])
+        return r + "]"
+    be m = jIsi(j)
+    be ks = asListS(peek64(m, 0))
+    be vs = asListJ(peek64(m, 8))
+    be r = "{"
+    for i in range(len(ks))
+        if i > 0
+            be r = r + ", "
+        be r = r + ks[i] + ": " + jTeks(vs[i])
+    return r + "}"
+
+# ---------------------------------------------------------------- toJson
+func jHex4(c int) string
+    be d = "0123456789abcdef"
+    return "\\u00" + substr(d, idiv(c, 16), 1) + substr(d, c % 16, 1)
+
+func jKutip(s string) string
+    be r = "\""
+    be awal = 0
+    for i in range(len(s))
+        be c = ord(s, i)
+        be pengganti = ""
+        if c == 34
+            be pengganti = "\\\""
+        else if c == 92
+            be pengganti = "\\\\"
+        else if c == 10
+            be pengganti = "\\n"
+        else if c == 13
+            be pengganti = "\\r"
+        else if c == 9
+            be pengganti = "\\t"
+        else if c < 32
+            be pengganti = jHex4(c)
+        if pengganti != ""
+            be r = r + substr(s, awal, i - awal) + pengganti
+            be awal = i + 1
+    return r + substr(s, awal, len(s) - awal) + "\""
+
+func jBaris(rapi bool, dalam int) string
+    if not rapi
+        return ""
+    be r = "\n"
+    for i in range(dalam)
+        be r = r + "  "
+    return r
+
+func jSer(j json, rapi bool, dalam int) string
+    if dalam > 100
+        _lempar("toJson: data is nested too deeply (maybe a list/map contains itself)")
+    be t = jTag(j)
+    if t == 1
+        be s = asString(jIsi(j))
+        if s == "true" or s == "false"
+            return s
+        return jKutip(s)
+    if t == 5
+        be l = asListJ(jIsi(j))
+        if len(l) == 0
+            return "[]"
+        be r = "["
+        for i in range(len(l))
+            if i > 0
+                if rapi
+                    be r = r + ","
+                else
+                    be r = r + ", "
+            be r = r + jBaris(rapi, dalam + 1) + jSer(l[i], rapi, dalam + 1)
+        return r + jBaris(rapi, dalam) + "]"
+    if t == 6
+        be m = jIsi(j)
+        be ks = asListS(peek64(m, 0))
+        be vs = asListJ(peek64(m, 8))
+        if len(ks) == 0
+            return "{}"
+        be r = "{"
+        for i in range(len(ks))
+            if i > 0
+                if rapi
+                    be r = r + ","
+                else
+                    be r = r + ", "
+            be r = r + jBaris(rapi, dalam + 1) + jKutip(ks[i]) + ": " + jSer(vs[i], rapi, dalam + 1)
+        return r + jBaris(rapi, dalam) + "}"
+    return jTeks(j)
+
+func toJson__json(j json) string
+    return jSer(j, false, 0)
+
+func toJson_a2__json(j json, rapi bool) string
+    return jSer(j, rapi, 0)
+
+func toJson__string(x string) string
+    return jSer(toJ__string(x), false, 0)
+
+func toJson__int(x int) string
+    return jSer(toJ__int(x), false, 0)
+
+func toJson__double(x double) string
+    return jSer(toJ__double(x), false, 0)
+
+func toJson__bool(x bool) string
+    return jSer(toJ__bool(x), false, 0)
+
+func toJson__list_string(x list string) string
+    return jSer(toJ__list_string(x), false, 0)
+
+func toJson__list_int(x list int) string
+    return jSer(toJ__list_int(x), false, 0)
+
+func toJson__list_double(x list double) string
+    return jSer(toJ__list_double(x), false, 0)
+
+func toJson__map_string(x map string) string
+    return jSer(toJ__map_string(x), false, 0)
+
+func toJson__map_int(x map int) string
+    return jSer(toJ__map_int(x), false, 0)
+
+func toJson__map_double(x map double) string
+    return jSer(toJ__map_double(x), false, 0)
+
+# ---------------------------------------------------------------- fromJson
+# posisi baca disimpan di sel p (alloc 8)
+func jGalatBaca(s string, p int, pesan string) int
+    _lempar("fromJson: " + pesan + " (at character " + str(peek64(p, 0) + 1) + ")")
+    return 0
+
+func jLewatSpasi(s string, p int) int
+    be i = peek64(p, 0)
+    loop i < len(s) and (ord(s, i) == 32 or ord(s, i) == 9 or ord(s, i) == 10 or ord(s, i) == 13)
+        be i += 1
+    poke64(p, 0, i)
+    return 0
+
+func jHexEmpat(s string, p int) int
+    be v = 0
+    be i = peek64(p, 0)
+    for k in range(4)
+        be c = ord(s, i + k)
+        be d = 0 - 1
+        if c >= 48 and c <= 57
+            be d = c - 48
+        else if c >= 97 and c <= 102
+            be d = c - 87
+        else if c >= 65 and c <= 70
+            be d = c - 55
+        if d < 0
+            jGalatBaca(s, p, "a \\u code must be 4 hexadecimal digits")
+        be v = v * 16 + d
+    poke64(p, 0, i + 4)
+    return v
+
+func jUtf8(cp int) string
+    if cp < 128
+        return chr(cp)
+    if cp < 2048
+        return chr(192 + idiv(cp, 64)) + chr(128 + cp % 64)
+    if cp < 65536
+        return chr(224 + idiv(cp, 4096)) + chr(128 + idiv(cp, 64) % 64) + chr(128 + cp % 64)
+    return chr(240 + idiv(cp, 262144)) + chr(128 + idiv(cp, 4096) % 64) + chr(128 + idiv(cp, 64) % 64) + chr(128 + cp % 64)
+
+func jBacaTeks(s string, p int) string
+    be i = peek64(p, 0) + 1
+    be r = ""
+    be n = len(s)
+    loop true
+        be awal = i
+        loop i < n and ord(s, i) != 34 and ord(s, i) != 92
+            be i += 1
+        be r = r + substr(s, awal, i - awal)
+        if i >= n
+            poke64(p, 0, i)
+            jGalatBaca(s, p, "text is not closed with \"")
+        if ord(s, i) == 34
+            poke64(p, 0, i + 1)
+            return r
+        be e = ord(s, i + 1)
+        be i += 2
+        if e == 110
+            be r = r + "\n"
+        else if e == 116
+            be r = r + "\t"
+        else if e == 114
+            be r = r + "\r"
+        else if e == 98
+            be r = r + chr(8)
+        else if e == 102
+            be r = r + chr(12)
+        else if e == 34 or e == 92 or e == 47
+            be r = r + chr(e)
+        else if e == 117
+            poke64(p, 0, i)
+            be cp = jHexEmpat(s, p)
+            be i = peek64(p, 0)
+            if cp >= 55296 and cp <= 56319 and ord(s, i) == 92 and ord(s, i + 1) == 117
+                poke64(p, 0, i + 2)
+                be lo = jHexEmpat(s, p)
+                be i = peek64(p, 0)
+                be cp = 65536 + (cp - 55296) * 1024 + (lo - 56320)
+            be r = r + jUtf8(cp)
+        else
+            poke64(p, 0, i)
+            jGalatBaca(s, p, "unknown escape")
+    return r
+
+func jBacaAngka(s string, p int) json
+    be i = peek64(p, 0)
+    be n = len(s)
+    be mulai = i
+    be neg = false
+    if ord(s, i) == 45
+        be neg = true
+        be i += 1
+    be awalDigit = i
+    be m = 0
+    be e10 = 0
+    be desimal = false
+    loop i < n and ord(s, i) >= 48 and ord(s, i) <= 57
+        if m < 100000000000000000
+            be m = m * 10 + ord(s, i) - 48
+        else
+            be e10 += 1
+        be i += 1
+    if i == awalDigit
+        poke64(p, 0, mulai)
+        jGalatBaca(s, p, "invalid number")
+    if i < n and ord(s, i) == 46
+        be desimal = true
+        be i += 1
+        loop i < n and ord(s, i) >= 48 and ord(s, i) <= 57
+            if m < 100000000000000000
+                be m = m * 10 + ord(s, i) - 48
+                be e10 -= 1
+            be i += 1
+    if i < n and (ord(s, i) == 101 or ord(s, i) == 69)
+        be desimal = true
+        be i += 1
+        be eneg = false
+        if i < n and (ord(s, i) == 45 or ord(s, i) == 43)
+            be eneg = ord(s, i) == 45
+            be i += 1
+        be ev = 0
+        loop i < n and ord(s, i) >= 48 and ord(s, i) <= 57
+            be ev = ev * 10 + ord(s, i) - 48
+            be i += 1
+        if eneg
+            be e10 -= ev
+        else
+            be e10 += ev
+    poke64(p, 0, i)
+    if not desimal and e10 == 0
+        if neg
+            return toJ__int(0 - m)
+        return toJ__int(m)
+    be d double = m
+    if e10 > 0
+        be d = d * p10d(e10)
+    else if e10 < 0
+        be d = d / p10d(0 - e10)
+    if neg
+        be d = 0 - d
+    return toJ__double(d)
+
+func jBacaNilai(s string, p int, dalam int) json
+    if dalam > 200
+        jGalatBaca(s, p, "data is nested too deeply")
+    jLewatSpasi(s, p)
+    be i = peek64(p, 0)
+    be n = len(s)
+    if i >= n
+        jGalatBaca(s, p, "JSON text ends too early")
+    be c = ord(s, i)
+    if c == 123
+        be r = jObjBaru()
+        poke64(p, 0, i + 1)
+        jLewatSpasi(s, p)
+        if ord(s, peek64(p, 0)) == 125
+            poke64(p, 0, peek64(p, 0) + 1)
+            return r
+        loop true
+            jLewatSpasi(s, p)
+            if ord(s, peek64(p, 0)) != 34
+                jGalatBaca(s, p, "object keys must be text in quotes")
+            be k = jBacaTeks(s, p)
+            jLewatSpasi(s, p)
+            if ord(s, peek64(p, 0)) != 58
+                jGalatBaca(s, p, "missing : after key")
+            poke64(p, 0, peek64(p, 0) + 1)
+            jIsiK(r, k, jBacaNilai(s, p, dalam + 1))
+            jLewatSpasi(s, p)
+            be d = ord(s, peek64(p, 0))
+            if d == 44
+                poke64(p, 0, peek64(p, 0) + 1)
+            else if d == 125
+                poke64(p, 0, peek64(p, 0) + 1)
+                return r
+            else
+                jGalatBaca(s, p, "missing , or }")
+    if c == 91
+        be r2 = jListBaru()
+        poke64(p, 0, i + 1)
+        jLewatSpasi(s, p)
+        if ord(s, peek64(p, 0)) == 93
+            poke64(p, 0, peek64(p, 0) + 1)
+            return r2
+        loop true
+            jTambah(r2, jBacaNilai(s, p, dalam + 1))
+            jLewatSpasi(s, p)
+            be d2 = ord(s, peek64(p, 0))
+            if d2 == 44
+                poke64(p, 0, peek64(p, 0) + 1)
+            else if d2 == 93
+                poke64(p, 0, peek64(p, 0) + 1)
+                return r2
+            else
+                jGalatBaca(s, p, "missing , or ]")
+    if c == 34
+        return toJ__string(jBacaTeks(s, p))
+    if substr(s, i, 4) == "true"
+        poke64(p, 0, i + 4)
+        return toJ__bool(true)
+    if substr(s, i, 5) == "false"
+        poke64(p, 0, i + 5)
+        return toJ__bool(false)
+    if substr(s, i, 4) == "null"
+        poke64(p, 0, i + 4)
+        return toJ__string("")
+    if c == 45 or (c >= 48 and c <= 57)
+        return jBacaAngka(s, p)
+    jGalatBaca(s, p, "unknown character")
+    return toJ__string("")
+
+func fromJson(teks string) json
+    be p = alloc(8)
+    poke64(p, 0, 0)
+    be v = jBacaNilai(teks, p, 0)
+    jLewatSpasi(teks, p)
+    if peek64(p, 0) < len(teks)
+        jGalatBaca(teks, p, "extra text after the JSON data")
+    free(p)
+    return v
+
+func jTipe(j json) string
+    be t = jTag(j)
+    if t == 1
+        return "string"
+    if t == 2
+        return "int"
+    if t == 3
+        return "double"
+    if t == 4
+        return "bool"
+    if t == 5
+        return "list"
+    return "map"
+
+func takeLast__json(j json) json
+    if jTag(j) != 5
+        _lempar("takeLast: a " + jNamaTipe(j) + " is not a list")
+    be n = peek64(jIsi(j), 0)
+    if n == 0
+        _lempar("takeLast: the list is already empty")
+    return asJson(remove__list(asListI(jIsi(j)), n - 1))
+# ---------------------------------------------------------------- hitungan dan perbandingan nilai json (diputuskan saat jalan)
+func jNum(j json) double
+    if jTag(j) == 3
+        return asDouble(jIsi(j))
+    be d double = jIsi(j)
+    return d
+
+func jAdaAngka(j json) bool
+    return jTag(j) == 2 or jTag(j) == 3
+
+func jOpNama(op int) string
+    be nm = split("+ - * / %")
+    return nm[op - 1]
+
+func jNamaOp(j json) string
+    be t = jTag(j)
+    if t == 1
+        return "text"
+    if t == 2
+        return "int"
+    if t == 3
+        return "double"
+    if t == 4
+        return "bool"
+    if t == 5
+        return "list"
+    return "map"
+
+# op: 1 +, 2 -, 3 *, 4 /, 5 %
+func jAritm(a json, b json, op int) json
+    if op == 1 and (jTag(a) == 1 or jTag(b) == 1)
+        return jBuat(1, asInt(jTeks(a) + jTeks(b)))
+    if not jAdaAngka(a)
+        _lempar("operator " + jOpNama(op) + " needs numbers, but got " + jNamaOp(a) + "; convert it first with int(...) or float(...)")
+    if not jAdaAngka(b)
+        _lempar("operator " + jOpNama(op) + " needs numbers, but got " + jNamaOp(b) + "; convert it first with int(...) or float(...)")
+    if jTag(a) == 2 and jTag(b) == 2 and op != 4
+        be x = jIsi(a)
+        be y = jIsi(b)
+        if op == 1
+            return jBuat(2, x + y)
+        if op == 2
+            return jBuat(2, x - y)
+        if op == 3
+            return jBuat(2, x * y)
+        if y == 0
+            _lempar("cannot divide by zero")
+        return jBuat(2, x % y)
+    be dx = jNum(a)
+    be dy = jNum(b)
+    be r double = 0
+    if op == 1
+        be r = dx + dy
+    else if op == 2
+        be r = dx - dy
+    else if op == 3
+        be r = dx * dy
+    else if op == 4
+        if dy == 0
+            _lempar("cannot divide by zero")
+        be r = dx / dy
+    else
+        be r = fmodD(dx, dy)
+    return jBuat(3, asInt(r))
+
+# op: 1 ==, 2 !=, 3 <, 4 >, 5 <=, 6 >=
+func jBanding(a json, b json, op int) bool
+    be ta = jTag(a)
+    be tb = jTag(b)
+    be eq = false
+    be kecil = false
+    if ta == 1 and tb == 1
+        be sa = jTeks(a)
+        be sb = jTeks(b)
+        be eq = sa == sb
+        be kecil = sa < sb
+    else if jAdaAngka(a) and jAdaAngka(b)
+        be dx = jNum(a)
+        be dy = jNum(b)
+        be eq = dx == dy
+        be kecil = dx < dy
+    else if ta == 4 and tb == 4
+        be eq = jIsi(a) == jIsi(b)
+        if op > 2
+            _lempar("cannot compare bool with bool; convert first with int(...), float(...), or str(...)")
+    else
+        if op > 2
+            _lempar("cannot compare " + jNamaOp(a) + " with " + jNamaOp(b) + "; convert first with int(...), float(...), or str(...)")
+    if op == 1
+        return eq
+    if op == 2
+        return not eq
+    if op == 3
+        return kecil
+    if op == 4
+        return not kecil and not eq
+    if op == 5
+        return kecil or eq
+    return not kecil

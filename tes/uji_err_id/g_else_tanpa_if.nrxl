@@ -1,0 +1,3 @@
+errlang = id
+else
+    print 1

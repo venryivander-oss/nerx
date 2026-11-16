@@ -1,0 +1,25 @@
+func tampil(x)
+    print "nilai: " x
+
+func dua(a, b) string
+    return str(a) + "/" + str(b)
+
+func tambah(a, b)
+    return a + b
+
+func gabung(a string, b) string
+    return a + str(b)
+
+tampil(5)
+tampil("halo")
+tampil(2.5)
+tampil(true)
+print dua(1, "x")
+print dua("x", 1)
+print dua(1, 2)
+print tambah(1, 2)
+print gabung("n=", 5)
+print gabung("n=", "lima")
+be xs list int
+add(xs, 3)
+tampil(xs)

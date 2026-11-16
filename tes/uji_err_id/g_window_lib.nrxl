@@ -1,0 +1,2 @@
+errlang = id
+newWindow("a", 100, 100)

@@ -1,0 +1,25 @@
+lib nrx_console.h
+
+print "[" runCommand("echo halo") "]"
+print commandStatus()
+print "[" runCommand("exit 3") "]"
+print commandStatus()
+print runCommand("echo a& echo b")
+print runCommand("dir tidak_ada_folder_ini")
+print commandStatus()
+print runCommand("echo %PATH%") != ""
+color("merah")
+color("putih", "biru")
+color("#ff8800")
+color()
+cursor(0, 0)
+clear()
+try
+    color("nggakada")
+catch e
+    print e
+try
+    color("#12345")
+catch e
+    print e
+print "selesai"

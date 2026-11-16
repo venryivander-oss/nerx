@@ -1,0 +1,27 @@
+print "Halo " "dunia" "!"
+print
+be nama = ask "Nama? "
+print "Hai " nama
+be umur = ask.int "Umur? "
+print umur + 1
+be u2 int = ask "Umur2? "
+print u2 * 2
+be x = ask "Halo " nama ", warna? "
+print "warna " x
+ask "Tekan Enter..."
+print "lanjut"
+write("Loading", "...")
+write("\rLoading 50%")
+print
+write("a", 1, 2.5, true)
+print
+print "tab\there"
+print "kutip \"dalam\""
+print "garis \\ miring"
+print "# bukan komentar"
+print "baris1\nbaris2"
+wait(0.01)
+wait(0)
+wait.float(0.01)
+wait.double(0.01)
+print "selesai"

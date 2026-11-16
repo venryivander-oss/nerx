@@ -1,0 +1,5 @@
+errlang = id
+type P
+    a int
+be p = P(1)
+print p.b

@@ -1,0 +1,84 @@
+func luas(p, l)
+    return p * l
+print luas(4, 5)
+print luas(2.5, 2)
+func sapa(nama, salam = "Halo")
+    return salam ", " nama
+print sapa("Budi")
+print sapa("Budi", "Hai")
+func kali(a, b = a * 2)
+    return a * b
+print kali(3)
+print kali(3, 5)
+func tambah(a int, b int) int
+    return a + b
+print tambah(1, 2)
+func luasLing(r double) double
+    return 3.14 * r * r
+print luasLing(2)
+print luasLing(2.5)
+func fakt(n int) int
+    if n <= 1
+        return 1
+    return n * fakt(n - 1)
+print fakt(10)
+func fib(n)
+    if n < 2
+        return n
+    return fib(n - 1) + fib(n - 2)
+print fib(20)
+func ganjil(n)
+    if n == 0
+        return false
+    return genap(n - 1)
+func genap(n)
+    if n == 0
+        return true
+    return ganjil(n - 1)
+print genap(10)
+print ganjil(7)
+func cetak(x)
+    print "cetak: " x
+cetak(5)
+cetak("teks")
+cetak(2.5)
+cetak([1, 2])
+cetak(true)
+func tanpaHasil()
+    be z = 1
+tanpaHasil()
+func kosong()
+    return
+print "[" kosong() "]"
+func jumlah(xs list int) int
+    be s = 0
+    for x in xs
+        be s += x
+    return s
+print jumlah([1, 2, 3])
+func ubah(xs list int)
+    add(xs, 99)
+be data = [1]
+ubah(data)
+print data
+func lokal()
+    be lk = 5
+    be gl += 1
+be gl = 10
+lokal()
+print gl
+func ganda(a, b, c = 1, d = 2)
+    return a + b + c + d
+print ganda(1, 2)
+print ganda(1, 2, 3)
+print ganda(1, 2, 3, 4)
+func dua(a, b)
+    return a + " " + b
+print dua("x", "y")
+print dua(1, 2)
+func rekur(n)
+    if n > 0
+        write(n, " ")
+        rekur(n - 1)
+rekur(5)
+print

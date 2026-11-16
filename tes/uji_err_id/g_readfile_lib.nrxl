@@ -1,0 +1,2 @@
+errlang = id
+print readFile("x.txt")

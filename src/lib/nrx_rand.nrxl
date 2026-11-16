@@ -1,0 +1,40 @@
+# nrx_rand.nrxl - angka acak (LCG 64-bit; keadaan di slot tersembunyi 0)
+
+# bilangan acak 0 .. 2^30-1
+func randNext() int
+    be x = _gget(0)
+    if x == 0
+        be x = callp(dllFn("kernel32.dll", "GetTickCount64")) * 2654435761 + 88172645463325251
+    be x = x * (6364136223 * 1000000000 + 846793005) + (1442695040 * 1000000000 + 888963407)
+    _gset(0, x)
+    be r = idiv(x, 8589934592)
+    if r < 0
+        be r = 0 - r
+    return r % 1073741824
+
+func randomSeed(n int) int
+    _gset(0, n * 2654435761 + 1)
+    return 0
+
+func random_a0() double
+    return randNext() / 1073741824
+
+func random_a2(lo int, hi int) int
+    if hi < lo
+        return hi + randNext() % (lo - hi + 1)
+    return lo + randNext() % (hi - lo + 1)
+
+func choice__list_int(xs list int) int
+    if len(xs) == 0
+        _lemparK(152, "choice: the list is empty")
+    return xs[randNext() % len(xs)]
+
+func choice__list_string(xs list string) string
+    if len(xs) == 0
+        _lemparK(152, "choice: the list is empty")
+    return xs[randNext() % len(xs)]
+
+func choice__list_double(xs list double) double
+    if len(xs) == 0
+        _lemparK(152, "choice: the list is empty")
+    return xs[randNext() % len(xs)]

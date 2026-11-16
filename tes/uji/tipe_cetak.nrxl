@@ -1,0 +1,24 @@
+type Player
+    nama string
+    hp int
+    x double
+    tag list int
+    m map int
+    ok bool
+type Game
+    pemain list Player
+    level int
+be p = Player("B", 1, 2.5, [1, 2], {"a": 1}, true)
+print p
+be g = Game([p], 3)
+print g
+be g.pemain[0].hp -= 5
+be g.level += 1
+print g
+print [p]
+print "teks " p " lagi"
+be ll = [[1, 2], [3]]
+print ll
+be mm = {"a": [1, 2]}
+print mm
+print typeOf(p)

@@ -1,0 +1,4 @@
+errlang = id
+func f(a int = "x")
+    print a
+f()

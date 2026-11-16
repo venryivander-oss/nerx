@@ -1,0 +1,7 @@
+lock A = 1
+try
+    be A = 2
+catch e
+    print e
+print A
+errlang = en

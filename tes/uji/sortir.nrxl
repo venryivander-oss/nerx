@@ -1,0 +1,50 @@
+func salin(xs list int) list int
+    be r list int
+    for x in xs
+        add(r, x)
+    return r
+func bubble(xs list int) list int
+    be a = salin(xs)
+    for i in range(len(a))
+        for j in range(len(a) - 1 - i)
+            if a[j] > a[j + 1]
+                be t = a[j]
+                be a[j] = a[j + 1]
+                be a[j + 1] = t
+    return a
+func insertion(xs list int) list int
+    be a = salin(xs)
+    for i in range(1, len(a))
+        be k = a[i]
+        be j = i - 1
+        loop j >= 0 and a[j] > k
+            be a[j + 1] = a[j]
+            be j -= 1
+        be a[j + 1] = k
+    return a
+func selection(xs list int) list int
+    be a = salin(xs)
+    for i in range(len(a))
+        be m = i
+        for j in range(i + 1, len(a))
+            if a[j] < a[m]
+                be m = j
+        be t = a[i]
+        be a[i] = a[m]
+        be a[m] = t
+    return a
+func tampil(xs list int) string
+    be s = ""
+    for i in range(len(xs))
+        if i > 0
+            be s = s + ","
+        be s = s + str(xs[i])
+    return s
+be data list int
+for x in split("9 3 7 3 1 8 2 9 0 5 5 4 6")
+    add(data, int(x))
+print tampil(data)
+print tampil(bubble(data))
+print tampil(insertion(data))
+print tampil(selection(data))
+print tampil(data)

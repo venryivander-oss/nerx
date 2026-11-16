@@ -1,0 +1,6 @@
+be u = ask.int "Umur? "
+print u + 1
+be v int = ask "V? "
+print v * 2
+be n = ask.int "Neg? "
+print n

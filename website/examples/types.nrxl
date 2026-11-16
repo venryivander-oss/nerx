@@ -1,0 +1,4 @@
+errlang = en
+be score = 10
+print "starting..."
+be score += 0.5

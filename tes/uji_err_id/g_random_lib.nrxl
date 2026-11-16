@@ -1,0 +1,2 @@
+errlang = id
+print random(1, 5)

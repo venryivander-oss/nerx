@@ -1,0 +1,18 @@
+lock W = [1,2]
+try
+    add(W, 3)
+catch e
+    print e
+lock M = {"a": 1}
+try
+    be M["b"] = 2
+catch e
+    print e
+try
+    remove(W, 0)
+catch e
+    print e
+try
+    be W[0] = 5
+catch e
+    print e

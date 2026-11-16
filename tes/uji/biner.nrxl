@@ -1,0 +1,29 @@
+be pw list int
+be v = 1
+for i in range(16)
+    add(pw, v)
+    be v = v * 2
+func keBiner(n int) string
+    be r = ""
+    be x = n
+    be mulai = false
+    for i in range(15, -1, -1)
+        if x >= pw[i]
+            be x = x - pw[i]
+            be r = r + "1"
+            be mulai = true
+        else if mulai
+            be r = r + "0"
+    if r == ""
+        return "0"
+    return r
+func dariBiner(s string) int
+    be n = 0
+    for i in range(len(s))
+        be n = n * 2
+        if substr(s, i, 1) == "1"
+            be n += 1
+    return n
+for n in range(0, 20)
+    print n " " keBiner(n) " " dariBiner(keBiner(n))
+print keBiner(1023) " " dariBiner("101010101010")

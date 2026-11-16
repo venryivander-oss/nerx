@@ -1,0 +1,10 @@
+func sapa(nama, salam = "Halo")
+    return salam ", " nama
+func kali(a int, b int = a * 2) int
+    return a * b
+func f(a int, b int = 1, c string = "x") string
+    return str(a) + str(b) + c
+print sapa("Budi")
+print sapa("Budi", "Hai")
+print kali(3) kali(3, 5)
+print f(1) f(1, 2) f(1, 2, "z")

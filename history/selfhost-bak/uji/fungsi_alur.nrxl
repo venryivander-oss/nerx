@@ -1,0 +1,36 @@
+func fakt(n)
+    if n <= 1
+        return 1
+    return n * fakt(n - 1)
+
+func fib(n)
+    if n < 2
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+func jumlah(a, b)
+    return a + b
+
+func garis()
+    print "------"
+
+print "faktorial 10: " fakt(10)
+print "fib 20: " fib(20)
+print jumlah(3, 4)
+garis()
+be i = 1
+loop i <= 5
+    if i % 2 == 0
+        print "genap"
+    else if i == 3
+        print "tiga"
+    else
+        print i
+    be i += 1
+be cnt = 0
+be tot = 0
+loop cnt < 100
+    be cnt += 1
+    be tot += cnt
+print tot
+print jumlah(fakt(3), fib(10) * 2)

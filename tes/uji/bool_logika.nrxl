@@ -1,0 +1,21 @@
+func genap(n int) bool
+    return n % 2 == 0
+func antara(x int, a int, b int) bool
+    return x >= a and x <= b
+be t = true
+be f = false
+print t and f
+print t or f
+print not t
+print not (t and f)
+print genap(4) and antara(4, 1, 5)
+print genap(7) or antara(7, 8, 9)
+print 3 < 4
+print "a" == "a"
+print "a" != "b"
+for i in range(1, 8)
+    print i " " genap(i) " " antara(i, 3, 5)
+be ok bool
+print ok
+be ok = 5 > 2
+print ok

@@ -1,0 +1,4 @@
+print "a"
+func f()
+    throw "boom"
+f()

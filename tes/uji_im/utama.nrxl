@@ -1,0 +1,5 @@
+im alat/hitung
+print luasLingkaran(2)
+be t = Titik(1, 2)
+print t.x + t.y
+print NAMA

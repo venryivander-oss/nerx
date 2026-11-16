@@ -1,0 +1,2 @@
+errlang = id
+print upper(5)

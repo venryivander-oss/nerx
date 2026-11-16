@@ -1,0 +1,5 @@
+# pustaka.nrxl - fungsi string/list tambahan (ditulis dalam subset nrxl yang didukung nrxc)
+# Nama dengan akhiran __tipe = overload menurut tipe argumen pertama.
+
+func contains__string(s string, t string) bool
+    return indexOf(s, t) >= 0

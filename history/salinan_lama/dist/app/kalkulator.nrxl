@@ -1,0 +1,75 @@
+# Kalkulator sederhana dalam Nrxl
+# Dibuat berdasarkan dokumentasi syntax
+
+# Fungsi untuk penjumlahan
+func tambah(a int, b int) int
+    return a + b
+
+# Fungsi untuk pengurangan
+func kurang(a int, b int) int
+    return a - b
+
+# Fungsi untuk perkalian
+func kali(a int, b int) int
+    return a * b
+
+# Fungsi untuk pembagian
+func bagi(a int, b int) int
+    return a / b
+
+# Fungsi untuk menampilkan menu
+func tampilkanMenu()
+    print("=== KALKULATOR SEDERHANA ===")
+    print("1. Penjumlahan")
+    print("2. Pengurangan")
+    print("3. Perkalian")
+    print("4. Pembagian")
+    print("5. Keluar")
+    print("============================")
+
+# Program utama
+be selesai = false
+while not selesai
+    tampilkanMenu()
+    print("Pilih operasi (1-5): ")
+    be pilihan = input()
+    
+    if pilihan == "1"
+        print("Masukkan dua angka (dipisahkan spasi): ")
+        be input1 = input()
+        be input2 = input()
+        be a = int(input1)
+        be b = int(input2)
+        be hasil = tambah(a, b)
+        print("Hasil: ", hasil)
+    else if pilihan == "2"
+        print("Masukkan dua angka (dipisahkan spasi): ")
+        be input1 = input()
+        be input2 = input()
+        be a = int(input1)
+        be b = int(input2)
+        be hasil = kurang(a, b)
+        print("Hasil: ", hasil)
+    else if pilihan == "3"
+        print("Masukkan dua angka (dipisahkan spasi): ")
+        be input1 = input()
+        be input2 = input()
+        be a = int(input1)
+        be b = int(input2)
+        be hasil = kali(a, b)
+        print("Hasil: ", hasil)
+    else if pilihan == "4"
+        print("Masukkan dua angka (dipisahkan spasi): ")
+        be input1 = input()
+        be input2 = input()
+        be a = int(input1)
+        be b = int(input2)
+        be hasil = bagi(a, b)
+        print("Hasil: ", hasil)
+    else if pilihan == "5"
+        print("Terima kasih!")
+        be selesai = true
+    else
+        print("Pilihan tidak valid!")
+    
+    print("\n")

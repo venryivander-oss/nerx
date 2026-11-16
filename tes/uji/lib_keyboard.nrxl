@@ -1,0 +1,18 @@
+lib nrx_keyboard.h
+
+print keyPressed("a")
+print keyPressed("LEFT")
+print keyPressed("f12")
+print keyPressed("5")
+try
+    print keyPressed("zzz")
+catch e
+    print e
+try
+    print keyPressed("f13")
+catch e
+    print e
+try
+    print getKey()
+catch e
+    print e

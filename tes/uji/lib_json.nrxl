@@ -1,0 +1,79 @@
+lib nrx_json.h
+
+func nama(x json) string
+    return x["nama"]
+
+func umur(x json) int
+    return int(x["umur"])
+
+be p json
+be p["nama"] = "Budi"
+be p["umur"] = 30
+be p["tinggi"] = 1.75
+be p["aktif"] = true
+print toJson(p)
+print toJson(p, true)
+print nama(p)
+print umur(p)
+
+be daftar json = fromJson("[]")
+add(daftar, p)
+be q json
+be q["nama"] = "Sari \"si\" kecil\nbaris dua\t"
+be q["umur"] = 25
+add(daftar, q)
+print len(daftar)
+print toJson(daftar)
+print toJson(daftar, true)
+for d in daftar
+    print nama(d) " / " umur(d)
+
+be teks = "{\"a\": [1, 2.5, -3, 1e3, true, false, null, \"x\\u00e9y\\n\"], \"b\": {\"c\": {}, \"d\": []}, \"e\": \"hai\"}"
+be data json = fromJson(teks)
+print toJson(data)
+print data["a"][1]
+print data["a"][3]
+print data["a"][7]
+print len(data["a"])
+print contains(data, "e")
+print contains(data, "zz")
+print str(data["e"]) + "!"
+for k in data
+    print k
+print data["b"]
+be x = int(data["a"][0]) + 10
+print x
+
+try
+    print data["zz"]
+catch e
+    print e
+try
+    print data["a"][99]
+catch e
+    print e
+try
+    print fromJson("{\"a\": ")
+catch e
+    print e
+try
+    print fromJson("[1, 2,]")
+catch e
+    print e
+
+print toJson("halo")
+print toJson(5)
+print toJson(2.5)
+print toJson(true)
+be ls list string
+add(ls, "a")
+add(ls, "b")
+print toJson(ls)
+be mp map int
+be mp["z"] = 1
+print toJson(mp)
+be riw json = fromJson("[]")
+add(riw, daftar[0])
+print toJson(riw)
+remove(riw, 0)
+print len(riw)

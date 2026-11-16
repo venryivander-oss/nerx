@@ -1,0 +1,4 @@
+errlang = id
+type P
+    a int
+be p = P("x")

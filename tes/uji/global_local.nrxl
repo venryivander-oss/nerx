@@ -1,0 +1,20 @@
+be total = 0
+be nama = "g"
+lock PI100 = 314
+func tambah(n int)
+    be total += n
+func lokal() int
+    be total2 = 5
+    be nama = "lokal"
+    return total2
+func baca() string
+    return nama + str(total)
+tambah(5)
+tambah(7)
+print total
+print lokal()
+print baca()
+for i in range(3)
+    tambah(i)
+print total
+print PI100

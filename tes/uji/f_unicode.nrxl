@@ -1,0 +1,14 @@
+be s = "héllo wörld ✓ 日本"
+print s
+print len(s)
+print upper(s)
+print lower("ÀÉ")
+print s[1]
+print reverse("añb")
+print substr(s, 0, 5)
+print indexOf(s, "ö")
+print replace(s, "ö", "o")
+print split("a,é,c", ",")
+print "é" + "ü"
+print "日" == "日"
+print "é" < "f"

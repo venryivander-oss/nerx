@@ -1,0 +1,25 @@
+func f(x)
+    be t = x * 2
+    return t
+func g(x)
+    if x > 0
+        return "pos"
+    return "neg"
+func h(a, b)
+    return a / b
+func fakt(n)
+    if n <= 1
+        return 1
+    return n * fakt(n - 1)
+func nada()
+    print "x"
+print f(3) f(2.5) g(1) g(-1) h(1, 2) fakt(5)
+nada()
+print "n=" + 5
+print "5" + 3
+print "v: " + 2.5 + true
+print 3 + "a"
+be s = "hello"
+print s[1] s[0]
+print "a" < "b" "b" < "a" "a" <= "a" "b" > "a" "a" >= "b"
+print "apple" < "apricot"

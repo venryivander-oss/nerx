@@ -1,0 +1,22 @@
+be a = "4"
+options a
+    option 4
+        print "str4 vs int4"
+be b = 4
+options b
+    option "4"
+        print "int4 vs str4"
+    else
+        print "int4 vs str4: else"
+be c = 4.0
+options c
+    option 4
+        print "dbl4 vs int4"
+    else
+        print "else dbl"
+be d = 4
+options d
+    option 4.0
+        print "int vs dbl"
+    else
+        print "else int/dbl"

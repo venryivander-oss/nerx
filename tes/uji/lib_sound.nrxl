@@ -1,0 +1,13 @@
+lib nrx_sound.h
+
+try
+    playSound("tidak_ada.wav")
+catch e
+    print e
+try
+    playMusic("tidak_ada.mp3")
+catch e
+    print e
+stopMusic()
+stopSound()
+print "selesai"

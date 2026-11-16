@@ -1,0 +1,9 @@
+func fib(n int) int
+    if n < 2
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+be names = ["Budi", "Sari", "Joko"]
+for name in names
+    print "Hello, " name "!"
+print "fib(25) = " fib(25)

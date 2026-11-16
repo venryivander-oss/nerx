@@ -1,0 +1,591 @@
+# agent.nrxl: agen terminal untuk AI lokal (llama.cpp / LM Studio / Ollama).
+# Berbeda dari chatbot biasa: AI bisa bekerja BERLANGKAH-LANGKAH di project besar.
+# Tiap langkah AI memilih satu aksi, hasilnya dikirim balik, sampai tugas selesai.
+#
+# Aksi: read_file, edit_file, write_file, run_cmd.
+# Setiap aksi yang mengubah sesuatu (edit, write, run) minta izin dulu.
+# Jalankan dari folder project:  nrxlang run agent.nrxl
+lib nrx_http.h
+lib nrx_json.h
+lib nrx_console.h
+lib nrx_crudfile.h
+
+lock MAKS_LANGKAH = 25            # langkah per tugas sebelum ditanya lanjut atau tidak
+lock BATAS_KARAKTER = 20000       # batas isi riwayat; kira-kira 1 token = 3-4 karakter. Untuk -c 8192 pakai 20000,
+                                  # untuk -c 32768 naikkan ke sekitar 80000
+lock BATAS_OUTPUT = 2500          # output satu aksi yang dikirim ke AI (naikkan kalau ctx besar)
+lock WAKTU_CMD = 120              # detik, perintah yang lebih lama dihentikan
+
+be OTOMATIS = false               # true = semua aksi disetujui otomatis
+be MODE = "wsl"                   # "wsl" atau "cmd": tempat run_cmd dijalankan
+be IZIN_BACA list string          # folder di luar folder kerja yang boleh dibaca (read_file)
+be BASE = ""                      # folder kerja aktif (path Windows dengan /), diganti dengan /folder
+be SUDO_PW = ""                   # password sudo WSL: hanya di memori, tidak dikirim ke AI, tidak masuk riwayat/log
+be TMPW = ""                      # folder temp Windows (dengan /)
+lock SANDI_TERSEMBUNYI = true     # true = ketikan password disembunyikan; false = ask biasa (terlihat di layar)
+
+# ---------------------------------------------------------------- bantu
+
+func ambil(d json, kunci string, bawaan string) string
+    if typeOf(d) != "map"
+        return bawaan
+    if contains(d, kunci)
+        return str(d[kunci])
+    return bawaan
+
+func potong(t string, n int) string
+    if len(t) <= n
+        return t
+    be h = int(n / 2)
+    be sisa = len(t) - n
+    return substr(t, 0, h) "\n...[" sisa " karakter dipotong]...\n" slice(t, -h)
+
+func amanPath(p string) bool
+    if p == ""
+        return false
+    if contains(p, "..")
+        return false
+    if slice(p, 0, 1) == "/"
+        return false
+    if slice(p, 0, 1) == "\\"
+        return false
+    if len(p) > 1
+        if substr(p, 1, 1) == ":"
+            return false
+    return true
+
+# ambil bagian JSON { ... } dari balasan AI (boleh ada teks / ``` di sekitarnya)
+func cariJson(t string) string
+    be a = indexOf(t, "{")
+    be r = indexOf(reverse(t), "}")
+    if a < 0
+        return ""
+    if r < 0
+        return ""
+    be akhir = len(t) - r
+    if akhir <= a
+        return ""
+    return slice(t, a, akhir)
+
+func parse(t string) json
+    be kosong json
+    be j = cariJson(t)
+    if j == ""
+        return kosong
+    try
+        be d json = fromJson(j)
+        return d
+    catch
+        return kosong
+
+func izin(pesan string) bool
+    if OTOMATIS
+        return true
+    color("kuning")
+    be jwb = ask pesan " [y/N/a=ya untuk semua]: "
+    color()
+    be jwb = lower(trim(jwb))
+    if jwb == "a"
+        be OTOMATIS = true
+        return true
+    return jwb == "y" or jwb == "ya"
+
+# rapikan path: \ jadi /, dan /mnt/c/x jadi C:/x
+func norm(p string) string
+    be q = replace(trim(p), "\\", "/")
+    if len(q) > 6
+        if lower(substr(q, 0, 5)) == "/mnt/"
+            if substr(q, 6, 1) == "/"
+                be q = upper(substr(q, 5, 1)) + ":" + slice(q, 6)
+    return q
+
+func absolut(p string) bool
+    if len(p) > 1
+        if substr(p, 1, 1) == ":"
+            return true
+    return false
+
+func induk(p string) string
+    be k = indexOf(reverse(p), "/")
+    if k < 0
+        return ""
+    return slice(p, 0, len(p) - k - 1)
+
+func dalamIzin(p string) bool
+    be pl = lower(p)
+    if BASE != ""
+        be bl = lower(BASE)
+        if pl == bl
+            return true
+        if slice(pl, 0, len(bl) + 1) == bl + "/"
+            return true
+    for r in IZIN_BACA
+        be rl = lower(r)
+        if pl == rl
+            return true
+        if slice(pl, 0, len(rl) + 1) == rl + "/"
+            return true
+    return false
+
+# periksa path untuk read_file. Hasil: "" kalau boleh, atau pesan alasan penolakan.
+# Path absolut di luar folder kerja selalu minta izin user (tidak ikut mode /auto).
+func cekBaca(path string) string
+    if path == ""
+        return "path kosong"
+    if contains(path, "..")
+        return "path tidak boleh memakai .."
+    be p = norm(path)
+    if not absolut(p)
+        if slice(p, 0, 1) == "/"
+            return "path Linux tidak didukung; pakai path relatif atau path Windows (C:/...)"
+        return ""
+    if dalamIzin(p)
+        return ""
+    be dir = induk(p)
+    color("kuning")
+    print "AI minta membaca file di luar folder kerja:"
+    print "  " p
+    be jwb = ask "Izinkan baca folder " dir " beserta isinya? [y/N]: "
+    color()
+    if lower(trim(jwb)) == "y"
+        add(IZIN_BACA, dir)
+        return ""
+    return "user menolak akses baca ke folder " dir
+
+# persetujuan yang TIDAK ikut mode /auto (dipakai untuk perintah sudo)
+func izinWajib(pesan string) bool
+    color("kuning")
+    be jwb = ask pesan " [y/N]: "
+    color()
+    be jwb = lower(trim(jwb))
+    return jwb == "y" or jwb == "ya"
+
+# minta password sudo ke user (bukan ke AI). Hasil "" = dibatalkan.
+func mintaSandi() string
+    color("kuning")
+    print "Password sudo WSL dibutuhkan. Hanya dipakai di komputer ini: tidak dikirim ke AI,"
+    print "tidak masuk riwayat atau log, dan dihapus dari memori saat keluar."
+    color()
+    be p = ""
+    if SANDI_TERSEMBUNYI
+        print "Ketik password (ketikan tidak terlihat), lalu Enter. Enter kosong = batal."
+        be p = runCommand("powershell -NoProfile -Command \"$s = Read-Host -AsSecureString; [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))\"")
+        be p = replace(p, "\r", "")
+        if len(p) > 0
+            if slice(p, -1) == "\n"
+                be p = slice(p, 0, len(p) - 1)
+    else
+        be p = ask "Password sudo (TERLIHAT di layar; Enter kosong = batal): "
+    return p
+
+# path relatif dari AI -> path lengkap di dalam folder kerja aktif
+func lokal(p string) string
+    return BASE + "/" + norm(p)
+
+# /folder: ganti folder kerja. Hasil: "" kalau berhasil, atau pesan galat.
+func gantiFolder(arg string) string
+    be a = norm(replace(arg, "\"", ""))
+    if a == ""
+        return "pakai: /folder C:/jalur/project  (atau path relatif dari folder sekarang, mis. /folder ../lain)"
+    if contains(a, "'")
+        return "nama folder tidak boleh mengandung tanda '"
+    be target = a
+    if not absolut(a)
+        be target = BASE + "/" + a
+    be hasil = trim(runCommand("cd /d \"" + replace(target, "/", "\\") + "\" 2>nul && cd"))
+    if commandStatus() != 0
+        return "folder tidak ditemukan: " target
+    be BASE = norm(hasil)
+    return ""
+
+func buatFolder(path string)
+    be p = replace(path, "\\", "/")
+    be k = indexOf(reverse(p), "/")
+    if k < 0
+        return
+    be dir = slice(p, 0, len(p) - k - 1)
+    if dir != ""
+        runCommand("mkdir \"" + replace(dir, "/", "\\") + "\" 2>nul")
+
+# ---------------------------------------------------------------- aksi
+
+func aksiBaca(d json) string
+    be path = ambil(d, "path", "")
+    be galat = cekBaca(path)
+    if galat != ""
+        return "[ERROR] " galat
+    be path = norm(path)
+    if not absolut(path)
+        be path = lokal(path)
+    if not fileExists(path)
+        return "[ERROR] file tidak ada: " path
+    be baris = readLines(path)
+    be total = len(baris)
+    be mulai = int(ambil(d, "mulai", "1"))
+    be jumlah = int(ambil(d, "jumlah", "400"))
+    if mulai < 1
+        be mulai = 1
+    be out list string
+    be i = mulai - 1
+    loop i < total and i < mulai - 1 + jumlah
+        be nomor = str(i + 1)
+        add(out, nomor ": " baris[i])
+        be i += 1
+    be kepala = "[" path ": baris " mulai "-" (i) " dari " total "]\n"
+    return kepala + potong(join(out, "\n"), BATAS_OUTPUT * 3)
+
+func aksiEdit(d json) string
+    be path = ambil(d, "path", "")
+    be lama = ambil(d, "old", "")
+    be baru = ambil(d, "new", "")
+    if not amanPath(path)
+        return "[ERROR] path harus relatif di dalam folder kerja, tanpa .. : " path
+    be path = lokal(path)
+    if not fileExists(path)
+        return "[ERROR] file tidak ada: " path
+    if lama == ""
+        return "[ERROR] old kosong"
+    be isi = readFile(path)
+    be bagian = split(isi, lama)
+    be n = len(bagian) - 1
+    if n == 0
+        # file berakhir baris CRLF: coba cocokkan dengan CRLF
+        be lamaCr = replace(lama, "\n", "\r\n")
+        if lamaCr != lama
+            be bagian = split(isi, lamaCr)
+            be n = len(bagian) - 1
+            be baru = replace(baru, "\n", "\r\n")
+    if n == 0
+        return "[ERROR] teks old tidak ditemukan di " path ". Baca file lagi (read_file) dan salin teksnya persis."
+    if n > 1
+        return "[ERROR] teks old muncul " n " kali di " path ". Tambah baris di sekitarnya supaya unik."
+    writeFile(path, join(bagian, baru))
+    return "[OK] " path " diubah (1 bagian)"
+
+func aksiTulis(d json) string
+    be path = ambil(d, "path", "")
+    be isi = ambil(d, "content", "")
+    if not amanPath(path)
+        return "[ERROR] path harus relatif di dalam folder kerja, tanpa .. : " path
+    be path = lokal(path)
+    buatFolder(path)
+    writeFile(path, isi)
+    return "[OK] " path " ditulis (" len(isi) " karakter)"
+
+func aksiCmd(cmd string) string
+    be out = ""
+    if MODE == "cmd"
+        be out = runCommand("cd /d \"" + replace(BASE, "/", "\\") + "\" && " + cmd)
+    else
+        # folder kerja Windows (C:/a/b) jadi path WSL (/mnt/c/a/b)
+        be dirWsl = "/mnt/" + lower(substr(BASE, 0, 1)) + slice(BASE, 2)
+        be skrip = "cd '" + dirWsl + "' || exit 1\n"
+        be pakaiSudo = false
+        if SUDO_PW != ""
+            if contains(cmd, "sudo")
+                # password diberikan lewat SUDO_ASKPASS: file sementara berisi password (dihapus
+                # sesudah perintah selesai), bukan lewat argumen perintah
+                be pakaiSudo = true
+                writeFile(TMPW + "/nrx_pw", SUDO_PW)
+                be pwWsl = "/mnt/" + lower(substr(TMPW, 0, 1)) + slice(TMPW, 2) + "/nrx_pw"
+                be skrip = skrip + "export SUDO_ASKPASS=/tmp/nrx_askpass_$$\n"
+                be skrip = skrip + "cat > \"$SUDO_ASKPASS\" <<'NRXEOF'\n#!/bin/sh\ntr -d '\\r\\n' < '" + pwWsl + "'\nNRXEOF\n"
+                be skrip = skrip + "chmod 700 \"$SUDO_ASKPASS\"\ntrap 'rm -f \"$SUDO_ASKPASS\"' EXIT\n"
+                be skrip = skrip + "sudo() { command sudo -A \"$@\"; }\n"
+        writeFile(".nrx_cmd.sh", skrip + cmd + "\n")
+        be perintah = "wsl -- timeout " WAKTU_CMD " bash -c \"bash <(tr -d '\\r' < .nrx_cmd.sh)\""
+        be out = runCommand(perintah)
+        deleteFile(".nrx_cmd.sh")
+        if pakaiSudo
+            deleteFile(TMPW + "/nrx_pw")
+    be kode = commandStatus()
+    # sensor: password tidak boleh muncul di output yang dikirim ke AI
+    if SUDO_PW != ""
+        be out = replace(out, SUDO_PW, "***")
+    be hasil = potong(out, BATAS_OUTPUT)
+    if contains(out, "incorrect password") or contains(out, "Sorry, try again") or contains(out, "Authentication failed") or contains(out, "incorrect authentication")
+        be SUDO_PW = ""
+        be hasil = hasil "\n[password sudo salah: dihapus, akan diminta lagi]"
+    if kode == 124
+        be hasil = hasil "\n[perintah dihentikan: lebih dari " WAKTU_CMD " detik]"
+    return hasil "\n[kode keluar " kode "]"
+
+# ---------------------------------------------------------------- AI
+
+func tanya(riwayat json, alamat string, model string, kunci string) string
+    be req json
+    be req["model"] = model
+    be req["messages"] = riwayat
+    be req["temperature"] = 0.2
+    be req["stream"] = false
+    be header = {"Content-Type": "application/json"}
+    if kunci != ""
+        be header["Authorization"] = "Bearer " + kunci
+    be balas = httpPost(alamat + "/v1/chat/completions", toJson(req), "application/json", header)
+    if httpStatus() != 200
+        throw "server membalas status " httpStatus() ": " slice(balas, 0, 300)
+    be data json = fromJson(balas)
+    return data["choices"][0]["message"]["content"]
+
+# buang pesan lama kalau riwayat terlalu besar (pesan system di index 0 selalu dipertahankan)
+func rapikan(riwayat json)
+    be total = 0
+    for m in riwayat
+        be total += len(str(m["content"]))
+    loop total > BATAS_KARAKTER and len(riwayat) > 3
+        be total -= len(str(riwayat[1]["content"]))
+        remove(riwayat, 1)
+    # riwayat harus mulai dari pesan user setelah system
+    loop len(riwayat) > 2 and str(riwayat[1]["role"]) != "user"
+        remove(riwayat, 1)
+
+func sistemPrompt(cwd string) string
+    be b list string
+    add(b, "Kamu agen pemrograman otonom yang bekerja di folder project user, dengan beberapa langkah berturut-turut.")
+    add(b, "Folder kerja: " + cwd + ". run_cmd dijalankan di mode " + MODE + " dari folder ini.")
+    add(b, "")
+    add(b, "Untuk bertindak, balas HANYA SATU objek JSON mentah (tanpa markdown, tanpa penjelasan di luar JSON).")
+    add(b, "WAJIB: isi field \"pikir\" PERTAMA di setiap JSON dengan 1-3 kalimat penalaran singkat: apa yang sudah diketahui, apa tujuan langkah ini, dan apa risikonya. Baru setelah itu field \"action\". Contoh: {\"pikir\":\"Belum tahu di file mana fungsinya, cari dengan grep dulu.\",\"action\":\"run_cmd\",\"cmd\":\"grep -rn nama src\"}")
+    add(b, "Aksi:")
+    add(b, "{\"action\":\"read_file\",\"path\":\"src/a.c\",\"mulai\":1,\"jumlah\":200}   (mulai dan jumlah opsional; hasil bernomor baris)")
+    add(b, "read_file juga boleh membaca file di folder lain dengan path Windows absolut, mis. D:/proyek/a.c (user akan ditanya izinnya). edit_file dan write_file hanya untuk folder kerja.")
+    add(b, "{\"action\":\"edit_file\",\"path\":\"src/a.c\",\"old\":\"teks lama persis\",\"new\":\"teks baru\"}   (old harus muncul tepat 1 kali)")
+    add(b, "{\"action\":\"write_file\",\"path\":\"baru.txt\",\"content\":\"isi file\"}   (file baru atau tulis ulang total)")
+    add(b, "{\"action\":\"run_cmd\",\"cmd\":\"perintah shell\"}")
+    add(b, "")
+    add(b, "Aturan:")
+    add(b, "1. Satu aksi per balasan. Tunggu hasilnya (pesan [HASIL ...]) lalu lanjut ke langkah berikutnya.")
+    add(b, "2. Di project besar jangan menebak: jelajahi dulu (ls, grep -rn, find), baca bagian yang relevan, baru ubah.")
+    add(b, "3. Utamakan edit_file untuk perubahan kecil; jangan menulis ulang file besar dengan write_file.")
+    add(b, "4. Path file selalu relatif terhadap folder kerja, tanpa .. dan tanpa awalan / .")
+    add(b, "5. Sebelum menulis atau mengubah kode, pahami dulu: baca kode terkait dan pikirkan akar masalahnya, jangan menebak. Setelah mengubah kode, WAJIB jalankan build atau tes untuk memeriksanya, baca hasilnya dengan teliti, dan perbaiki kalau gagal. Jangan bilang selesai sebelum terbukti berhasil.")
+    add(b, "6. Jangan menjalankan perintah merusak (rm -rf, format, dll.) kecuali user memintanya jelas.")
+    add(b, "7. Kalau tugas selesai atau cuma perlu menjawab, balas teks biasa (bukan JSON) berisi ringkasan singkat.")
+    add(b, "8. Hindari sudo dan pemasangan paket kecuali benar-benar perlu. Tiap perintah sudo butuh persetujuan khusus user. Jangan pernah mencoba mencari, mencetak, atau menyalin password.")
+    return join(b, "\n")
+
+# ---------------------------------------------------------------- program
+
+color("cyan")
+print "=== Agen AI Lokal (nrxl) ==="
+color()
+
+be cwd = trim(runCommand("cd"))
+be BASE = norm(cwd)
+be TMPW = norm(trim(runCommand("echo %TEMP%")))
+print "Folder kerja: " BASE
+
+be alamat = ask "Alamat server [http://localhost:8080]: "
+be alamat = trim(alamat)
+if alamat == ""
+    be alamat = "http://localhost:8080"
+loop slice(alamat, -1) == "/"
+    be alamat = slice(alamat, 0, len(alamat) - 1)
+
+be model = ask "Nama model [qwen3-coder-30b-a3b-instruct]: "
+be model = trim(model)
+if model == ""
+    be model = "qwen3-coder-30b-a3b-instruct"
+
+be kunci = ask "API key (kosongkan kalau tidak ada): "
+be kunci = trim(kunci)
+
+be pilih = ask "Tempat run_cmd [wsl/cmd] (wsl): "
+be pilih = lower(trim(pilih))
+if pilih == "cmd"
+    be MODE = "cmd"
+
+be sistem = {"role": "system", "content": sistemPrompt(BASE)}
+be riwayat json = fromJson("[]")
+add(riwayat, sistem)
+
+func bantuan()
+    print "Tulis tugasnya, mis: cari bug di src/nrxlang.c lalu perbaiki dan build."
+    print "Perintah:"
+    print "  /auto    setujui semua aksi otomatis (hati-hati)"
+    print "  /manual  kembali minta izin tiap aksi"
+    print "  /folder  lihat folder kerja; /folder D:/proyek (atau ../lain) menggantinya"
+    print "  /izin    lihat folder luar yang boleh dibaca; /izin D:/proyek menambah folder"
+    print "  /sudo    isi password sudo WSL (hanya di memori); /sudo off menghapusnya"
+    print "  /reset   hapus riwayat"
+    print "  /simpan  simpan riwayat ke agent_log.json"
+    print "  /exit    keluar"
+
+print
+bantuan()
+print
+
+be jalan = true
+loop jalan
+    color("hijau")
+    be teks = ask "Kamu: "
+    color()
+    be teks = trim(teks)
+    if teks == ""
+        continue
+
+    if teks == "/sudo off"
+        be SUDO_PW = ""
+        print "(password sudo dihapus dari memori)"
+        continue
+    if teks == "/sudo"
+        be pwBaru = mintaSandi()
+        if pwBaru == ""
+            print "(dibatalkan)"
+        else
+            be SUDO_PW = pwBaru
+            print "(password sudo tersimpan di memori sesi ini)"
+        be pwBaru = ""
+        continue
+    if teks == "/folder"
+        print "Folder kerja: " BASE
+        continue
+    if slice(teks, 0, 8) == "/folder "
+        be galatF = gantiFolder(slice(teks, 8))
+        if galatF != ""
+            print "(" galatF ")"
+        else
+            print "Folder kerja sekarang: " BASE
+            be sistem = {"role": "system", "content": sistemPrompt(BASE)}
+            add(riwayat, {"role": "user", "content": "[INFO] Folder kerja sekarang: " + BASE + ". Path relatif dan run_cmd memakai folder ini mulai sekarang."})
+        continue
+    if teks == "/izin"
+        if len(IZIN_BACA) == 0
+            print "(belum ada folder luar yang diizinkan; folder kerja selalu boleh)"
+        for f in IZIN_BACA
+            print "  boleh dibaca: " f
+        continue
+    if slice(teks, 0, 6) == "/izin "
+        be dirBaru = norm(slice(teks, 6))
+        loop len(dirBaru) > 3 and slice(dirBaru, -1) == "/"
+            be dirBaru = slice(dirBaru, 0, len(dirBaru) - 1)
+        if not absolut(dirBaru) or contains(dirBaru, "..")
+            print "(pakai path Windows absolut tanpa .., contoh: /izin D:/proyek)"
+        else
+            add(IZIN_BACA, dirBaru)
+            print "(folder " dirBaru " boleh dibaca)"
+        continue
+
+    options teks
+        option "/exit", "/keluar"
+            be jalan = false
+            continue
+        option "/reset"
+            be riwayat json = fromJson("[]")
+            add(riwayat, sistem)
+            print "(riwayat dihapus)"
+            continue
+        option "/auto"
+            be OTOMATIS = true
+            print "(mode otomatis AKTIF: aksi langsung jalan tanpa izin)"
+            continue
+        option "/manual"
+            be OTOMATIS = false
+            print "(mode manual: tiap aksi minta izin)"
+            continue
+        option "/simpan"
+            writeFile("agent_log.json", toJson(riwayat, true))
+            print "(tersimpan di agent_log.json)"
+            continue
+
+    add(riwayat, {"role": "user", "content": teks})
+
+    be langkah = 0
+    be selesai = false
+    loop not selesai
+        rapikan(riwayat)
+        write("AI berpikir... ")
+        be jawab = ""
+        try
+            be jawab = tanya(riwayat, alamat, model, kunci)
+        catch err
+            write("\r")
+            color("merah")
+            print "Gagal: " err
+            color()
+            be selesai = true
+            continue
+        write("\r                \r")
+        add(riwayat, {"role": "assistant", "content": jawab})
+
+        be d json = parse(jawab)
+        be aksi = ambil(d, "action", "")
+        if aksi == ""
+            color("kuning")
+            print "AI: " jawab
+            color()
+            be selesai = true
+            continue
+
+        be pikir = trim(ambil(d, "pikir", ""))
+        if pikir != ""
+            color("abu")
+            print "  [pikir] " potong(pikir, 400)
+            color()
+
+        be hasil = ""
+        try
+            options aksi
+                option "read_file"
+                    print "[BACA] " ambil(d, "path", "?")
+                    be hasil = aksiBaca(d)
+                option "edit_file"
+                    print "[EDIT] " ambil(d, "path", "?")
+                    print "  lama: " potong(replace(ambil(d, "old", ""), "\n", "\\n"), 200)
+                    print "  baru: " potong(replace(ambil(d, "new", ""), "\n", "\\n"), 200)
+                    if izin("Terapkan edit?")
+                        be hasil = aksiEdit(d)
+                    else
+                        be hasil = "[DITOLAK] user menolak edit ini"
+                option "write_file"
+                    print "[TULIS] " ambil(d, "path", "?") " (" len(ambil(d, "content", "")) " karakter)"
+                    print "  awal: " potong(replace(ambil(d, "content", ""), "\n", "\\n"), 200)
+                    if izin("Tulis file?")
+                        be hasil = aksiTulis(d)
+                    else
+                        be hasil = "[DITOLAK] user menolak menulis file ini"
+                option "run_cmd"
+                    be cmdIni = ambil(d, "cmd", "")
+                    print "[CMD] " cmdIni
+                    be adaSudo = false
+                    if MODE == "wsl"
+                        if contains(cmdIni, "sudo")
+                            be adaSudo = true
+                    be setuju = false
+                    if adaSudo
+                        be setuju = izinWajib("Perintah ini memakai sudo (selalu minta izin, juga di mode /auto). Jalankan?")
+                        if setuju
+                            if SUDO_PW == ""
+                                be SUDO_PW = mintaSandi()
+                            if SUDO_PW == ""
+                                be setuju = false
+                                be hasil = "[DITOLAK] user tidak memberi password sudo. Jangan pakai sudo."
+                    else
+                        be setuju = izin("Jalankan perintah?")
+                    if setuju
+                        be hasil = aksiCmd(cmdIni)
+                    else
+                        if hasil == ""
+                            be hasil = "[DITOLAK] user menolak menjalankan perintah ini"
+                else
+                    be hasil = "[ERROR] aksi tidak dikenal: " aksi ". Pakai read_file, edit_file, write_file, atau run_cmd."
+        catch err
+            be hasil = "[ERROR] " err
+
+        color("abu")
+        print potong(hasil, 800)
+        color()
+
+        add(riwayat, {"role": "user", "content": "[HASIL " + aksi + "]\n" + potong(hasil, BATAS_OUTPUT * 3)})
+
+        be langkah += 1
+        if langkah >= MAKS_LANGKAH
+            be lagi = ask "Sudah " langkah " langkah. Lanjutkan? [y/N]: "
+            if lower(trim(lagi)) != "y"
+                be selesai = true
+                add(riwayat, {"role": "user", "content": "Berhenti di sini. Ringkas apa yang sudah dan belum selesai."})
+            be langkah = 0
+    print
+
+be SUDO_PW = ""
+print "Sampai jumpa!"

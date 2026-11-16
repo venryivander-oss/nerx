@@ -1,0 +1,6 @@
+be hitung = 5
+ex be nilaiA = 1
+func bantu() int
+    return 10
+ex func dariA() int
+    return bantu() + hitung

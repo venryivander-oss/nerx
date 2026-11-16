@@ -1,0 +1,23 @@
+lib nrx_json.h
+
+be a json = fromJson("{\"a\": 1}")
+print typeOf(a)
+print typeOf(fromJson("[1]"))
+print typeOf(fromJson("5"))
+print typeOf(fromJson("2.5"))
+print typeOf(fromJson("\"x\""))
+print typeOf(fromJson("true"))
+print typeOf(fromJson("null"))
+print typeOf(a["a"])
+print typeOf(5)
+print typeOf("s")
+print typeOf(2.5)
+print typeOf(true)
+be xs list int
+print typeOf(xs)
+be m map int
+print typeOf(m)
+be r json = fromJson("[1,2,3]")
+print takeLast(r)
+print len(r)
+print toJson(r)

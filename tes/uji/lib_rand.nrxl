@@ -1,0 +1,37 @@
+lib nrx_rand.h
+
+be ok = true
+be hitung list int
+for i in range(7)
+    add(hitung, 0)
+for i in range(3000)
+    be r = random(1, 6)
+    if r < 1 or r > 6
+        be ok = false
+    be hitung[r] += 1
+    be d = random()
+    if d < 0 or d >= 1
+        be ok = false
+print ok
+be semua = true
+for v in range(1, 7)
+    if hitung[v] < 300
+        be semua = false
+print semua
+
+randomSeed(42)
+be a = random(1, 1000000)
+be b = random(1, 1000000)
+randomSeed(42)
+print a == random(1, 1000000)
+print b == random(1, 1000000)
+
+be nama = ["a", "b", "c"]
+be dapat = true
+for i in range(50)
+    be c = choice(nama)
+    if c != "a" and c != "b" and c != "c"
+        be dapat = false
+print dapat
+print choice([7])
+print random(5, 5)

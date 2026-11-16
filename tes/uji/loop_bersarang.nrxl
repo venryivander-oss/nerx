@@ -1,0 +1,25 @@
+for i in range(1, 6)
+    be baris = ""
+    for j in range(1, 6)
+        be baris = baris + str(i * j) + " "
+    print baris
+be n = 0
+for i in range(10)
+    if i == 7
+        break
+    if i % 2 == 0
+        continue
+    for j in range(10)
+        if j > 2
+            break
+        be n += i * 10 + j
+print n
+be k = 0
+loop k < 5
+    be m = 0
+    loop true
+        be m += 1
+        if m >= k
+            break
+    be k += 1
+    print "k=" k " m=" m

@@ -1,0 +1,8 @@
+ffi "kernel32.dll" (
+    func GetTickCount() int
+)
+ffi "msvcrt.dll" (
+    func length(s string) int as strlen
+)
+print length("nrxlang")
+print GetTickCount() > 0

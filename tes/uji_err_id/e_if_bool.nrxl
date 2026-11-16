@@ -1,0 +1,4 @@
+errlang = id
+be x = 3
+if x
+    print 1

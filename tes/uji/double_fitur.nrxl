@@ -1,0 +1,68 @@
+type Titik
+    x double
+    y double
+    nama string
+func rata(a double, b double) double
+    return (a + b) / 2
+func kuadrat(x double) double
+    return x * x
+func ke3(x int) double
+    return x
+func luas(r double) double
+    return 3.14159265358979 * r * r
+func fahrenheit(c double) double
+    return c * 9 / 5 + 32
+print rata(3, 4)
+print rata(2.5, 3.5)
+print kuadrat(1.5) " " kuadrat(3)
+print ke3(7)
+print luas(2)
+print fahrenheit(100) " " fahrenheit(36.6) " " fahrenheit(0 - 40)
+be p = Titik(1, 2.5, "A")
+print p.x " " p.y
+be p.x = 7
+be p.y = p.y * 2
+print p.x " " p.y " " p.nama
+be daftar list double
+add(daftar, 1)
+add(daftar, 2.5)
+add(daftar, 1 / 3)
+be total double = 0
+for v in daftar
+    be total += v
+print total
+print daftar[1] + daftar[2]
+be daftar[0] = 10
+print daftar[0] * 2
+be hasil = 0
+for i in range(1, 6)
+    be hasil = hasil + i
+print hasil / 5
+print int(hasil / 4)
+be rata2 = hasil / 5
+print rata2 > 2.5 and rata2 < 3.5
+be d double
+print d
+be d = 5
+print d / 2
+be f float = 1.5
+print f * 2
+print floor(7 / 2) " " ceil(7 / 2) " " round(7 / 2)
+print floor(0 - 2.5) " " ceil(0 - 2.5) " " round(0 - 2.5)
+be m = 0
+loop m < 3
+    be m += 1
+    print m / 3
+func sigma(n int) double
+    be s double = 0
+    for i in range(1, n + 1)
+        be s += 1 / i
+    return s
+print sigma(10)
+print sigma(1000)
+func bagi(a int, b int) double
+    return a / b
+print bagi(22, 7)
+print bagi(1, 3) + bagi(2, 3)
+print 0.1 + 0.2 == 0.3
+print 0.5 + 0.25 == 0.75

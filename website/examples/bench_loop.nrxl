@@ -1,0 +1,4 @@
+be total = 0
+for i in range(3000000)
+    be total += i % 7
+print total

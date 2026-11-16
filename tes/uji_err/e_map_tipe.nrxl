@@ -1,0 +1,2 @@
+be m map int
+be m["a"] = "x"

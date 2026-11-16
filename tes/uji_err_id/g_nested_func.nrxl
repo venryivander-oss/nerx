@@ -1,0 +1,4 @@
+errlang = id
+func a()
+    func b()
+        print 1

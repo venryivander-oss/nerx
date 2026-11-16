@@ -1,0 +1,4 @@
+ffi "nodll_zzz.dll" (
+    func Foo() int
+)
+print Foo()

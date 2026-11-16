@@ -1,0 +1,48 @@
+print trim("  Budi  ") "|"
+print upper("halo") lower("HALO")
+print split("a  b")
+print split("a,b,c", ",")
+print split("abc", "")
+print join(["a", "b"], "-")
+print replace("kopi kopi", "kopi", "teh")
+print contains("halo", "al")
+print contains("halo", "xx")
+print indexOf("halo", "lo")
+print indexOf("halo", "z")
+print substr("Halo Dunia", 0, 4)
+print substr("Halo Dunia", 5)
+print slice("nrxlang", -4)
+print slice("nrxlang", 1, 3)
+print slice("nrxlang", 2)
+print reverse("halo")
+print len("halo")
+print len("")
+be s = "abc"
+print s[0] s[2]
+be t = s + "def"
+print t
+print "a" + "b" + "c"
+
+print "?? ?? ??"
+print len("??")
+print upper("??bc")
+print "=" + "=" + "="
+be u = "Halo"
+be u2 = u
+be u2 = u2 + "!"
+print u u2
+print "a\tb"
+print "uno" < "dos"
+print "dos" < "uno"
+print "Apel" < "apel"
+print "" == ""
+print trim("") "|"
+print split("")
+print split("   ")
+print replace("aaa", "a", "bb")
+print replace("abc", "", "x")
+print indexOf("abcabc", "c")
+print contains("", "")
+print "x" in "xyz"
+for ch in "h??"
+    print ch

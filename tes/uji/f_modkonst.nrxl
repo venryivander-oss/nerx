@@ -1,0 +1,75 @@
+func f(x int) int
+    be t = 0
+    be t = t * 7 + x % 2
+    be t = t % 1000000007
+    be t = t * 7 + x % 3
+    be t = t % 1000000007
+    be t = t * 7 + x % 4
+    be t = t % 1000000007
+    be t = t * 7 + x % 5
+    be t = t % 1000000007
+    be t = t * 7 + x % 6
+    be t = t % 1000000007
+    be t = t * 7 + x % 7
+    be t = t % 1000000007
+    be t = t * 7 + x % 8
+    be t = t % 1000000007
+    be t = t * 7 + x % 9
+    be t = t % 1000000007
+    be t = t * 7 + x % 10
+    be t = t % 1000000007
+    be t = t * 7 + x % 11
+    be t = t % 1000000007
+    be t = t * 7 + x % 12
+    be t = t % 1000000007
+    be t = t * 7 + x % 13
+    be t = t % 1000000007
+    be t = t * 7 + x % 16
+    be t = t % 1000000007
+    be t = t * 7 + x % 25
+    be t = t % 1000000007
+    be t = t * 7 + x % 31
+    be t = t % 1000000007
+    be t = t * 7 + x % 60
+    be t = t % 1000000007
+    be t = t * 7 + x % 64
+    be t = t % 1000000007
+    be t = t * 7 + x % 100
+    be t = t % 1000000007
+    be t = t * 7 + x % 127
+    be t = t % 1000000007
+    be t = t * 7 + x % 128
+    be t = t % 1000000007
+    be t = t * 7 + x % 255
+    be t = t % 1000000007
+    be t = t * 7 + x % 1000
+    be t = t % 1000000007
+    be t = t * 7 + x % 1024
+    be t = t % 1000000007
+    be t = t * 7 + x % 3600
+    be t = t % 1000000007
+    be t = t * 7 + x % 65535
+    be t = t % 1000000007
+    be t = t * 7 + x % 65537
+    be t = t % 1000000007
+    be t = t * 7 + x % 1000000
+    be t = t % 1000000007
+    be t = t * 7 + x % 2147483647
+    be t = t % 1000000007
+    be t = t * 7 + x % 2147483646
+    be t = t % 1000000007
+    be t = t * 7 + x % 1073741825
+    be t = t % 1000000007
+    return t
+be acc = 0
+be x = -4000000000000000
+loop x < 4000000000000000
+    be acc = (acc * 31 + f(x)) % 1000000007
+    be x = x + 12345678901234 + (acc % 97)
+for i in range(2000)
+    be acc = (acc * 31 + f(i - 1000)) % 1000000007
+    be acc = (acc * 31 + f(i * i * 7919 - 5000000)) % 1000000007
+print acc
+
+
+

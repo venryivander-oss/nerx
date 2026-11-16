@@ -1,0 +1,15 @@
+lock ABJAD = "abcdefghijklmnopqrstuvwxyz"
+func geser(s string, k int) string
+    be r = ""
+    for i in range(len(s))
+        be c = substr(s, i, 1)
+        be p = indexOf(ABJAD, c)
+        if p >= 0
+            be c = substr(ABJAD, (p + k + 26) % 26, 1)
+        be r = r + c
+    return r
+be asli = "halo dunia, ini rahasia!"
+be sandi = geser(asli, 3)
+print sandi
+print geser(sandi, -3)
+print geser(geser(asli, 13), 13) == asli

@@ -1,0 +1,13 @@
+be t = time()
+print len(t)
+print substr(t, 2, 1) substr(t, 5, 1)
+be d = date()
+print len(d)
+print substr(d, 4, 1) substr(d, 7, 1)
+print typeOf(timer())
+print timer() >= 0
+wait(0.05)
+print timer() >= 0.05
+print "bye"
+exit(3)
+print "tidak"

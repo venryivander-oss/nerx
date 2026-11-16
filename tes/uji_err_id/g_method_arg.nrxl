@@ -1,0 +1,7 @@
+errlang = id
+type P
+    a int
+    func m(x int)
+        print x
+be p = P(1)
+p.m()

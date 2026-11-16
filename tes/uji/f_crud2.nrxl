@@ -1,0 +1,44 @@
+lib nrx_crudfile.h
+lib nrx_rand.h
+try
+    print readFile("tidak_ada_file.txt")
+catch e
+    print e
+try
+    print readLines("tidak_ada_file.txt")
+catch e
+    print e
+try
+    appendFile("tidak_ada_dir/x.txt", "a")
+catch e
+    print e
+try
+    writeFile("tidak_ada_dir/x.txt", "a")
+catch e
+    print e
+try
+    print readRange("tidak_ada_file.txt", 1, 2)
+catch e
+    print e
+try
+    print random(5, 5)
+catch e
+    print e
+try
+    be e0 list int
+    print choice(e0)
+catch e
+    print e
+try
+    print replaceInFile("tidak_ada_file.txt", "a", "b")
+catch e
+    print e
+try
+    print findInFile("tidak_ada_file.txt", "a")
+catch e
+    print e
+writeFile("uji_u.txt", "h??llo\nw??rld\n")
+print readFile("uji_u.txt")
+print len(readLines("uji_u.txt"))
+print findInFile("uji_u.txt", "??")
+deleteFile("uji_u.txt")

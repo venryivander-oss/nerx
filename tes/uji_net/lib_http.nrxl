@@ -1,0 +1,37 @@
+lib nrx_http.h
+lib nrx_json.h
+
+be U = "http://localhost:8765"
+print httpGet(U + "/x?a=1")
+print httpStatus()
+print httpPost(U + "/p", "isi pesan")
+print httpPost(U + "/p", "{\"a\": 1}", "application/json")
+be h map string
+be h["X-Tes"] = "rahasia"
+print httpPost(U + "/p", "b", "text/plain", h)
+print httpGet(U + "/g", h)
+print httpGet(U + "/404")
+print httpStatus()
+httpStart(U + "/bg", "data bg", "application/json")
+be hitung = 0
+loop not httpDone()
+    be hitung += 1
+    if hitung > 2000000
+        break
+print httpPartial()
+print httpResult()
+print httpStatus()
+print httpDone()
+try
+    print httpGet("http://localhost:1/x")
+catch e
+    print e
+try
+    print httpGet("bukan url")
+catch e
+    print e
+try
+    print httpResult()
+catch e
+    print e
+print httpPost(U + "/j", toJson(fromJson("{\"k\": [1, 2]}")))

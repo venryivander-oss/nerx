@@ -1,0 +1,18 @@
+type P
+    nama string
+    hp int = 100
+    level int = 1
+    tag list int
+
+    init nama, level
+        be own.nama = nama
+        be own.level = level
+        add(own.tag, level)
+
+    func info() string
+        return own.nama " hp=" own.hp " lv=" own.level " tag=" len(own.tag)
+
+be p = P("Budi", 3)
+print p.info()
+be q = P("Ani", 7)
+print q.info()

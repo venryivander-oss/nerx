@@ -1,0 +1,1122 @@
+==============================================================================
+                          NERXELITY (nrxl) SYNTAX
+==============================================================================
+
+The complete nrxl syntax: the core language, built-in functions, and every
+library. This is the English version of SYNTAX.txt.
+
+Contents:
+   1. Running and building
+   2. Basics
+   3. Variables
+   4. Operators
+   5. Input and output
+   6. Control flow
+   7. Functions
+   8. Type
+   9. Other files, export, libraries, and ffi
+  10. Built-in functions (no lib)
+  11. Libraries
+  12. Limits
+  13. VS Code extension
+  14. nrxc: the compiler written in nrxl (no VM)
+
+
+==============================================================================
+1. RUNNING AND BUILDING
+==============================================================================
+
+Run a script (it is compiled to a temporary .exe, run, then deleted):
+
+    nrxlang run contoh_fitur.nrxl
+
+Turn it into an .exe (nothing else needed; the nrxl compiler (nrxc) that is
+built into nrxlang.exe makes it; see section 14):
+
+    nrxlang build contoh_fitur.nrxl       -> contoh_fitur.exe
+    nrxlang build game.nrxl -o out\game.exe
+    nrxlang contoh_fitur.nrxl             (the same as build)
+
+- The .exe stands alone: the .nrxl file (and every file it pulls in with im)
+  is embedded, so the .nrxl files do not need to be shared.
+- Type errors are caught at build time, and no .exe is made.
+- Output and error messages of the .exe are exactly the same as running the
+  script directly.
+- The .exe holds x64 machine code written by nrxc directly (no VM, no
+  interpreter), so calculations are much faster than with run. The syntax
+  does not change.
+- lib nrx_window.h and ffi can be built too.
+- The installer puts nrxlang.exe, prelude.nrxl, pustaka.nrxl, and the lib\ folder
+  in one folder; nothing else is needed.
+- The earlier implementation was moved to the history\ folder of the repository;
+  it is not needed to use or build nrxl.
+
+Files a script reads (readFile, playSound, newImage, ...) are looked up from
+the folder the command runs in, not the script's folder. The exception is im:
+files for im are looked up from the script's folder.
+
+
+==============================================================================
+2. BASICS
+==============================================================================
+
+  # comment         Comment until the end of the line. # inside quotes is
+                    not a comment.
+  indentation       Spaces/tabs at the start of a line decide what belongs
+                    to a block (if, loop, for, func, try, options).
+  one line          A statement must fit on one line.
+
+Value kinds:
+
+  number    5   -3  (int)      2.5   5.0   1e3  (double)
+  text      "Hello"
+  bool      true   false
+  list      [1, 2, 3]   ["apple", "orange"]   (all items one kind)
+  map       {"Budi": 20, "Sari": 21}   (all values one kind)
+  array     array(1000)   array([1, 2.5])  (a row of decimal numbers, see below)
+  type      Player("Budi", 100)            (see section 8)
+
+Escapes inside text:
+
+  \n    new line
+  \t    tab
+  \r    back to the start of the line (to overwrite, e.g. progress)
+  \"    quote
+  \\    backslash
+
+Write file paths with / (for example "C:/data/a.txt"), because \n in
+"C:\new" is read as a new line.
+
+Error message language:
+
+    errlang = en                 # errors in English
+    errlang = id                 # errors in Indonesian
+
+- Without errlang, the language follows Windows: Indonesian Windows gets
+  Indonesian errors, any other language gets English.
+- errlang is only allowed in the main file, at the far left. It applies to
+  the whole program, including files pulled in with im.
+- Every error has the same code in every language, for example:
+      error E0003 in game.nrxl:5: variable skor has not been created
+      error E0003 di game.nrxl:5: variabel skor belum dibuat
+  The code can be searched online even when the message is in another
+  language.
+
+
+==============================================================================
+3. VARIABLES
+==============================================================================
+
+    be x = 5
+    be name = "Budi"
+    be x int = 5                 # with a type: int, float, double, bool,
+                                 # string, list, map
+    be active bool               # without a value: int/float/double = 0,
+                                 # bool = false, string = "",
+                                 # list = [], map = {}
+    be scores list int           # empty list of int
+    be ages map int              # empty map, values are int
+    be x += 1                    # also -=  *=  /=  %=
+    be items[0] = "a"            # set a list item
+    be ages["Budi"] = 21         # set a map value (new keys are created,
+                                 # starting at 0)
+    be p.hp -= 10                # set a type field / map value
+    be data.players[0].hp = 50   # nested
+
+- A variable must be created before it is read; otherwise it is an error.
+- Inside a function, new variables are local. Existing global variables can
+  still be changed from inside a function.
+- for variables inside a function are always local: for i in a function
+  does not change the main program's i.
+- Every be and for outside functions makes a global variable, including the
+  ones inside a loop or if. If a function uses the same name with another
+  kind, the error appears before the program runs, with the line number of
+  that global:
+
+    loop running3d()
+        be t = trim(typed)       # t is global, text
+    func shelf()
+        be t = 0.5               # ERROR: t is already a global variable of type string
+
+Strict types:
+
+    be x = 5                     # same as be x int = 5
+    be x = "hello"               # ERROR: x is an int
+    be x = 2.5                   # ERROR: decimal into int, use int(2.5)
+    be h = 2.5                   # no type: a decimal becomes double
+    be h float = 2.5             # float must be written out
+    be h = 3                     # allowed: int goes into double, becomes 3.0
+
+- A variable's kind is set when it is created (from the written type, or
+  from its first value) and cannot change. The guess: 5 -> int,
+  2.5 / 5.0 -> double, "a" -> string, true -> bool.
+- List and map items must be one kind: [1, "two"] and add(scoreList, "x")
+  are errors. [1, 2.5] is allowed and everything becomes double.
+- Mixed data (name and age together) uses a type, not a map.
+- be x = [] and be x = {} are errors because the item kind is unknown;
+  write be x list int or be x map string.
+- Type fields keep the kind written in the type.
+- Decimals with a whole value print with .0 (4 / 2 -> 2.0) so they look
+  different from ints.
+- fromJson results may be mixed, because JSON is mixed. Their type is json:
+  be data json = fromJson(text). be data json alone = empty json {}.
+  typeOf still names the shape of the content (map, list, ...).
+- be m[k] += value: if key k does not exist yet, it starts from the empty
+  value of the map's item kind (0, 0.0, "", false). So be count[word] += 1
+  just works.
+- Function parameters follow the kind of the argument given.
+
+Check before running: before the first line runs, nrxl checks the whole file
+(including the bodies of functions that are never called). If something is
+certainly wrong, the program does not run at all and the error shows right
+away:
+
+    be score = 10
+    be score += 0.5              # error before running: score is an int
+    add2(1, "two")               # error: parameter b is an int
+    func result() int
+        return "text"            # error even if result() is never called
+
+- What is checked: values of variables whose kind is known, arguments and
+  argument counts, return values, type fields, and lock variables.
+- Operators that are certainly wrong are checked too: "17" * 2, 10 == "10",
+  list + 1.
+- Functions with untyped parameters are checked for every argument kind
+  used: func minus(a, b) called as minus("five", 2) is an error right away.
+- If a value's kind is only known at run time (for example json content),
+  that line is checked at run time as usual.
+- The body of a try block is not checked before running, because try exists
+  to catch errors.
+
+lock (a variable that cannot change):
+
+    lock PI = 3.14159
+    lock MAX_HP int = 100
+    lock COLORS = ["red", "blue"]
+
+- be PI = 3, be PI += 1, and for PI in ... are errors.
+- The content of a locked list/map is locked too: be COLORS[0] = ..., add(),
+  takeLast(), and remove() are refused.
+- lock only creates new variables.
+
+delete (remove a variable that is no longer used, like freeing memory by hand):
+
+    be data = [1, 2, 3]
+    delete data                  # its memory is released
+    delete a, b                  # several at once
+
+- After delete, reading that variable is an error like a variable that was
+  never created. The name can be used again with be.
+- Inside a function, delete removes the local variable first, then the
+  global one.
+- lock variables and variables owned by another file cannot be deleted.
+
+Memory is cleaned up automatically (reference counting):
+
+    be a = [1, 2, 3]
+    be b = a                     # a and b hold the SAME list
+    add(b, 4)                    # a is now [1, 2, 3, 4] too
+    be a = [9]                   # b still holds the old list, so it is kept
+
+- Lists, maps, and type objects are freed as soon as no variable, list, or
+  map holds them. delete is only needed to release memory sooner (for
+  example big data in the middle of a program).
+- Text is always copied, so changing one text never changes another.
+- Do not put a list inside itself (add(a, a)): its memory is never freed.
+
+
+==============================================================================
+4. OPERATORS
+==============================================================================
+
+  + - * / %            Arithmetic. % = remainder. Use ( ) for order.
+                       / always gives a decimal: 7 / 2 -> 3.5,
+                       4 / 2 -> 2.0. For a whole result: int(7 / 2) -> 3.
+                       int with int stays int; if either side is a
+                       decimal, the result is a decimal.
+  +                    Adds when both sides are numbers. Otherwise joins
+                       text: "Age: " + 5 -> "Age: 5", "5" + 3 -> "53".
+  == != < > <= >=      Number with number, or text with text. The result is
+                       true / false. Number with text is an error: 5 == "5".
+
+Text holding a number (for example the result of ask) is still text. To
+calculate with it, convert it first: int("5") + 3 -> 8,
+float("2.5") * 2 -> 5.0, or use ask.int. "5" * 2, sqrt("16"), and -"5" are
+errors.
+  and  or  not         Logic.
+  in   not in          Is inside a list / text / map keys:
+                       "orange" in fruits
+  x[i]                 List item or character in text (index starts at 0).
+  x["key"]  x.field    Map value or type field.
+
+Joining without +:
+Text and values written side by side are joined directly, in print, be, and
+function arguments.
+
+    print "Hello " name "!"
+    be greeting = "Score: " score
+    writeFile("a.txt", "content " x)
+
+A minus after text is read as subtraction, so wrap it in parentheses:
+
+    print "result " (-x)
+
+
+==============================================================================
+5. INPUT AND OUTPUT
+==============================================================================
+
+    print "Hello " name
+    print                               # empty line
+    write("Loading", "...")             # like print, without a new line
+    write("\rLoading 50%")              # \r: back to the start, overwrite
+    be name = ask "Name? "
+    be age = ask.int "Age? "            # only accepts whole numbers
+    be age int = ask "Age? "            # same as ask.int
+    be x = ask "Hi " name ", age? "     # the prompt may contain variables
+    ask "Press Enter..."                # the input is thrown away
+    wait(1)                             # wait (seconds)
+    wait(0.5)                           # decimals are fine
+    wait.float(0.5)                     # same as wait(0.5)
+    wait.double(0.5)
+
+
+==============================================================================
+6. CONTROL FLOW
+==============================================================================
+
+if / else if / else:
+
+    if x > 10
+        print "big"
+    else if x > 5
+        print "medium"
+    else
+        print "small"
+
+loop (while the condition is true):
+
+    be i = 0
+    loop i < 10
+        print i
+        be i += 1
+
+for ... in:
+
+    for f in ["apple", "orange"]   # list items
+    for c in "abc"                 # each character
+    for k in people                # each map key
+    for i in range(5)              # 0, 1, 2, 3, 4
+
+break / continue:
+
+    for i in range(10)
+        if i == 2
+            continue               # go to the next round
+        if i == 5
+            break                  # leave the loop
+
+  break and continue also work from inside if, try, and options.
+
+options (pick one):
+
+    options choice
+        option "1"
+            print "Play"
+        option "2", "3"            # several values at once
+            print "Quit"
+        else                       # optional
+            print "None"
+
+  Only the first matching option runs. Matching works like ==
+  (option 4 matches "4").
+
+try / catch / throw:
+
+    try
+        be content = readFile("data.txt")
+    catch err                      # plain "catch" is fine too
+        print "failed: " err
+
+    throw "error message"          # raise your own error
+
+  Every nrxl error (including ones from libraries and functions) can be
+  caught.
+
+exit:
+
+    exit()                         # stop the program
+    exit(3)                        # with exit code 3
+
+
+==============================================================================
+7. FUNCTIONS
+==============================================================================
+
+    func area(w, h)
+        return w * h
+
+    print area(4, 5)               # used in an expression
+    greet()                        # called as a statement
+
+Default parameter values:
+
+    func greet(name, word = "Hello")
+        return word ", " name
+
+    greet("Budi")                  # Hello, Budi
+    greet("Budi", "Hi")            # Hi, Budi
+    func times(a, b = a * 2)       # a default may use earlier parameters
+
+- Parameters without defaults must come first.
+- At most 8 parameters. A function may call itself (recursion).
+- return without a value returns empty text.
+
+Parameter and result types (optional, recommended):
+
+    func add2(a int, b int) int
+        return a + b
+
+    func circleArea(r double) double
+        return 3.14 * r * r
+
+    func greet(name string, word string = "Hello") string
+    func heal(p Player, n int = 10) Player      # a type name is a type too
+
+- The type goes after the parameter name, the result type after the ).
+- Arguments that do not fit are an error right away: add2(1, "two"),
+  add2(1, 2.5). An int may go into a double parameter.
+- If a result type is written, the function must return a matching value.
+  return 7 / 2 in an int function is an error; use int(7 / 2).
+- Untyped parameters follow the kind of the argument given.
+
+
+==============================================================================
+8. TYPE (NEW TYPES, LIKE CLASSES)
+==============================================================================
+
+    type Player
+        name string
+        hp int = 100                       # defaults are fine
+        level int = 1
+
+        init name, level                   # no parentheses, optional
+            be own.name = name
+            be own.level = level
+
+        func attack(n int)                 # method; own = this object
+            be own.hp -= n
+
+        func info() string
+            return own.name " hp=" own.hp
+
+    be p = Player("Budi", 3)               # calls init
+    p.attack(30)
+    print p.info()                         # Budi hp=70
+    print typeOf(p)                        # Player
+
+Without init, values fill the fields in order:
+
+    type Point
+        x int
+        y int
+    be t = Point(1, 2)                     # number of values = number of fields
+
+- Every field must have a type; its kind cannot change.
+- own only exists inside init and methods.
+- A type name can also be a parameter type, result type, and list item type:
+  be team list Player, func heal(p Player) Player.
+- At most 16 fields. A misspelled field or method is an error right away.
+- struct has been removed; use type.
+
+
+==============================================================================
+9. OTHER FILES, EXPORT, LIBRARIES, AND FFI
+==============================================================================
+
+im (use your own .nrxl file):
+
+    im calc                        # = calc.nrxl
+    im "calc.nrxl"
+    im tools/calc                  # = tools/calc.nrxl
+    im "tools/calc"
+
+- nrxl looks for the file from the folder of the file that writes im.
+- The same file is only loaded once.
+- im must be written at the far left (not indented).
+- im is a reserved word: it cannot be a function or type name, and im()
+  is always an error. A variable named im (be im = 5) is still allowed.
+
+im ... from (take only certain names):
+
+    im area, Point from "tools"    # from tools.nrxl, only area and Point
+    im area from tools             # without quotes is fine too
+
+- Other names exported (ex) in tools.nrxl cannot be used from this file.
+  The error says which name needs to be added to im.
+- Every name written must be exported in that file; otherwise it is an
+  error before the program runs.
+- im "tools" without from is still allowed, and opens everything exported.
+
+ex (export):
+In a file used through im, only what has ex can be used by other files.
+
+    ex func circleArea(r)
+        return tidy(PI * r * r)
+    ex type Point
+        x int
+        y int
+    ex be NAME = "calc"
+    ex lock PI = 3.14159
+
+    func tidy(x)                   # no ex: only for this file
+        return round(x, 2)
+
+- The main file (the one run directly) does not need ex.
+- The same name in different files does not clash as long as it is not
+  exported.
+- ex must be written at the far left, outside functions.
+
+lib (built-in libraries):
+
+    lib nrx_window.h
+    lib nrx_rand.h
+    lib nrx_crudfile.h
+    lib nrx_keyboard.h
+    lib nrx_console.h
+    lib nrx_sound.h
+    lib nrx_json.h
+    lib nrx_http.h
+    lib nrx_3d.h
+
+Library features can only be used after their lib line.
+
+ffi (call DLL functions directly):
+
+    ffi "user32.dll" (
+        func MessageBoxA(hwnd int, text string, title string, kind int) int
+        func SetCursorPos(x int, y int) int
+    )
+    ffi "kernel32.dll" (
+        func GetTickCount() int
+        func Sleep(ms int)                 # no result kind = returns
+    )                                      # nothing
+
+    MessageBoxA(0, "Hello from nrxl!", "Message", 0)
+    SetCursorPos(100, 200)
+
+  Argument and result kinds:
+    int        32-bit whole number (also BOOL, UINT, DWORD)
+    int64      64-bit whole number
+    float      32-bit decimal
+    double     64-bit decimal
+    string     text (char*)
+    pointer    address / handle (HWND, HANDLE, H..., *); 0 = NULL
+
+- Write "name kind" for each argument (the name may be left out, the kind
+  is enough). The result kind goes after the closing parenthesis.
+- At most 12 arguments. Windows 64-bit only.
+- nrxl checks the DLL file and function name while reading the program, so
+  a typo is an error before the program runs.
+- ffi functions win over built-in functions with the same name (e.g. sqrt).
+- An ffi function name cannot be the same as your own nrxl function/type.
+- ffi functions can be called from every file (no ex needed).
+- Another name for a DLL function: write "as RealName" after the result
+  kind.
+
+    ffi "msvcrt.dll" (
+        func length(s string) int as strlen
+    )
+
+Buffers (raw memory for structs, arrays, and output text):
+
+  newBuffer(n)                 n zero bytes, returns the address (pointer)
+  poke(p, offset, kind, value) write value at p + offset
+  peek(p, offset, kind)        read the value at p + offset
+  peekText(p)                  zero-terminated text at p (peekText(p, offset))
+  freeBuffer(p)                give the memory back
+  kind: "int8", "int16", "int", "int64", "float", "double", "pointer"
+
+    # struct { int x; double y; } = 16 bytes (y starts at byte 8)
+    be s = newBuffer(16)
+    poke(s, 0, "int", 5)
+    poke(s, 8, "double", 2.5)
+    cFunction(s)                 # passed as a pointer
+    print peek(s, 8, "double")
+    freeBuffer(s)
+
+- A struct passed by value (not a pointer) that is 8 bytes or smaller: read
+  it first with peek(s, 0, "int64"), then pass it as int64.
+- A wrong address crashes the program; nrxl cannot check it.
+
+Callbacks (nrxl functions called by native code):
+
+    func compare(a int, b int) int
+        return peek(a, 0, "int") - peek(b, 0, "int")
+
+    qsort(data, count, 4, callback("compare"))
+
+- callback("name") gives a pointer to that function. At most 16 functions,
+  each with up to 4 whole-number/pointer parameters; the result is a whole
+  number. Callbacks must be called on the same thread (like qsort,
+  EnumWindows).
+
+
+==============================================================================
+10. BUILT-IN FUNCTIONS (NO LIB)
+==============================================================================
+
+Function names are case-sensitive: getKey() is right, getkey() is wrong.
+
+--- List ---
+
+  len(x)                   number of list items (also text length / number
+                           of map keys)     len([1, 2]) -> 2
+  add(list, value)         add at the end of the list
+                           add(fruits, "mango")
+  takeLast(list)           take out and return the last item
+                           takeLast([1, 2, 3]) -> 3
+  remove(list, i)          take out the item at index i
+                           remove(fruits, 0)
+  sort(list)               a new sorted list
+                           sort([3, 1, 2]) -> [1, 2, 3]
+  filled(n, value)         a list of n copies of the same value, made at once
+                           filled(3, 0) -> [0, 0, 0]
+  reverse(x)               reverse the order (also for text)
+                           reverse([1, 2, 3]) -> [3, 2, 1]
+  indexOf(x, value)        first position, or -1 if not found
+                           indexOf(["a", "b"], "b") -> 1
+  slice(x, start, end)     take from start up to before end
+                           (end optional, negative = from the back)
+                           slice([1, 2, 3, 4], 1, 3) -> [2, 3]
+  contains(x, value)       true / false (same as in)
+
+--- Array (numbers only, fastest) ---
+
+  array(n)                 n numbers 0.0          array(3) -> [0.0, 0.0, 0.0]
+  array(n, value)          n equal numbers        array(2, 7) -> [7.0, 7.0]
+  array(list)              number list to array   array([1, 2]) -> [1.0, 2.0]
+
+    be pos array = array(1000)
+    be pos[0] = 2.5
+    be pos[1] += 1
+    print pos[0] + pos[1]
+
+- Items are always decimals (double), like a plain double array: a[i] is a double,
+  so use int(a[i]) for an int.
+- len, add, in, for x in a, lock, print, and toJson work like for lists.
+- Uses less memory than a list, and in a built .exe math with a[i] becomes a
+  plain double (can be several times faster than a list).
+- In ffi, an array can be passed to a pointer parameter as double*.
+
+--- Map ---
+
+  keys(m)                  list of all keys
+  values(m)                list of all values
+  remove(m, key)           take out a key, return its value
+  contains(m, key)         whether the key exists
+  len(m)                   number of keys
+
+--- Text ---
+
+  trim(t)                  remove spaces at the start and end
+                           trim("  Budi  ") -> "Budi"
+  upper(t)  lower(t)       upper / lower case
+                           upper("hello") -> "HELLO"
+  split(t)                 split on spaces
+                           split("a  b") -> ["a", "b"]
+  split(t, separator)      split on a separator ("" = per character)
+                           split("a,b", ",") -> ["a", "b"]
+  join(list, separator)    join list items (separator optional)
+                           join(["a", "b"], "-") -> "a-b"
+  replace(t, find, with)   replace every match
+                           replace("tea tea", "tea", "coffee") -> "coffee coffee"
+  contains(t, part)        contains("hello", "ell") -> true
+  indexOf(t, part)         indexOf("hello", "lo") -> 3
+  substr(t, start, length)
+                           substr("Hello World", 0, 5) -> "Hello"
+                           (length optional)
+  slice(t, start, end)     slice("nrxlang", -4) -> "lang"
+  reverse(t)               reverse("hello") -> "olleh"
+
+--- Conversion ---
+
+  str(x)                   to text
+  int(x)                   to a whole number (error if not a number)
+  float(x)                 to a decimal
+  typeOf(x)                "int", "double", "string", "bool", "list", "map",
+                           or the type name (float also shows "double")
+
+--- Numbers and math ---
+
+  range(end)                     range(3) -> [0, 1, 2]
+  range(start, end)              range(2, 5) -> [2, 3, 4]
+  range(start, end, step)        range(10, 0, -3) -> [10, 7, 4, 1]
+  abs(x)                         abs(-5) -> 5
+  round(x)  round(x, digits)     round(2.567, 2) -> 2.57
+  floor(x)  ceil(x)              floor(2.9) -> 2
+  sqrt(x)                        sqrt(16) -> 4
+  sin(x), cos(x), tan(x)         angle in radians: sin(pi() / 2) -> 1
+  atan2(y, x)                    angle (radians) of point (x, y), -pi..pi
+  pi()                           3.14159...; degrees to radians: d * pi() / 180
+  pow(a, b)                      pow(2, 10) -> 1024
+  min(...)  max(...)             max(3, 9, 2) -> 9   max([3, 9, 2]) -> 9
+
+--- Time and program ---
+
+  time()                   "HH:MM:SS"
+  date()                   "YYYY-MM-DD"
+  timer()                  seconds since the program started
+  exit()  exit(code)       stop the program
+
+
+==============================================================================
+11. LIBRARIES
+==============================================================================
+
+------------------------------------------------------------------------------
+lib nrx_window.h  -  windows, buttons, canvas
+------------------------------------------------------------------------------
+
+templateStyle (look):
+
+    templateStyle title(
+        size: 28
+        bold: true
+        color: "blue"
+    )
+
+  Properties:
+    size: 20                  font size (pixels)
+    font: "Consolas"          font
+    bold: true                bold
+    italic: true              italic
+    color: "blue"             text color
+    background: "#1e1e2e"     background color
+    width: 120                element width (automatic without it)
+    height: 40                element height (automatic without it)
+    hover: "#b4befe"          button background under the cursor
+    hoverColor: "white"       button text under the cursor
+
+- Used by naming it: newText("Hello", 20, 20, title).
+  One element can use at most 4 styles.
+- In newWindow: background = window background; size, font, bold, italic
+  become the default for everything inside; color becomes the text default.
+- Order of precedence: window style -> element style -> size/color arguments.
+
+windowTemplate (window content):
+
+    windowTemplate menu(
+        newText(text, x, y, fontSize, color, style)
+        newButton(onclick(function()), text, x, y, fontSize, style)
+        newInput(variable, x, y, width, fontSize, style)
+        newCheck(variable, "text", x, y, fontSize, style)
+        newSelect(variable, choices, x, y, width, fontSize, style)
+        newList(variable, choices, x, y, width, height, fontSize, style)
+        newCanvas(name, x, y, width, height, style)
+        newImage("file.png", x, y, width, height, style)
+        onKey(function())
+        onMouse(function())
+        onTimer(function(), seconds)
+    )
+
+- Arguments after the x, y position may be left out. A style name may be
+  placed anywhere at the end.
+- Text may contain variables ("Score: " score) and updates automatically.
+- newInput, newCheck, newSelect, newList are linked both ways with their
+  variable. newCheck holds true/false; newSelect/newList hold the chosen
+  text; choices is a list.
+- newCanvas(screen, ...) also creates the variable screen for the drawing
+  functions.
+- At most 32 items per template.
+
+Events:
+
+  onclick(f()) in newButton   f()                    button clicked
+  onKey(f())                  f(key)                 keyboard key pressed
+  onMouse(f())                f(x, y, action, canvas) mouse on a canvas
+                                                     action: "left", "right",
+                                                     "release", "move"
+  onTimer(f(), seconds)       f()                    called repeatedly every
+                                                     few seconds (max. 4)
+
+- The function may take fewer parameters than are sent, for example
+  func click(x, y).
+- In a window with onKey, keyboard keys only go to onKey (except Tab, and
+  while typing in a newInput).
+
+Opening and closing windows:
+
+    newWindow("Title", width, height)
+    newWindow("Title", width, height, menu)          # with a template
+    newWindow("Title", width, height, menu, dark)    # template and style
+    closeWindow("Title")                             # close one window
+    closeWindow()                                    # close all
+
+- Events run while the script is waiting (wait), or after the script ends.
+- The program only exits after every window is closed.
+
+Drawing on a canvas:
+
+    clearCanvas(screen)                               # or with a color
+    clearCanvas(screen, "#1e1e2e")
+    drawRect(screen, x, y, width, height, color)
+    drawCircle(screen, x, y, radius, color)           # x, y = center
+    drawLine(screen, x1, y1, x2, y2, color, thick)    # thick optional
+    drawText(screen, text, x, y, color, fontSize)     # size optional (16)
+    drawImage(screen, "file.png", x, y)               # or + width, height
+
+  drawImage and newImage can open PNG, JPG, and BMP. Drawings appear on
+  screen at the end of every event or wait.
+
+Window colors:
+  black, white, red, green, blue, yellow, orange, purple, gray
+  (or the Indonesian names hitam, putih, merah, hijau, biru, kuning, oranye,
+  ungu, abu), or "#RRGGBB".
+
+------------------------------------------------------------------------------
+lib nrx_rand.h  -  random numbers
+------------------------------------------------------------------------------
+
+  random()              random decimal from 0 up to below 1
+  random(min, max)      random whole number min..max
+  choice(list)          one random list item
+  randomSeed(n)         set the seed so the random sequence can repeat
+
+------------------------------------------------------------------------------
+lib nrx_crudfile.h  -  files
+------------------------------------------------------------------------------
+
+  createFile(path)          create an empty file; false if it already exists
+  readFile(path)            the whole file as text
+  readLines(path)           the file as a list, one line per item
+  writeFile(path, text)     overwrite the file
+  writeLines(path, list)    overwrite the file, one list item per line
+  appendFile(path, text)    add text at the end of the file
+  appendLine(path, text)    add text as a new line
+  deleteFile(path)          delete the file; false if it fails
+  fileExists(path)          true if the file exists
+  listFiles(folder)         list of file and folder names (folders end in /)
+  readRange(path, start, n) list of n lines from line start (first line is 1)
+  findInFile(path, text)    list of line numbers that contain text
+  replaceInFile(path, old, new)  replace all, returns how many were replaced;
+                            the file's line endings (CRLF/LF) are kept
+
+------------------------------------------------------------------------------
+lib nrx_keyboard.h  -  keyboard in the console
+------------------------------------------------------------------------------
+
+  keyPressed("left")    true/false without waiting: key pressed since the
+                        last check
+  getKey()              wait for one key, return its name
+
+Key names:
+  "a" to "z", "0" to "9", "left", "right", "up", "down", "space",
+  "enter", "escape" or "esc", "tab", "backspace", "delete", "shift", "ctrl",
+  "alt", "home", "end", "pageup", "pagedown", "f1" to "f12".
+  onKey in windows uses the same names.
+
+------------------------------------------------------------------------------
+lib nrx_console.h  -  console display
+------------------------------------------------------------------------------
+
+  clear()                   clear the screen
+  cursor(x, y)              move the cursor to column x, row y (from 0)
+  color("red")              text color for the next prints
+  color("white", "blue")    text + background color
+  color()                   back to the normal color
+  runCommand(command)       run a cmd command, returns its output (stdout and
+                            stderr) as text: runCommand("dir")
+  commandStatus()           exit code of the last command (0 = success)
+
+Console colors:
+  black, red, green, yellow, blue, purple, cyan, white, gray
+  (or the Indonesian names), or "#RRGGBB".
+
+------------------------------------------------------------------------------
+lib nrx_sound.h  -  sound
+------------------------------------------------------------------------------
+
+  playSound("coin.wav")     play an effect once (several can overlap)
+  playMusic("song.mp3")     play music on repeat (replaces the old one)
+  stopMusic()               stop the music
+  stopSound()               stop all effects
+
+  Formats: WAV and MP3.
+
+------------------------------------------------------------------------------
+lib nrx_json.h  -  JSON
+------------------------------------------------------------------------------
+
+  toJson(data)          nrxl data -> one-line JSON text
+  toJson(data, true)    same, but pretty (lines and indentation)
+  fromJson(text)        JSON text -> nrxl data
+
+- JSON object <-> map, array <-> list, true/false <-> bool,
+  null -> empty text. Types are saved as objects.
+- To save and load data from a file, pair it with nrx_crudfile:
+
+    writeFile("data.json", toJson(data, true))
+    be result json = fromJson(readFile("data.json"))   # content may be mixed
+
+------------------------------------------------------------------------------
+lib nrx_http.h  -  internet (HTTP and HTTPS)
+------------------------------------------------------------------------------
+
+  httpGet(url)                  page/data content as text
+  httpPost(url, body)           send text, returns the reply text
+  httpPost(url, body, kind)     with a content type, e.g. "application/json"
+  httpPost(url, body, kind, headers)  extra headers as a map of text
+  httpGet(url, headers)         same, for GET
+  httpStatus()                  status code of the last request (200, 404, ...)
+
+    lib nrx_http.h
+    lib nrx_json.h
+    be data json = fromJson(httpGet("https://api.example.com/data"))
+    if httpStatus() != 200
+        print "failed: " httpStatus()
+
+    be headers = {"Authorization": "Bearer " + key}
+    be reply = httpPost(url, bodyJson, "application/json", headers)
+
+- A status other than 2xx is not an error; check it with httpStatus(). Only
+  failing to connect (wrong address, no internet) is an error.
+
+In the background (the program keeps running while it waits, e.g. a game
+window):
+
+  httpStart(url, body, kind, headers)  start sending, returns right away
+  httpDone()                    true when finished (or nothing is running)
+  httpResult()                  the reply; the status is in httpStatus()
+  httpPartial()                 text that arrived since the last httpPartial
+                                (for streamed replies, e.g. "stream": true in
+                                AI APIs); httpResult still holds the whole reply
+
+    httpStart(url, bodyJson, "application/json", headers)
+    loop running3d()
+        if httpDone()
+            be reply = httpResult()
+        ...draw as usual...
+
+- One request at a time: the next httpStart is only allowed after
+  httpResult. Connection errors appear at httpResult.
+
+------------------------------------------------------------------------------
+lib nrx_3d.h  -  simple 3D games (raylib)
+------------------------------------------------------------------------------
+
+  open3d(title, width, height)          open a 3D window
+  running3d()                           true while the window is open
+  camera3d(x, y, z, lookX, lookY, lookZ)  camera and the point it looks at
+  begin3d(color)  ...  end3d()          one frame: background, draw, show
+  begin3d(top, bottom)                  gradient background from top to bottom
+  cube(x, y, z, width, height, depth, color)  box (sides shaded automatically
+                                        so the shape is visible); cubeWire(...)
+                                        only the edges
+  cylinder(x, y, z, topRadius, bottomRadius, height, color)
+                                        cylinder; top radius 0 = cone;
+                                        y = base of the cylinder
+  sphere(x, y, z, radius, color)        sphere
+  plane(x, y, z, width, depth, color)   flat floor
+  grid(count, spacing)                  helper lines on the floor
+  text2d(text, x, y, size, color)       text on screen (pixels)
+  rect2d(x, y, width, height, color)    rectangle on screen (pixels)
+  rectGrad2d(x, y, width, height, top, bottom)   2D gradient rectangle
+  textWidth2d(text, size)               text width in pixels
+  key3d("w")                            true while the key is held (letters,
+                                        digits, space, enter, escape, shift,
+                                        up, down, left, right, backspace,
+                                        tab, ctrl)
+  pressed3d("enter")                    true once when pressed, repeating
+                                        while held (for typing)
+  typed3d()                             characters typed since the last frame
+  clipboard3d()                         clipboard text (for Ctrl+V)
+  clipboard3d(text)                     put text on the clipboard (for copy)
+  screenshot3d("screen.png")            save the window content to .png
+  mouse3d()                             mouse position [x, y] in pixels
+  click3d()                             true once on a left click
+  wheel3d()                             mouse wheel movement this frame (+ up)
+  ground3d()                            floor point (y = 0) under the mouse:
+                                        [x, z], or [] when pointing at the sky
+  toScreen3d(x, y, z)                   pixel position [x, y] of a 3D point,
+                                        for labels above objects
+  exitKey3d("")                         key that closes the window (default
+                                        escape; "" = only the X button)
+  fps3d(n)                              frames per second limit (default 60)
+  frameTime()                           seconds since the previous frame
+  close3d()                             close the window
+
+  colors: "red", "green", "blue", "white", "black", "gray", "darkgray",
+          "yellow", "orange", "purple", "pink", "brown", "skyblue", "#rrggbb",
+          "#rrggbbaa" (aa = transparency, 00 invisible to ff solid)
+
+    lib nrx_3d.h
+    open3d("Game", 800, 600)
+    be x = 0.0
+    loop running3d()
+        if key3d("d")
+            be x += 3 * frameTime()
+        begin3d("skyblue")
+        grid(10, 1)
+        cube(x, 0.5, 0, 1, 1, 1, "orange")
+        text2d("WASD", 10, 10, 20, "black")
+        end3d()
+    close3d()
+
+Rotating and moving (like transforms in other 3D programs):
+
+    push3d()                    # save the current position and direction
+    move3d(x, 0, z)             # everything drawn next moves to this point
+    turn3d("y", heading)        # then rotates (degrees) on axis "x", "y", "z"
+    cube(0, 1, 0, 1, 2, 0.5, "orange")   # coordinates are now relative to it
+    push3d()                    # may nest (at most 16), e.g. an arm:
+    move3d(0.6, 1.8, 0)         #   move to the shoulder
+    turn3d("x", swing)          #   swing from the shoulder
+    cube(0, -0.4, 0, 0.3, 0.8, 0.3, "orange")
+    pop3d()
+    pop3d()                     # back to how it was before push3d
+
+- Every push3d must be closed with pop3d before end3d. text2d/rect2d only
+  outside push3d.
+
+- Draw only between begin3d and end3d (screenshot3d after end3d).
+- The environment variable NRX3D_HIDDEN=1 keeps the window hidden (for
+  automated tests); drawing and screenshot3d still work.
+- Full example with a text box: agen/kantor.nrxl.
+- A built .exe of a 3D program is about 1.7 MB (raylib is inside it); other
+  programs do not carry raylib.
+
+
+==============================================================================
+12. LIMITS
+==============================================================================
+
+- One line is at most 511 characters.
+- One program (including files pulled in with im) is at most 4096 lines.
+- At most 128 functions, 64 types, 1024 global variables, and 64 local
+  variables per function.
+- lock inside a loop outside functions is an error on the second round (the
+  variable already exists).
+
+
+==============================================================================
+13. VS CODE EXTENSION
+==============================================================================
+
+The vscode-nrxl folder holds the extension for syntax colors and code
+snippets. How to install it, and later how to publish it, is in
+vscode-nrxl/README.md.
+
+==============================================================================
+14. NRXC: THE COMPILER WRITTEN IN NRXL (NO VM)
+==============================================================================
+
+nrxc is the nrxl compiler written in nrxl itself (src\nrxc.nrxl). It reads
+a .nrxl file and writes a 64-bit Windows .exe directly (x64 machine code + PE
+header), with no VM and no external toolchain.
+
+Using it:
+
+    nrxlang game.nrxl                          # -> game.exe
+    nrxlang game.nrxl out\game.exe             # choose the .exe name
+    nrxlang                                 # no arguments: it asks for the file and the .exe
+    nrxlang build game.nrxl -o game.exe        # the same, with an option for the .exe name
+    nrxlang run game.nrxl                      # compile to a temporary .exe, run it, delete it
+
+- nrxlang.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrxl,
+  pustaka.nrxl, and the lib\nrx_*.nrxl folder) are read from the folder where
+  nrxlang.exe is, so it can run from any folder.
+- To build it yourself: from the src folder run
+  nrxc.exe nrxc.nrxl nrxlang_new.exe (nrxc builds itself from a seed; no old interpreter needed).
+- nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.
+- Only functions that are actually called go into the .exe, so it stays small.
+- The .exe has two sections: .text (code, read/execute only) and .data
+  (variables).
+- Every library (nrx_crudfile, rand, console, keyboard, json, http, sound,
+  window, 3d) was rewritten in nrxl in src\lib\nrx_*.nrxl. They are used
+  the same way: lib nrx_window.h.
+- nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and
+  functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from
+  not, and text uses Segoe UI.
+- Runtime error messages match the old nrxlang interpreter:
+      error E0026 in game.nrxl:3: index 5 is outside the list (the list has 1 items)
+  Errors found while compiling (before the .exe exists) still look different.
+  nrxc prints Done: game.exe (N bytes) when it finishes.
+
+Differences from the old nrxlang interpreter that are not matched yet:
+
+- Integers that pass the 64-bit limit wrap around (nrxlang turns them into
+  decimals).
+- min(2.5, 1) returns a decimal (nrxlang: the integer 1).
+- Type names are not separated per file (ordinary functions and variables
+  already are).
+
+------------------------------------------------------------------------------
+nrxc intrinsics  -  for writing libraries in nrxl
+------------------------------------------------------------------------------
+
+Most of these functions exist only in nrxc (peek, poke, and newBuffer also work in nrxlang). The libraries in src\lib\nrx_*.nrxl
+and the runtime (prelude.nrxl, pustaka.nrxl) use them. Ordinary programs do
+not need them. Every value is a 64-bit integer (a memory address or bits).
+
+Calling Windows DLLs:
+
+  dllFn("user32.dll", "MessageBoxA")   address of a function in a DLL
+                                       (LoadLibraryA + GetProcAddress); 0 if
+                                       missing
+  callp(address, a1, ..., a12)         call a function by address (Windows x64
+                                       rules); result = RAX; missing arguments
+                                       are filled with 0
+  cstr("text")                         address of a zero-terminated string, to
+                                       pass as char*
+  fromC(address)                       read the zero-terminated string at address as a string
+  api(i, a1, ..., a7)                  call one of the 13 built-in kernel32
+                                       functions by number (WriteFile,
+                                       ReadFile, HeapAlloc, ...)
+
+    be f = dllFn("user32.dll", "MessageBoxA")
+    callp(f, 0, cstr("Hello"), cstr("Title"), 0)
+
+Raw memory:
+
+  alloc(n)  free(p)                    same as newBuffer / freeBuffer
+  peek(p, off, "int8"|"int16"|"int"|"int64"|"pointer"|"float"|"double")
+  poke(p, off, kind, value)            read / write a typed value at p + off
+  peek8(p, off)  peek64(p, off)        read 1 byte / 8 bytes
+  poke8(p, off, v)  poke64(p, off, v)  write 1 byte / 8 bytes
+  idiv(a, b)                           integer division (int result)
+
+Turning nrxl values into addresses and back:
+
+  asInt(x)       address of a string / list / map / json (or the bits of a double)
+  asString(p)    string at an address     asListI(p)  list int
+  asListS(p)     list string              asListD(p)  list double
+  asListJ(p)     list json                asJson(p)   json
+  asDouble(bit)  a double from its bits
+
+Callbacks and calling by address:
+
+  _callback("function")   address of an nrxl function Windows can call (thread,
+                          WndProc, qsort); same as callback("function"); up to
+                          4 integer arguments
+  _callfn(address, a1, ..., ak)   call an nrxl function by its address
+
+Errors and state:
+
+  _lempar("message")        throw an error that try/catch can catch
+  _lemparK(code, "message") same, with an E#### number for uncaught errors
+  _gget(k)  _gset(k, v)     hidden global slot k (0..14) owned by a library:
+                            0 rand, 1 http status, 2 http background, 3 sound,
+                            4-6 console, 7 keyboard, 8 sound list,
+                            9 stdout handle, 10 window, 14 nrx_3d
+
+Decimal math (used by pustaka.nrxl): _sqrt(x) _sin(x) _cos(x) _tan(x)
+_atan2(y, x) _fpow(x, y).
+
+A small library example (user32 + kernel32):
+
+    func message(text string, title string) int
+        return callp(dllFn("user32.dll", "MessageBoxA"), 0, cstr(text), cstr(title), 0)
+
+    func tickMs() int
+        return callp(dllFn("kernel32.dll", "GetTickCount"))

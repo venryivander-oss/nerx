@@ -1,0 +1,36 @@
+lib nrx_crudfile.h
+
+be f = "uji_tmp_crud.txt"
+deleteFile(f)
+print fileExists(f)
+print createFile(f)
+print createFile(f)
+print fileExists(f)
+print "[" readFile(f) "]"
+writeFile(f, "satu\ndua\ntiga")
+print readFile(f)
+appendFile(f, "!")
+appendLine(f, "empat")
+appendLine(f, "lima")
+print readFile(f)
+be ls = readLines(f)
+print len(ls)
+for l in ls
+    print "> " l
+writeLines(f, ls)
+print readFile(f)
+print readRange(f, 2, 2)
+print readRange(f, 4, 10)
+print readRange(f, 9, 2)
+print findInFile(f, "a")
+print findInFile(f, "zzz")
+print replaceInFile(f, "a", "AA")
+print readFile(f)
+print replaceInFile(f, "tidakada", "x")
+print deleteFile(f)
+print deleteFile(f)
+print fileExists(f)
+be d = listFiles(".")
+print contains(d, "uji/")
+print contains(d, "prelude.nrxl")
+print len(d) > 5

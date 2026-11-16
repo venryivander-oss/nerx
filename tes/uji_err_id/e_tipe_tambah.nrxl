@@ -1,0 +1,3 @@
+errlang = id
+be x = 10
+be x += 0.5

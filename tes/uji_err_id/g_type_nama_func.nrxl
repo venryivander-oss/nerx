@@ -1,0 +1,5 @@
+errlang = id
+func A()
+    print 1
+type A
+    x int

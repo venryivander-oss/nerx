@@ -1,0 +1,14 @@
+type Player
+    name string
+    hp int = 100
+
+    func hit(n int)
+        be own.hp -= n
+
+    func info() string
+        return own.name " hp=" own.hp
+
+be p = Player("Budi")
+p.hit(30)
+print p.info()
+print typeOf(p)

@@ -1,0 +1,18 @@
+be a = 6
+be b = a * 7
+print b
+print a + b * 2 - 3
+print -5
+print 3000000000 * 3
+print 7 % 3
+print (1 + 2) * (3 + 4)
+be a += 1
+print "a=" a " ok=" a > 3
+print 5 > 3 and 2 > 1
+print not (1 == 1)
+be z int = 9
+print "z=" z
+be ok bool
+print ok
+be nm string
+print "[" nm "]"

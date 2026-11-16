@@ -1,0 +1,5 @@
+be hitung = 7
+func bantu() int
+    return 20
+ex func dariB() int
+    return bantu() + hitung

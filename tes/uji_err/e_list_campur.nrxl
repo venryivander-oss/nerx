@@ -1,0 +1,2 @@
+be xs = [1, "a"]
+print xs

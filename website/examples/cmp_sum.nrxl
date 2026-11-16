@@ -1,0 +1,6 @@
+be mulai = timer()
+be s = 0
+for i in range(300000000)
+    be s += i * 3 + 1
+print s
+print "done in: " round((timer() - mulai) * 1000 * 100) / 100 " ms"

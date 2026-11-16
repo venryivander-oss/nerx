@@ -1,0 +1,109 @@
+# nrx_crudfile.nrxl - library file ditulis dalam nrxl (tanpa C). readFile / writeFile / fileExists ada di prelude / pustaka.
+
+func createFile(path string) bool
+    if fileExists(path)
+        return false
+    writeFile(path, "")
+    return true
+
+# daftar baris: pisah di \n, \r dibuang, baris kosong terakhir (setelah \n penutup) tidak dihitung
+func cekBaca(fn string, path string)
+    if not fileExists(path)
+        _lemparK(134, fn + ": file " + path + " not found or cannot be opened")
+
+func readLines(path string) list string
+    cekBaca("readLines", path)
+    be hasil list string
+    be isi = replace(readFile(path), "\r", "")
+    if isi == ""
+        return hasil
+    be bagian = split(isi, "\n")
+    be n = len(bagian)
+    if bagian[n - 1] == ""
+        be n -= 1
+    for i in range(n)
+        add(hasil, bagian[i])
+    return hasil
+
+func writeLines(path string, baris list string) bool
+    be isi = ""
+    for b in baris
+        be isi = isi + b + "\n"
+    return writeFile(path, isi) == 1
+
+# tambah di akhir file (dibuat kalau belum ada): FILE_APPEND_DATA + OPEN_ALWAYS
+func appendFile(path string, teks string) bool
+    be h = CreateFileA(path, 4, 0, 0, 4, 128, 0)
+    if h == 0 - 1
+        _lemparK(135, "appendFile: file " + path + " cannot be written")
+    be buf = alloc(8)
+    WriteFile(h, cstr(teks), len(teks), buf, 0)
+    CloseHandle(h)
+    free(buf)
+    return true
+
+func appendLine(path string, teks string) bool
+    be isi = readFile(path)
+    if isi != "" and ord(isi, len(isi) - 1) != 10
+        return appendFile(path, "\n" + teks + "\n")      # baris terakhir belum diakhiri \n: pisahkan dulu
+    return appendFile(path, teks + "\n")
+
+func deleteFile(path string) bool
+    return callp(dllFn("kernel32.dll", "DeleteFileA"), cstr(path)) != 0
+
+# nama file dan folder; folder berakhiran /
+func listFiles(folder string) list string
+    be hasil list string
+    be data = alloc(400)
+    be h = callp(dllFn("kernel32.dll", "FindFirstFileA"), cstr(folder + "\\*"), data)
+    if h == 0 - 1
+        _lemparK(319, "listFiles: folder " + folder + " not found")
+    be lagi = true
+    loop lagi
+        be nama = fromC(data + 44)
+        if nama != "." and nama != ".."
+            if peek8(data, 0) % 32 >= 16
+                be nama = nama + "/"
+            add(hasil, nama)
+        be lagi = callp(dllFn("kernel32.dll", "FindNextFileA"), h, data) != 0
+    callp(dllFn("kernel32.dll", "FindClose"), h)
+    free(data)
+    return hasil
+
+# n baris mulai baris ke-mulai (baris pertama = 1)
+func readRange(path string, mulai int, n int) list string
+    cekBaca("readRange", path)
+    be semua = readLines(path)
+    be hasil list string
+    for i in range(len(semua))
+        if i + 1 >= mulai and i + 1 < mulai + n
+            add(hasil, semua[i])
+    return hasil
+
+func findInFile(path string, teks string) list int
+    cekBaca("findInFile", path)
+    be semua = readLines(path)
+    be hasil list int
+    for i in range(len(semua))
+        if indexOf(semua[i], teks) >= 0
+            add(hasil, i + 1)
+    return hasil
+
+func replaceInFile(path string, lama string, baru string) int
+    if lama == ""
+        _lemparK(321, "replaceInFile: the text to find cannot be empty")
+    cekBaca("replaceInFile", path)
+    be isi = readFile(path)
+    be jumlah = 0
+    be pos = indexOf(isi, lama)
+    loop pos >= 0
+        be jumlah += 1
+        be isi2 = slice(isi, pos + len(lama))
+        be pos2 = indexOf(isi2, lama)
+        if pos2 < 0
+            be pos = 0 - 1
+        else
+            be pos = pos + len(lama) + pos2
+    if jumlah > 0
+        writeFile(path, replace(isi, lama, baru))
+    return jumlah

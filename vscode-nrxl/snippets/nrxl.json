@@ -1,0 +1,94 @@
+{
+  "func": {
+    "prefix": "func",
+    "body": ["func ${1:nama}(${2})", "\t${0:return}"],
+    "description": "Fungsi baru"
+  },
+  "if": {
+    "prefix": "if",
+    "body": ["if ${1:kondisi}", "\t$0"],
+    "description": "if"
+  },
+  "if else": {
+    "prefix": "ife",
+    "body": ["if ${1:kondisi}", "\t${2}", "else", "\t$0"],
+    "description": "if ... else"
+  },
+  "loop": {
+    "prefix": "loop",
+    "body": ["loop ${1:i < 10}", "\t$0"],
+    "description": "loop selama kondisi benar"
+  },
+  "for": {
+    "prefix": "for",
+    "body": ["for ${1:x} in ${2:list}", "\t$0"],
+    "description": "for ... in"
+  },
+  "for range": {
+    "prefix": "forr",
+    "body": ["for ${1:i} in range(${2:10})", "\t$0"],
+    "description": "for i in range(n)"
+  },
+  "try catch": {
+    "prefix": "try",
+    "body": ["try", "\t${1}", "catch ${2:err}", "\t${0:print \"error: \" err}"],
+    "description": "try ... catch"
+  },
+  "options": {
+    "prefix": "options",
+    "body": ["options ${1:nilai}", "\toption ${2:\"1\"}", "\t\t${3}", "\telse", "\t\t$0"],
+    "description": "options / option / else"
+  },
+  "type": {
+    "prefix": "type",
+    "body": ["type ${1:Nama}", "    ${2:nama} ${3:string}", "", "    init ${2:nama}", "        be own.${2:nama} = ${2:nama}"],
+    "description": "type baru (seperti class)"
+  },
+  "lib": {
+    "prefix": "lib",
+    "body": ["lib ${1|nrx_window.h,nrx_rand.h,nrx_crudfile.h,nrx_keyboard.h,nrx_console.h,nrx_sound.h,nrx_json.h|}"],
+    "description": "pakai library"
+  },
+  "windowTemplate": {
+    "prefix": "windowTemplate",
+    "body": ["windowTemplate ${1:menu}(", "\tnewText(\"${2:Halo}\", 20, 20)", "\t$0", ")"],
+    "description": "isi window"
+  },
+  "templateStyle": {
+    "prefix": "templateStyle",
+    "body": ["templateStyle ${1:gaya}(", "\tcolor: \"${2:biru}\"", "\t$0", ")"],
+    "description": "gaya tampilan"
+  },
+  "newWindow": {
+    "prefix": "newWindow",
+    "body": ["newWindow(\"${1:Judul}\", ${2:400}, ${3:300}, ${4:menu})"],
+    "description": "buka window"
+  },
+  "game": {
+    "prefix": "game",
+    "body": [
+      "lib nrx_window.h",
+      "",
+      "be x = 50",
+      "",
+      "func gerak(tombol)",
+      "\tif tombol == \"left\"",
+      "\t\tbe x -= 10",
+      "\tif tombol == \"right\"",
+      "\t\tbe x += 10",
+      "",
+      "func gambar()",
+      "\tclearCanvas(layar, \"#1e1e2e\")",
+      "\tdrawRect(layar, x, 100, 30, 30, \"biru\")",
+      "",
+      "windowTemplate game(",
+      "\tonKey(gerak())",
+      "\tonTimer(gambar(), 0.03)",
+      "\tnewCanvas(layar, 0, 0, 400, 300)",
+      ")",
+      "",
+      "newWindow(\"${1:Game}\", 400, 300, game)"
+    ],
+    "description": "kerangka game dengan canvas"
+  }
+}

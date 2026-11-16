@@ -1,0 +1,5 @@
+errlang = en
+print 1
+be x = 10
+be x += 0.5
+

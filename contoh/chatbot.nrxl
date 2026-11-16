@@ -1,0 +1,109 @@
+# chatbot.nrxl: chatbot di console untuk AI lokal (API kompatibel OpenAI)
+# Cocok untuk llama.cpp (llama-server), LM Studio, Ollama, atau URL cloudflared-nya.
+# Jalankan: nrxlang run chatbot.nrxl
+lib nrx_http.h
+lib nrx_json.h
+lib nrx_console.h
+
+lock SYSTEM = "Kamu asisten yang ramah, jelas, dan menjawab dalam bahasa Indonesia kecuali diminta lain."
+
+# Kirim seluruh riwayat ke server, kembalikan teks jawabannya
+func tanya(riwayat json, alamat string, model string, kunci string) string
+    be req json
+    be req["model"] = model
+    be req["messages"] = riwayat
+    be req["stream"] = false
+    be header = {"Content-Type": "application/json"}
+    if kunci != ""
+        be header["Authorization"] = "Bearer " + kunci
+    be balas = httpPost(alamat + "/v1/chat/completions", toJson(req), "application/json", header)
+    if httpStatus() != 200
+        throw "server membalas status " httpStatus() ": " slice(balas, 0, 300)
+    be data json = fromJson(balas)
+    return data["choices"][0]["message"]["content"]
+
+func bantuan()
+    print "Perintah:"
+    print "  /reset   hapus riwayat percakapan"
+    print "  /simpan  simpan percakapan ke chat.json"
+    print "  /bantu   tampilkan bantuan ini"
+    print "  /exit    keluar"
+
+color("cyan")
+print "=== Chatbot AI Lokal (nrxl) ==="
+color()
+
+be alamat = ask "Alamat server [http://localhost:8080]: "
+be alamat = trim(alamat)
+if alamat == ""
+    be alamat = "http://localhost:8080"
+# buang / di akhir supaya tidak jadi //v1
+loop slice(alamat, -1) == "/"
+    be alamat = slice(alamat, 0, len(alamat) - 1)
+
+be model = ask "Nama model [qwen3-coder-30b-a3b-instruct]: "
+be model = trim(model)
+if model == ""
+    be model = "qwen3-coder-30b-a3b-instruct"
+
+be kunci = ask "API key (kosongkan kalau tidak ada): "
+be kunci = trim(kunci)
+
+be riwayat json = fromJson("[]")
+be sistem = {"role": "system", "content": SYSTEM}
+add(riwayat, sistem)
+
+print
+bantuan()
+print
+
+be jalan = true
+loop jalan
+    color("hijau")
+    be teks = ask "Kamu: "
+    color()
+    be teks = trim(teks)
+
+    if teks == ""
+        continue
+
+    options teks
+        option "/exit", "/keluar"
+            be jalan = false
+            continue
+        option "/reset"
+            be riwayat json = fromJson("[]")
+            add(riwayat, sistem)
+            print "(riwayat dihapus)"
+            continue
+        option "/bantu"
+            bantuan()
+            continue
+        option "/simpan"
+            lib nrx_crudfile.h
+            writeFile("chat.json", toJson(riwayat, true))
+            print "(tersimpan di chat.json)"
+            continue
+
+    be pesan = {"role": "user", "content": teks}
+    add(riwayat, pesan)
+
+    write("AI: ... ")
+    try
+        be jawab = tanya(riwayat, alamat, model, kunci)
+        write("\r")
+        color("kuning")
+        print "AI: " jawab
+        color()
+        be balasan = {"role": "assistant", "content": jawab}
+        add(riwayat, balasan)
+    catch err
+        write("\r")
+        color("merah")
+        print "Gagal: " err
+        color()
+        # batalkan pesan terakhir supaya bisa dicoba lagi
+        takeLast(riwayat)
+    print
+
+print "Sampai jumpa!"

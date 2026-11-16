@@ -1,0 +1,65 @@
+print str(5) + "x"
+print str(2.5)
+print str(true)
+print int("42") + 1
+print int(3.9)
+print int(-3.9)
+print int("-7")
+print float("2.5") * 2
+print float("3")
+print float(2)
+print typeOf(1)
+print typeOf(1.5)
+print typeOf("s")
+print typeOf(true)
+print typeOf([1])
+print typeOf({"a": 1})
+print range(3)
+print range(2, 5)
+print range(10, 0, -3)
+print abs(-5)
+print abs(-2.5)
+print abs(3)
+print round(2.567, 2)
+print round(2.5)
+print round(3.5)
+print round(-2.5)
+print round(2.4)
+print floor(2.9)
+print floor(-2.1)
+print ceil(2.1)
+print ceil(-2.9)
+print sqrt(16)
+print sqrt(2)
+print pow(2, 10)
+print pow(2, 0.5)
+print pow(2.5, 2)
+print max(3, 9, 2)
+print min(3, 9, 2)
+print max(2.5, 1.5)
+print min(1, 2)
+print pi()
+print sin(pi() / 2)
+print cos(0)
+print tan(0)
+print atan2(1, 1)
+print 7 % 3
+print -7 % 3
+print 7.5 % 2
+print 10 / 4
+print 10 / 5
+print 2 * 3.5
+print 1e10
+print 123456789012
+print 1.5e300 * 1.0
+print 100 * 1.1
+print 5 / 2 * 2
+print int(7 / 2)
+print float(7) / 2
+
+print 12345678.9
+print 0.5
+print 1.0
+print 1e-5
+print 3 == 3.0
+print 2 + 2 == 4

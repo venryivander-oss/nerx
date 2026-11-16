@@ -1,0 +1,4473 @@
+# nrxc.nrxl  -  self-hosting TAHAP 5: compiler mini yang ditulis dalam nrxl dan menghasilkan
+# file .exe Windows 64-bit LANGSUNG (tanpa gcc, tanpa C, tanpa VM, tanpa runtime tambahan).
+#
+# Bahasa sumber mini (satu perintah per baris, indentasi = spasi; # = komentar):
+#     be x = 6 * (2 + 3)            variabel; tipenya ditentukan dari isi pertama (int / string / list)
+#     be s = "halo" + " dunia"      string: + menggabung, == dan != membandingkan
+#     print x - 4                   cetak int atau string
+#     if x > 3                      if / else if / else
+#         print "besar"
+#     else
+#         print "kecil"
+#     loop x > 0                    ulangi selama kondisi benar
+#         be x = x - 1
+#     be xs list int                list kosong: "list int" atau "list string"
+#     add(xs, 5)                    tambah di akhir
+#     be xs[0] = 7                  ubah isi
+#     print xs[0] + len(xs)         baca isi; len() untuk string dan list
+#     func ulang(s string, n int) string      fungsi: parameter bertipe, tipe hasil (bawaan: int)
+#         ...
+#         return hasil
+#   Tipe: int, string, list int, list string.  Ekspresi: angka, "teks", variabel, xs[i],
+#   fungsi(arg, ...), + - * / %, == != < > <= >=, and, or, not, kurung.
+#   type (struct, field 8 byte, nilai = penunjuk ke blok heap; salinan "be b = a" berbagi isi):
+#         type Titik                 be p Titik          (blok nol)
+#             x int                  be p.x = 3          print p.x
+#             nama string            be xs list Titik    add(xs, p)    print xs[0].nama
+#   File dan argumen (prelude): bacaFile(nama), tulisFile(nama, isi), argKe(k), cmdLine(), cariS(list, teks)
+#   Intrinsik tingkat rendah: alloc(n), free(p), peek8/peek64(p, offset), poke8/poke64(p, offset, nilai),
+#   asString(int), asInt(string/list), asListI(int), asListS(int),
+#   api(indeks, a1..a7) = panggil fungsi Windows dari tabel impor (lihat OFF_IAT di bawah).
+#   Pustaka standar (prelude.nrxl, ditulis dalam bahasa ini juga): str, substr, ord, chr, indexOf, ...
+#   Memori: delete(x) membebaskan string atau list (data dan kepalanya). Setelah delete, jangan
+#   pakai x lagi. Isi list yang berupa string tidak ikut dibebaskan (delete tiap elemen dulu).
+#   Intrinsik free(p) membebaskan blok dari alloc(n). Indeks list tidak dicek batasnya.
+#
+# Pakai:   nrxlang run src\nrxc.nrxl      (lalu isi nama file sumber dan nama .exe)
+#          File prelude.nrxl harus ada di folder kerja.
+
+lib nrx_crudfile.h
+
+ffi "kernel32.dll" (
+    func CreateFileA(nama string, akses int, bagi int, sa pointer, buat int, atribut int, templ pointer) pointer
+    func WriteFile(h pointer, data pointer, n int, tertulis pointer, ov pointer) int
+    func CloseHandle(h pointer) int
+)
+
+lock HEX = "0123456789ABCDEF"
+ffi "kernel32.dll" (
+    func lstrcpyA(dst int, src string) int
+    func GetCommandLineA() pointer
+    func GetUserDefaultUILanguage() int
+    func LoadLibraryA(nama string) pointer
+    func GetProcAddress(h pointer, nama string) pointer
+    func GetModuleFileNameA(h pointer, buf pointer, n int) int
+    func GetTempPathA(n int, buf pointer) int
+    func GetCurrentProcessId() int
+    func DeleteFileA(p string) int
+)
+ffi "msvcrt.dll" (
+    func system(perintah string) int
+)
+lock ASCII =" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+lock HURUF = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+lock DIGIT = "0123456789"
+lock RAW = 512                    # 0x200: ukuran header di file (FileAlignment)
+lock BASE_RVA = 4096              # 0x1000: alamat section di memori
+lock OFF_ILT = 64                 # 0x40  tabel pencarian impor (6 entri)
+lock OFF_IAT = 192                # 0xC0  tabel alamat impor (indeks untuk api(): 0 GetStdHandle 1 WriteFile
+                                  #   2 ExitProcess 3 GetProcessHeap 4 HeapAlloc 5 HeapFree 6 CreateFileA
+                                  #   7 ReadFile 8 GetFileSize 9 CloseHandle 10 GetCommandLineA
+                                  #   11 LoadLibraryA 12 GetProcAddress)
+lock NIMPOR = 13
+
+be B = 0                          # buffer seluruh file .exe
+be kur = 0                        # kursor penulisan (offset di dalam section)
+be tok list string                # token ekspresi yang sedang diurai
+be tp = 0                         # posisi token
+be noBaris = 0
+be berkNama = ""
+be dlmFfi = false
+# daftar perintah hasil lewatan 1 (satu elemen per baris sumber yang bermakna)
+be jenis list string              # p b d s i ei e l f r x
+be arg list string
+be isiB list string
+be isiC list string
+be nomor list int
+be berk list string
+be inden list int
+be si = 0                         # perintah yang sedang dikompilasi
+be nStmt = 0
+# fungsi
+be funcNama list string
+be funcArity list int
+be funcStmt list int
+be funcAddr list int
+be funcPT list string             # tipe parameter dipisah koma
+be funcRet list string
+be callPos list int               # tempat disp32 panggilan yang harus ditambal
+be callFn list int
+be dalamFungsi = false
+be curRet = "int"
+be curFnNama = ""
+be imMuat list string                # file yang sudah dimuat lewat im
+be teksOverride = ""                  # kalau tidak kosong: bacaSumber membaca teks ini, bukan file (fungsi buatan compiler)
+be retInferensi = ""                  # tipe return yang ditemukan saat menebak tipe hasil fungsi tanpa tipe
+# lingkup variabel (program utama atau satu fungsi)
+be scNama list string
+be scDisp list int
+be scTipe list string
+be nLokal = 0
+# variabel global: semua be/lock di luar fungsi. Slot 8 byte di akhir image, dialamati rip-relatif.
+be vbNama list string                   # baris pembuatan pertama tiap variabel (untuk E0343)
+be vbBaris list int
+be untukFor = false
+be gNama list string
+be gTipe list string
+be gKunci list int                # 1 = lock (tidak boleh diubah)
+be gloPos list int                # tempat disp32 yang harus ditambal ke slot global
+be gloIdx list int
+be globalOK = true                # false untuk fungsi prelude: tidak boleh menyentuh global program
+be paksaLokal = false             # true saat menyimpan variabel for di dalam fungsi (selalu lokal)
+# break / continue: lompatan yang menunggu ditambal; *Base = tumpukan awal tiap loop yang sedang terbuka
+be brkPos list int
+be brkBase list int
+be cntPos list int
+be cntBase list int
+# rutin bawaan dan literal string
+be offCetak = 0
+be offTek = 0
+be offStr = 0
+be offCetakNL = 0
+be offAlloc = 0
+be offFree = 0
+be posFreeLim = 0
+be offApi = 0
+be offNL = 0
+be offLempar = 0
+be offCallp = 0
+be optN = 0                       # penghitung nama variabel tersembunyi untuk options
+be diam = false                       # true: jangan cetak "Done:" (dipakai nrxc run)
+be rtDir = ""                        # folder file runtime (prelude, pustaka, lib\) kalau nrxc.exe dipasang terpisah dari folder kerja
+be banyakBerkas = false               # lebih dari satu file sumber pengguna: catat berkas di tiap baris
+be metaJenis list string         # templateStyle ("s") dan windowTemplate ("t") yang dibaca dari sumber
+be metaNama list string
+be metaBody list string           # baris isinya dipisah \n
+be metaAktif = false
+be libMuat list string            # file library nrx_*.nrxl yang sudah dimuat
+be tryAktif list int              # slot catat try yang sedang terbuka (disp rbp), dari luar ke dalam
+be tryBase list int               # panjang tryAktif saat tiap loop dimulai
+# struct (type)
+be structNama list string
+be structFN list string           # nama field dipisah koma
+be structFT list string           # tipe field dipisah titik koma
+be structDef list string          # nilai bawaan field dipisah baris baru (kosong = tidak ada)
+be typeAktif = ""                 # nama type yang sedang dibaca fieldnya (lewatan 1)
+be litTeks list string
+be litPos list int
+be litIdx list int
+
+# ---------------------------------------------------------------- penulis byte
+func w8(o int, v int)
+    be x = v
+    if x > 127
+        be x = x - 256
+    poke(B, o, "int8", x)
+
+func w16(o int, v int)
+    be x = v
+    if x > 32767
+        be x = x - 65536
+    poke(B, o, "int16", x)
+
+func w32(o int, v int)
+    be x = v
+    if x > 2147483647
+        be x = x - 4294967296
+    poke(B, o, "int", x)
+
+func w64(o int, v)
+    poke(B, o, "int64", v)
+
+# tulis teks ASCII (kode karakter = posisi di tabel + 32) + byte 0 penutup, mulai di offset file o
+func tulisTeks(o int, s string)
+    lstrcpyA(B + o, s)                # salin byte apa adanya (UTF-8 utuh) + 0 penutup
+
+# offset section -> offset file
+func sek(o int) int
+    return RAW + o
+
+# tulis byte dari teks heksadesimal: "48 83 EC 38"
+func hex(s string)
+    # peephole: "push rax" langsung diikuti "pop rax" / "pop rcx" tidak perlu lewat memori
+    if lastPush == kur and kur > barrierKur and (s == "58" or s == "59" or substr(s, 0, 3) == "58 " or substr(s, 0, 3) == "59 ")
+        be kur -= 1
+        be lastPush = -1
+        if substr(s, 0, 2) == "59"
+            hex("48 89 C1")               # mov rcx, rax
+        if len(s) > 3
+            hex(slice(s, 3))
+        return
+    for t in split(s)
+        be v = indexOf(HEX, substr(t, 0, 1)) * 16 + indexOf(HEX, substr(t, 1, 1))
+        w8(sek(kur), v)
+        be kur += 1
+    be lastPush = -1
+    if len(s) >= 2 and substr(s, len(s) - 2, 2) == "50" and (len(s) == 2 or substr(s, len(s) - 3, 1) == " ")
+        if s != "41 50" and substr(s, 0, 8) != "48 83 EC" and substr(s, 0, 8) != "48 8D 74" and substr(s, 0, 8) != "4C 8D 44" and substr(s, 0, 8) != "4C 8B 4D"
+            be lastPush = kur
+
+# posisi terakhir "push rax" yang baru dikeluarkan (= kur kalau instruksi terakhir adalah push rax); barrierKur = target lompatan terakhir
+be lastPush = -1
+be barrierKur = -1
+be kknst = -1                         # nilai konstanta operan kanan terakhir yang dimuat ke rcx oleh gabungKanan (-1 = bukan konstanta)
+be kknPos = 0                         # posisi "movabs rcx, konstanta" itu
+
+# M = floor(2^(63+l)/d) + 1 (64 bit tanpa tanda), l = ceil(log2 d), untuk pembagian bertanda 64-bit dengan d konstan
+# (Granlund-Montgomery: m' = M - 2^64 sebagai bilangan bertanda punya pola bit yang sama dengan M).
+# Pembagian panjang basis 2^15 supaya semua hasil antara kecil (nrxlang asli mengubah int besar jadi double);
+# hasilnya dua kata 32-bit di magLo dan magHi.
+be magLo = 0
+be magHi = 0
+func hitungMagik(d int, l int)
+    be k = 63 + l
+    be t = int(floor(k / 15))
+    be r = 0
+    be lo = 0
+    be hi = 0
+    for ii in range(t + 1)
+        be cur = r * 32768
+        if ii == 0
+            be cur = cur + int(pow(2, k - t * 15))
+        be qd = int(floor(cur / d))
+        be r = cur - qd * d
+        be lo = lo * 32768 + qd
+        be hi = hi * 32768 + int(floor(lo / 4294967296))
+        be lo = lo % 4294967296
+    be magLo = lo + 1
+    be magHi = hi
+    if magLo >= 4294967296
+        be magLo = 0
+        be magHi = hi + 1
+# x % d dengan d konstan (2 <= d < 2^31): rax = x -> rax = sisa. Tanpa idiv.
+func modKonstan(d int)
+    be l = 0
+    be p2 = 1
+    loop p2 < d
+        be p2 = p2 * 2
+        be l += 1
+    if p2 == d
+        hex("48 89 C2 48 C1 FA 3F 48 C1 EA")   # mov rdx, rax; sar rdx, 63; shr rdx, imm8
+        w8(sek(kur), 64 - l)
+        be kur += 1
+        hex("48 01 C2 48 C1 FA")                # add rdx, rax; sar rdx, imm8
+        w8(sek(kur), l)
+        be kur += 1
+        hex("48 C1 E2")                         # shl rdx, imm8
+        w8(sek(kur), l)
+        be kur += 1
+        hex("48 29 D0 50")                      # sub rax, rdx; push rax
+        return
+    hex("49 89 C0 48 B9")                       # mov r8, rax; movabs rcx, m'
+    hitungMagik(d, l)
+    w32(sek(kur), magLo)
+    w32(sek(kur + 4), magHi)
+    be kur += 8
+    hex("48 F7 E9 4C 01 C2 48 C1 FA")           # imul rcx; add rdx, r8; sar rdx, imm8
+    w8(sek(kur), l - 1)
+    be kur += 1
+    hex("4C 89 C0 48 C1 F8 3F 48 29 C2")        # mov rax, r8; sar rax, 63; sub rdx, rax   (q = rdx)
+    hex("48 69 D2")                             # imul rdx, rdx, d
+    d32(d)
+    hex("4C 89 C0 48 29 D0 50")                 # mov rax, r8; sub rax, rdx; push rax
+
+func bacaB(o int) int
+    be v = peek(B, sek(o), "int8")
+    if v < 0
+        be v = v + 256
+    return v
+
+# operan kanan sudah dihitung di [pR, kur). Kalau isinya hanya "muat nilai lalu push", muat langsung ke rcx
+# dan (kalau operan kiri berakhir dengan push) buang push kiri juga: hasil rax = kiri, rcx = kanan tanpa pop.
+# false = tidak diubah; pemanggil memakai "pop rcx; pop rax" seperti biasa.
+func gabungKanan(pR int, kiriPush bool) bool
+    be kknst = -1
+    if lastPush != kur or barrierKur >= pR
+        return false
+    be n = kur - pR
+    be glob = false
+    if n == 11 and bacaB(pR) == 72 and bacaB(pR + 1) == 184
+        w8(sek(pR + 1), 185)              # 48 B8 -> 48 B9 (movabs rcx, imm64)
+        be kknst = peek(B, sek(pR + 2), "int64")
+        be kknPos = pR
+    else if n == 8 and bacaB(pR) == 72 and bacaB(pR + 1) == 139 and (bacaB(pR + 2) == 5 or bacaB(pR + 2) == 133)
+        be glob = bacaB(pR + 2) == 5
+        w8(sek(pR + 2), bacaB(pR + 2) + 8)    # 05 -> 0D, 85 -> 8D (mov rcx, [..])
+    else
+        return false
+    be kur -= 1                           # buang push kanan
+    be lastPush = -1
+    if kiriPush
+        for k in range(n - 1)
+            w8(sek(pR - 1 + k), bacaB(pR + k))
+        be kur -= 1                       # buang push kiri
+        be kknPos = pR - 1
+        if glob
+            be gloPos[len(gloPos) - 1] = gloPos[len(gloPos) - 1] - 1
+    else
+        hex("58")
+    return true
+
+# imm32 / disp32 little-endian di posisi kursor
+func d32(v int)
+    w32(sek(kur), v)
+    be kur += 4
+
+# rip-relatif: target = offset section tujuan; disp32 dihitung dari akhir instruksi
+func relatif(target int)
+    d32(target - (kur + 4))
+
+# tambal lompatan/panggilan: disp32 di posisi p diarahkan ke target
+func tambal(p int, target int)
+    w32(sek(p), target - (p + 4))
+    if target == kur
+        be barrierKur = target
+        be lastPush = -1
+
+func ratakan(n int, k int) int
+    return int(floor((n + k - 1) / k)) * k
+
+func galat(pesan string)
+    print "Error " berkNama " baris " noBaris ": " pesan
+    exit(1)
+
+# error kompilasi berformat sama dengan nrxlang: error E0229 in file.nrxl:4: pesan
+be errId = false                       # pesan error dalam bahasa Indonesia (errlang = id, atau bahasa Windows)
+be errPilih = 0                       # 1 = errlang = id di sumber, 2 = errlang = en, 0 = ikut bahasa Windows
+
+func galatK(kode int, pesan string)
+    be ks = str(kode)
+    loop len(ks) < 4
+        be ks = "0" + ks
+    be kata = " in "
+    if errId
+        be pesan = terjemahPesan(tabelPesanId(), kode, pesan)
+        be kata = " di "
+    print "error E" + ks + kata + berkNama + ":" + str(noBaris) + ": " + pesan
+    exit(1)
+
+# bahasa pesan error: baris "errlang = id/en" di file utama, kalau tidak ada ikut bahasa Windows (seperti nrxlang)
+func tentukanBahasa(sumber string)
+    be errId = (GetUserDefaultUILanguage() % 1024) == 33
+    if not fileExists(sumber)
+        return
+    for baris in split(replace(readFile(sumber), "\r", ""), "\n")
+        be b = trim(replace(split(baris, "#")[0], "\t", " "))
+        if substr(b, 0, 7) == "errlang" and (len(b) == 7 or substr(b, 7, 1) == " " or substr(b, 7, 1) == "=")
+            be v = trim(replace(slice(b, 7), "=", ""))
+            if v == "id"
+                be errId = true
+                be errPilih = 1
+            else if v == "en"
+                be errId = false
+                be errPilih = 2
+
+
+# terjemahan pesan error ke Indonesia (errlang = id): tabel "kode|indonesia|inggris" dari src\nrx_msgs.h
+func isiTemplate(idT string, enT string, pesan string) string
+    be segs list string
+    be cur = ""
+    be i = 0
+    loop i < len(enT)
+        if substr(enT, i, 1) == "%" and i + 1 < len(enT) and contains("sdc", substr(enT, i + 1, 1))
+            add(segs, cur)
+            be cur = ""
+            be i += 2
+        else
+            be cur = cur + substr(enT, i, 1)
+            be i += 1
+    add(segs, cur)
+    if len(segs) == 1
+        return idT
+    if substr(pesan, 0, len(segs[0])) != segs[0]
+        return pesan
+    be args list string
+    be pos = len(segs[0])
+    for k in range(1, len(segs))
+        be nxt = segs[k]
+        if k == len(segs) - 1
+            if nxt != "" and slice(pesan, len(pesan) - len(nxt)) != nxt
+                return pesan
+            add(args, slice(pesan, pos, len(pesan) - len(nxt)))
+        else
+            be ix = indexOf(slice(pesan, pos), nxt)
+            if ix < 0
+                return pesan
+            add(args, slice(pesan, pos, pos + ix))
+            be pos = pos + ix + len(nxt)
+    be hasil = ""
+    be j = 0
+    be ai = 0
+    loop j < len(idT)
+        if substr(idT, j, 1) == "%" and j + 1 < len(idT) and contains("sdc", substr(idT, j + 1, 1))
+            be hasil = hasil + args[ai]
+            be ai += 1
+            be j += 2
+        else
+            be hasil = hasil + substr(idT, j, 1)
+            be j += 1
+    return hasil
+
+func terjemahPesan(tabel list string, kode int, pesan string) string
+    be pref = str(kode) + "|"
+    for e in tabel
+        if substr(e, 0, len(pref)) == pref
+            be bag = split(e, "|")
+            return isiTemplate(bag[1], bag[2], pesan)
+    return pesan
+func tabelPesanId() list string
+    be r list string
+    add(r, "3|variabel %s belum dibuat (kalau maksudnya teks, pakai tanda kutip: \"%s\")|variable %s has not been created (if you meant text, use quotes: \"%s\")")
+    add(r, "5|%s di-lock, nilainya tidak bisa diubah|%s is locked, its value cannot be changed")
+    add(r, "6|%s butuh %d argumen, tapi diberi %d|%s needs %d arguments, but got %d")
+    add(r, "10|ffi: file %s tidak ditemukan|ffi: file %s not found")
+    add(r, "20|ffi: fungsi %s tidak ada di %s|ffi: function %s is not in %s")
+    add(r, "23|operator %c butuh angka|operator %c needs numbers")
+    add(r, "24|tidak bisa dibagi dengan nol|cannot divide by zero")
+    add(r, "25|index harus angka|index must be a number")
+    add(r, "26|index %d di luar list (isi list ada %d)|index %d is outside the list (the list has %d items)")
+    add(r, "27|%s tidak punya field %s|%s has no field %s")
+    add(r, "28|key \"%s\" tidak ada di map (cek dulu dengan contains(map, \"%s\"))|key \"%s\" is not in the map (check first with contains(map, \"%s\"))")
+    add(r, "30|angka tidak bisa diberi index [ ]|a number cannot be indexed with [ ]")
+    add(r, "31|tanda kutip \" belum ditutup|quote \" is not closed")
+    add(r, "33|kurang tanda }|missing }")
+    add(r, "34|kurang tanda )|missing )")
+    add(r, "35|kurang tanda ]|missing ]")
+    add(r, "37|kurang tanda ) setelah argumen %s|missing ) after the arguments of %s")
+    add(r, "39|tidak dimengerti: %s|not understood: %s")
+    add(r, "41|tanda - butuh angka|- needs a number")
+    add(r, "42|%s(): \"%s\" bukan angka|%s(): \"%s\" is not a number")
+    add(r, "43|argumen pertama %s harus list|the first argument of %s must be a list")
+    add(r, "44|%s: isinya di-lock, tidak bisa diubah|%s: its contents are locked and cannot be changed")
+    add(r, "46|takeLast: list sudah kosong|takeLast: the list is already empty")
+    add(r, "47|%s butuh map: %s({\"a\": 1})|%s needs a map: %s({\"a\": 1})")
+    add(r, "48|range butuh 1 sampai 3 argumen: range(akhir), range(awal, akhir), range(awal, akhir, langkah)|range needs 1 to 3 arguments: range(end), range(start, end), range(start, end, step)")
+    add(r, "49|range: langkah tidak boleh 0|range: step cannot be 0")
+    add(r, "51|sqrt: tidak bisa akar dari angka negatif|sqrt: cannot take the square root of a negative number")
+    add(r, "52|round butuh 1 atau 2 argumen: round(angka) atau round(angka, digit)|round needs 1 or 2 arguments: round(number) or round(number, digits)")
+    add(r, "54|split butuh 1 atau 2 argumen: split(teks, pemisah)|split needs 1 or 2 arguments: split(text, separator)")
+    add(r, "55|join butuh 1 atau 2 argumen: join(list, pemisah)|join needs 1 or 2 arguments: join(list, separator)")
+    add(r, "56|replace: teks yang dicari tidak boleh kosong|replace: the text to find cannot be empty")
+    add(r, "57|substr butuh 2 atau 3 argumen: substr(teks, mulai, panjang)|substr needs 2 or 3 arguments: substr(text, start, length)")
+    add(r, "58|slice butuh 2 atau 3 argumen: slice(list, awal, akhir)|slice needs 2 or 3 arguments: slice(list, start, end)")
+    add(r, "59|exit butuh 0 atau 1 argumen: exit() atau exit(kode)|exit needs 0 or 1 arguments: exit() or exit(code)")
+    add(r, "66|%s() butuh library file, tambahkan di atas: lib nrx_crudfile.h|%s() needs the file library, add at the top: lib nrx_crudfile.h")
+    add(r, "67|%s butuh %d nilai (%d field), tapi diberi %d|%s needs %d values (%d fields), but got %d")
+    add(r, "70|fungsi %s tidak ditemukan|function %s not found")
+    add(r, "71|%s hanya boleh di dalam loop|%s is only allowed inside a loop")
+    add(r, "72|fungsi %s butuh %d argumen, tapi diberi %d|function %s needs %d arguments, but got %d")
+    add(r, "73|fungsi %s butuh %d sampai %d argumen, tapi diberi %d|function %s needs %d to %d arguments, but got %d")
+    add(r, "81|%s di-lock, isinya tidak bisa diubah|%s is locked, its contents cannot be changed")
+    add(r, "84|tipe %s tidak dikenal, pakai: int, float, double, bool, string, list, map, json|unknown type %s, use: int, float, double, bool, string, list, map, json")
+    add(r, "96|lock butuh nilai: lock %s = nilai|lock needs a value: lock %s = value")
+    add(r, "97|variabel %s sudah ada; lock hanya untuk membuat variabel baru|variable %s already exists; lock is only for creating new variables")
+    add(r, "99|for butuh list, teks, atau map; untuk angka pakai range(), contoh: for i in range(10)|for needs a list, text, or map; for numbers use range(), example: for i in range(10)")
+    add(r, "100|try harus diikuti catch dengan indent yang sama|try must be followed by catch at the same indent")
+    add(r, "104|di dalam options hanya boleh option atau else|only option or else is allowed inside options")
+    add(r, "108|return hanya boleh di dalam fungsi|return is only allowed inside a function")
+    add(r, "109|catch harus berada tepat setelah blok try|catch must come right after a try block")
+    add(r, "110|option harus berada di dalam blok options|option must be inside an options block")
+    add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window.h|this command needs the window library, add at the top: lib nrx_window.h")
+    add(r, "113|perintah tidak dikenal: %s|unknown command: %s")
+    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)|library %s not found (available: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)")
+    add(r, "118|fungsi %s sudah ada (di %s:%d)|function %s already exists (at %s:%d)")
+    add(r, "119|fungsi maksimal punya 8 parameter|a function can have at most 8 parameters")
+    add(r, "126|nama %s sudah dipakai fungsi|name %s is already used by a function")
+    add(r, "134|%s: file %s tidak ditemukan atau tidak bisa dibuka|%s: file %s not found or cannot be opened")
+    add(r, "135|%s: file %s tidak bisa ditulis|%s: file %s cannot be written")
+    add(r, "152|choice: list masih kosong|choice: the list is empty")
+    add(r, "199|gambar %s tidak ditemukan atau formatnya tidak didukung (pakai PNG, JPG, atau BMP)|image %s not found or its format is not supported (use PNG, JPG, or BMP)")
+    add(r, "220|file tidak ditemukan: %s|file not found: %s")
+    add(r, "228|isi %s bertipe %s, tidak bisa diisi %s|%s holds %s values, it cannot hold %s")
+    add(r, "229|%s bertipe int, tidak bisa diisi angka desimal; pakai int(...) untuk membulatkan ke bawah|%s has type int, it cannot hold a decimal number; use int(...) to round down")
+    add(r, "230|%s berisi %s, tidak bisa diisi %s berisi %s|%s holds %s, it cannot be set to a %s of %s")
+    add(r, "231|%s bertipe %s, tidak bisa diisi %s|%s has type %s, it cannot hold %s")
+    add(r, "233|isi list harus satu jenis, tapi ada %s dan %s|list items must all be one type, but found %s and %s")
+    add(r, "234|jenis isi %s tidak dikenal, pakai: int, float, double, bool, string, list, map, json|unknown item type %s, use: int, float, double, bool, string, list, map, json")
+    add(r, "121|parameter %s harus ditulis sebelum parameter yang punya nilai bawaan|parameter %s must come before parameters that have default values")
+    add(r, "240|parameter %s fungsi %s bertipe %s, tidak bisa diisi %s|parameter %s of function %s has type %s, it cannot hold %s")
+    add(r, "243|fungsi %s harus mengembalikan %s, bukan %s|function %s must return %s, not %s")
+    add(r, "254|%s punya %d field, tapi diberi %d nilai|%s has %d fields, but got %d values")
+    add(r, "256|field %s di type %s bertipe %s, tidak bisa diisi %s|field %s in type %s has type %s, it cannot hold %s")
+    add(r, "257|type %s tidak punya method %s|type %s has no method %s")
+    add(r, "262|type %s sudah ada|type %s already exists")
+    add(r, "270|field %s sudah ada|field %s already exists")
+    add(r, "273|operator %c butuh angka, tapi dapat teks; ubah dulu pakai int(...) atau float(...)|operator %c needs numbers, but got text; convert it first with int(...) or float(...)")
+    add(r, "274|operator %c butuh angka, tapi dapat %s|operator %c needs numbers, but got %s")
+    add(r, "275|tidak bisa membandingkan %s dengan %s; ubah dulu pakai int(...), float(...), atau str(...)|cannot compare %s with %s; convert first with int(...), float(...), or str(...)")
+    add(r, "319|listFiles: folder %s tidak ditemukan|listFiles: folder %s not found")
+    add(r, "321|replaceInFile: teks yang dicari tidak boleh kosong|replaceInFile: the text to find cannot be empty")
+    add(r, "60|%s() butuh library keyboard, tambahkan di atas: lib nrx_keyboard.h|%s() needs the keyboard library, add at the top: lib nrx_keyboard.h")
+    add(r, "61|%s() butuh library window, tambahkan di atas: lib nrx_window.h|%s() needs the window library, add at the top: lib nrx_window.h")
+    add(r, "62|%s() butuh library suara, tambahkan di atas: lib nrx_sound.h|%s() needs the sound library, add at the top: lib nrx_sound.h")
+    add(r, "63|%s() butuh library JSON, tambahkan di atas: lib nrx_json.h|%s() needs the JSON library, add at the top: lib nrx_json.h")
+    add(r, "64|%s() butuh library console, tambahkan di atas: lib nrx_console.h|%s() needs the console library, add at the top: lib nrx_console.h")
+    add(r, "65|%s() butuh library random, tambahkan di atas: lib nrx_rand.h|%s() needs the random library, add at the top: lib nrx_rand.h")
+    add(r, "292|%s() butuh library HTTP, tambahkan di atas: lib nrx_http.h|%s() needs the HTTP library, add at the top: lib nrx_http.h")
+    add(r, "299|%s() butuh library 3D, tambahkan di atas: lib nrx_3d.h|%s() needs the 3D library, add at the top: lib nrx_3d.h")
+    add(r, "241|fungsi %s harus mengembalikan %s, tapi tidak ada return|function %s must return %s, but there is no return")
+    add(r, "343|%s sudah dipakai sebagai %s di baris %d, tidak bisa diisi %s|%s is already used as %s on line %d, it cannot hold %s")
+    return r
+
+# kata untuk jenis nilai di pesan error
+func kataJenis(t string) string
+    if t == "int" or t == "double"
+        return "a number"
+    if t == "string"
+        return "text"
+    if tipeList(t)
+        return "a list"
+    if tipeMap(t)
+        return "a map"
+    return "a " + t
+
+# nama fungsi untuk pesan: metode Tipe__m ditulis m
+func namaTampil(nm string) string
+    be pp = indexOf(nm, "__")
+    if pp > 0 and indexOf(structNama, substr(nm, 0, pp)) >= 0
+        return slice(nm, pp + 2)
+    return split(nm, "#")[0]
+
+func galatArity(nama string, fi int, n int)
+    be tampil = namaTampil(nama)
+    be sub = 0
+    if tampil != nama and indexOf(structNama, substr(nama, 0, indexOf(nama, "__"))) >= 0
+        be sub = 1
+    if berkasPengguna(berk[funcStmt[fi]])
+        be mx = funcArity[fi] - sub
+        be mn = mx
+        for k in range(0, 13)
+            if indexOf(funcNama, nama + "_a" + str(k)) >= 0 and k - sub < mn
+                be mn = k - sub
+        if mn < mx
+            galatK(73, "function " + tampil + " needs " + str(mn) + " to " + str(mx) + " arguments, but got " + str(n - sub))
+        galatK(72, "function " + tampil + " needs " + str(mx) + " arguments, but got " + str(n - sub))
+    if nama == "substr"
+        galatK(57, "substr needs 2 or 3 arguments: substr(text, start, length)")
+    if nama == "slice"
+        galatK(58, "slice needs 2 or 3 arguments: slice(list, start, end)")
+    if nama == "split"
+        galatK(54, "split needs 1 or 2 arguments: split(text, separator)")
+    if nama == "join"
+        galatK(55, "join needs 1 or 2 arguments: join(list, separator)")
+    if nama == "exit"
+        galatK(59, "exit needs 0 or 1 arguments: exit() or exit(code)")
+    if nama == "round"
+        galatK(52, "round needs 1 or 2 arguments: round(number) or round(number, digits)")
+    galatK(6, tampil + " needs " + str(funcArity[fi]) + " arguments, but got " + str(n))
+
+# nama tidak ketemu: pesan yang tepat (bukan list, bukan map, atau butuh library)
+func galatNamaTakAda(nama string, n int, tipeArg list string)
+    if n >= 1 and contains("takeLast sort remove", nama) and not tipeList(tipeArg[0])
+        galatK(43, "the first argument of " + nama + " must be a list")
+    if n >= 1 and contains("keys values", nama) and not tipeMap(tipeArg[0])
+        galatK(47, nama + " needs a map: " + nama + "({\"a\": 1})")
+    if contains("int float str bool double", nama) and n != 1
+        galatK(6, nama + " needs 1 arguments, but got " + str(n))
+    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299")
+    for q in range(0, len(kdLib), 2)
+        be bt = "lib\\" + kdLib[q] + ".nrxl"
+        if fileExists(jalurRt(bt))
+            be isiLib = readFile(jalurRt(bt))
+            if contains(isiLib, "func " + nama + "(") or contains(isiLib, "func " + nama + "__") or contains(isiLib, "func " + nama + "_a")
+                if kdLib[q] == "nrx_window"
+                    galatK(112, "this command needs the window library, add at the top: lib nrx_window.h")
+                galatK(int(kdLib[q + 1]), nama + "() needs the " + namaLib(kdLib[q]) + " library, add at the top: lib " + kdLib[q] + ".h")
+    galatK(70, "function " + nama + " not found")
+
+func namaLib(l string) string
+    if l == "nrx_json"
+        return "JSON"
+    if l == "nrx_rand"
+        return "random"
+    if l == "nrx_crudfile"
+        return "file"
+    if l == "nrx_http"
+        return "HTTP"
+    if l == "nrx_3d"
+        return "3D"
+    return slice(l, 4)
+
+# variabel bertipe tv diberi nilai bertipe tn
+func galatTipeVar(nama string, tv string, tn string)
+    if tipeList(tv) and tipeList(tn)
+        galatK(230, nama + " holds " + slice(tv, 5) + ", it cannot be set to a list of " + slice(tn, 5))
+    if untukFor
+        be vbi = len(vbNama) - 1
+        loop vbi >= 0 and vbNama[vbi] != nama
+            be vbi -= 1
+        if vbi >= 0
+            galatK(343, nama + " is already used as " + tv + " on line " + str(vbBaris[vbi]) + ", it cannot hold " + tn)
+    if tv == "int" and tn == "double"
+        galatK(229, nama + " has type int, it cannot hold a decimal number; use int(...) to round down")
+    galatK(231, nama + " has type " + tv + ", it cannot hold " + tn)
+
+# ---------------------------------------------------------------- tipe
+func tipeList(t string) bool
+    return len(t) > 5 and substr(t, 0, 5) == "list "
+
+func harusInt(t string)
+    if t != "int"
+        galat("butuh int, tetapi tipenya " t)
+
+# nilai di puncak stack dijadikan bool (seperti nrxlang: 0, teks kosong, 0.0, dan list/map kosong = false)
+func harusBool(t string)
+    if t == "bool"
+        return
+    if t == "int"
+        hex("58 48 85 C0 0F 95 C0 0F B6 C0 50")     # pop rax; test rax, rax; setne al; movzx eax, al; push rax
+    else if t == "double"
+        hex("58 48 D1 E0 0F 95 C0 0F B6 C0 50")     # pop rax; shl rax, 1 (buang tanda); setne; push
+    else if t == "string" or tipeList(t)
+        hex("58 48 8B 00 48 85 C0 0F 95 C0 0F B6 C0 50")   # pop rax; rax = panjang; test; setne; push
+    else if tipeMap(t)
+        hex("58 48 8B 00 48 8B 00 48 85 C0 0F 95 C0 0F B6 C0 50")
+    else
+        galatK(23, "a condition needs a bool, number, text, list, or map, but got " + t)
+
+be opNow = "+"                        # operator aritmetika yang sedang diurai (untuk pesan error)
+func harusAngka(t string)
+    if t == "string"
+        galatK(273, "operator " + opNow + " needs numbers, but got text; convert it first with int(...) or float(...)")
+    if t != "int" and t != "double"
+        galatK(274, "operator " + opNow + " needs numbers, but got " + t)
+
+func kataJenisPendek(t string) string
+    if t == "string"
+        return "text"
+    return t
+
+func harusIndeks(t string)
+    if t != "int"
+        galatK(25, "index must be a number")
+
+# ---------------------------------------------------------------- double (SSE2; nilai disimpan sebagai 8 byte IEEE di slot biasa)
+# "float" = "double". Nama tipe dinormalkan ke "double".
+func normTipe(t string) string
+    if t == "array"
+        return "list double"
+    if t == "float"
+        return "double"
+    if t == "list float"
+        return "list double"
+    if t == "map float"
+        return "map double"
+    return t
+
+func tipeMap(t string) bool
+    return len(t) > 4 and substr(t, 0, 4) == "map "
+
+func pangkat10(k int) int
+    be r = 1
+    for i in range(k)
+        be r = r * 10
+    return r
+
+# int di rax -> double di rax
+func raxKeDouble()
+    hex("F2 48 0F 2A C0 66 48 0F 7E C0")  # cvtsi2sd xmm0, rax; movq rax, xmm0
+
+# ubah nilai int yang berada j slot dari puncak stack (0 = puncak) menjadi double
+func konversiArg(j int)
+    hex("F2 48 0F 2A 84 24")              # cvtsi2sd xmm0, [rsp + 8j]
+    d32(8 * j)
+    hex("F2 0F 11 84 24")                 # movsd [rsp + 8j], xmm0
+    d32(8 * j)
+
+# nilai json <-> tipe biasa. Nilai di j slot dari puncak stack diganti hasil konversi (toJ__tipe / fromJ__tipe di library)
+func koersiJson(j int, dari string, ke string)
+    be fn = "toJ__" + replace(dari, " ", "_")
+    if dari == "json"
+        be fn = "fromJ__" + ke
+    hex("48 8B 84 24")                    # mov rax, [rsp + 8j]
+    d32(8 * j)
+    hex("50")
+    panggilNama(fn, 1)                    # hasil di puncak stack
+    hex("58 48 89 84 24")                 # pop rax; mov [rsp + 8j], rax
+    d32(8 * j)
+
+# nilai di j slot dari puncak stack (int / double) diganti teksnya
+func koersiTeks(j int, dari string)
+    hex("48 8B 84 24")                    # mov rax, [rsp + 8j]
+    d32(8 * j)
+    hex("50")
+    jadiTeks(dari)
+    hex("58 48 89 84 24")                 # pop rax; mov [rsp + 8j], rax
+    d32(8 * j)
+
+# bisakah nilai bertipe 'dari' dipakai sebagai 'ke' lewat konversi json?
+func bisaJson(dari string, ke string) bool
+    if ke == "json"
+        return dari == "int" or dari == "string" or dari == "double" or dari == "bool" or tipeList(dari) or tipeMap(dari)
+    if dari == "json"
+        return ke == "int" or ke == "string" or ke == "double" or ke == "bool"
+    return false
+
+# cocokkan tipe target dengan tipe nilai yang ada di puncak stack; int boleh jadi double (dikonversi)
+func samakan(target string, nilai string) bool
+    if target == nilai
+        return true
+    if target == "double" and nilai == "int"
+        konversiArg(0)
+        return true
+    if bisaJson(nilai, target)
+        koersiJson(0, nilai, target)
+        return true
+    return false
+
+# setelah "pop rcx; pop rax" (rcx = kanan, rax = kiri): muat kedua operand ke xmm0 / xmm1 sebagai double
+func muatXmm(tl string, tr string)
+    if tl == "int"
+        hex("F2 48 0F 2A C0")             # cvtsi2sd xmm0, rax
+    else if tl == "double"
+        hex("66 48 0F 6E C0")             # movq xmm0, rax
+    else
+        harusAngka(tl)
+    if tr == "int"
+        hex("F2 48 0F 2A C9")             # cvtsi2sd xmm1, rcx
+    else if tr == "double"
+        hex("66 48 0F 6E C9")             # movq xmm1, rcx
+    else
+        harusAngka(tr)
+
+# letakkan literal desimal (2.5, 1e5, 1.5e-3) sebagai double di stack: mantisa / 10^k atau * 10^k di waktu jalan
+func literalDouble(t string)
+    be mant = ""
+    be frac = 0
+    be ex = 0
+    be adaTitik = false
+    be i = 0
+    be n = len(t)
+    loop i < n
+        be ch = substr(t, i, 1)
+        if ch == "."
+            be adaTitik = true
+        else if ch == "e" or ch == "E"
+            be es = slice(t, i + 1)
+            if substr(es, 0, 1) == "+"
+                be es = slice(es, 1)
+            be ex = int(es)
+            break
+        else
+            be mant = mant + ch
+            if adaTitik
+                be frac += 1
+        be i += 1
+    loop len(mant) > 1 and substr(mant, 0, 1) == "0"
+        be mant = slice(mant, 1)
+    if len(mant) > 18
+        be ex += len(mant) - 18
+        be mant = substr(mant, 0, 18)
+    be m = int(mant)
+    be e10 = ex - frac
+    hex("48 B8")                          # mov rax, imm64 (mantisa)
+    w64(sek(kur), m)
+    be kur += 8
+    hex("F2 48 0F 2A C0")                 # cvtsi2sd xmm0, rax
+    if m != 0 and e10 != 0
+        be k = e10
+        be kali = true
+        if e10 < 0
+            be k = 0 - e10
+            be kali = false
+        loop k > 0
+            be langkah = k
+            if langkah > 18
+                be langkah = 18
+            hex("48 B9")                  # mov rcx, imm64 (10^langkah)
+            w64(sek(kur), pangkat10(langkah))
+            be kur += 8
+            hex("F2 48 0F 2A C9")         # cvtsi2sd xmm1, rcx
+            if kali
+                hex("F2 0F 59 C1")        # mulsd xmm0, xmm1
+            else
+                hex("F2 0F 5E C1")        # divsd xmm0, xmm1
+            be k -= langkah
+    hex("66 48 0F 7E C0 50")              # movq rax, xmm0; push rax
+
+# cek pembagi nol (xmm1 = 0): cetak pesan lalu keluar dengan kode 1
+func cekBagiNol()
+    hex("66 0F 57 D2")                    # xorpd xmm2, xmm2
+    hex("66 0F 2E CA")                    # ucomisd xmm1, xmm2
+    hex("0F 85")                          # jne aman
+    be pa = kur
+    d32(0)
+    hex("0F 8A")                          # jp aman (NaN)
+    be pb = kur
+    d32(0)
+    lemparTeks("cannot divide by zero", 24)
+    tambal(pa, kur)
+    tambal(pb, kur)
+
+# lempar galat dengan pesan literal (bisa ditangkap oleh try/catch)
+func lemparTeks(pesan string, kode int)
+    hex("B8")                             # mov eax, kode
+    d32(kode)
+    ripGlobal("48 89 05", 14)
+    add(litTeks, pesan)
+    hex("48 8D 05")                       # lea rax, [pesan]
+    add(litPos, kur)
+    add(litIdx, len(litTeks) - 1)
+    d32(0)
+    hex("E8")                             # call lempar
+    relatif(offLempar)
+
+# instruksi rip-relatif ke slot global tersembunyi (0 = $H pencatat try, 1 = $E pesan galat)
+func ripGlobal(op string, gx int)
+    hex(op)
+    add(gloPos, kur)
+    add(gloIdx, gx)
+    d32(0)
+
+# lempar: rax = pesan (string). Tanpa try aktif: cetak "error: pesan" lalu keluar kode 1.
+# Dengan try: pulihkan rsp/rbp dari catat try dan lompat ke blok catch.
+func rutinLempar()
+    hex("50")                             # push rax (pesan)
+    ripGlobal("FF 35", 14)                # push [kode]
+    panggilNama("nrxTerjemah", 2)         # pesan dalam bahasa Indonesia kalau errlang = id
+    hex("58")                             # pop rax
+    ripGlobal("48 89 05", 1)              # mov [$E], rax
+    ripGlobal("48 8B 0D", 0)              # mov rcx, [$H]
+    hex("48 85 C9")                       # test rcx, rcx
+    hex("0F 85")                          # jnz tertangkap
+    be pj = kur
+    d32(0)
+    ripGlobal("FF 35", 1)                 # push [$E]   pesan
+    ripGlobal("FF 35", 14)                # push [kode]
+    ripGlobal("FF 35", 13)                # push [baris]
+    ripGlobal("FF 35", 15)                # push [berkas]
+    panggilNama("nrxGalat", 4)            # cetak "error E#### in berkas:baris: pesan"
+    hex("58")
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 20")                    # sub rsp, 32 (shadow space)
+    hex("B9 01 00 00 00")                 # mov ecx, 1
+    hex("FF 15")                          # call [ExitProcess]
+    relatif(OFF_IAT + 16)
+    hex("CC")
+    tambal(pj, kur)
+    hex("31 C0")                          # xor eax, eax
+    ripGlobal("48 89 05", 14)             # kode galat dibersihkan
+    hex("48 8B 01")                       # mov rax, [rcx]      (try sebelumnya)
+    ripGlobal("48 89 05", 0)              # mov [$H], rax
+    hex("48 8B 61 08")                    # mov rsp, [rcx+8]
+    hex("48 8B 69 10")                    # mov rbp, [rcx+16]
+    hex("FF 61 18")                       # jmp [rcx+24]
+
+# lepas try pada slot d: $H kembali ke try sebelumnya
+func lepasHandler(d int)
+    hex("48 8B 8D")                       # mov rcx, [rbp + d]
+    d32(d)
+    ripGlobal("48 89 0D", 0)              # mov [$H], rcx
+
+# tipe variabel yang sudah ada ("" kalau belum ada)
+func tipeVar(nama string) string
+    be idx = indexOf(scNama, nama)
+    if idx >= 0
+        return scTipe[idx]
+    if globalOK and not paksaLokal
+        be gx = indexOf(gNama, nama)
+        if gx >= 0
+            return gTipe[gx]
+    return ""
+
+# ---------------------------------------------------------------- ekspresi (parser + pembuat kode)
+# Setiap fungsi parser mengembalikan TIPE ekspresi ("int", "string", "list int", "list string").
+func pecah(s string) list string
+    be hasil list string
+    be i = 0
+    be n = len(s)
+    loop i < n
+        be ch = substr(s, i, 1)
+        if ch == " "
+            be i += 1
+        else if ch == "\""
+            be j = i + 1
+            be lit = ""
+            be tutup = false
+            loop j < n and not tutup
+                be c2 = substr(s, j, 1)
+                if c2 == "\\" and j + 1 < n
+                    be e2 = substr(s, j + 1, 1)
+                    if e2 == "n"
+                        be lit = lit + "\n"
+                    else if e2 == "t"
+                        be lit = lit + "\t"
+                    else if e2 == "r"
+                        be lit = lit + "\r"
+                    else if e2 == "\\" or e2 == "\""
+                        be lit = lit + e2
+                    else
+                        be lit = lit + "\\" + e2      # escape tidak dikenal: garis miring tetap ada
+                    be j += 2
+                else if c2 == "\""
+                    be tutup = true
+                    be j += 1
+                else
+                    be lit = lit + c2
+                    be j += 1
+            if not tutup
+                galatK(31, "quote \" is not closed")
+            add(hasil, "\"" + lit)
+            be i = j
+        else if contains(DIGIT, ch)
+            be j = i
+            loop j < n and contains(DIGIT, substr(s, j, 1))
+                be j += 1
+            # bagian desimal: .angka
+            if j + 1 < n and substr(s, j, 1) == "." and contains(DIGIT, substr(s, j + 1, 1))
+                be j += 1
+                loop j < n and contains(DIGIT, substr(s, j, 1))
+                    be j += 1
+            # eksponen: e atau E, tanda opsional, angka
+            if j < n and (substr(s, j, 1) == "e" or substr(s, j, 1) == "E")
+                be j2 = j + 1
+                if j2 < n and (substr(s, j2, 1) == "+" or substr(s, j2, 1) == "-")
+                    be j2 += 1
+                if j2 < n and contains(DIGIT, substr(s, j2, 1))
+                    loop j2 < n and contains(DIGIT, substr(s, j2, 1))
+                        be j2 += 1
+                    be j = j2
+            add(hasil, slice(s, i, j))
+            be i = j
+        else if contains(HURUF, ch)
+            be j = i
+            loop j < n and (contains(HURUF, substr(s, j, 1)) or contains(DIGIT, substr(s, j, 1)))
+                be j += 1
+            add(hasil, slice(s, i, j))
+            be i = j
+        else if contains("=!<>", ch)
+            if i + 1 < n and substr(s, i + 1, 1) == "="
+                add(hasil, slice(s, i, i + 2))
+                be i += 2
+            else
+                add(hasil, ch)
+                be i += 1
+        else if contains("+-*/%(),[].{}:", ch)
+            add(hasil, ch)
+            be i += 1
+        else
+            galat("karakter tidak dikenal: " ch)
+    return hasil
+
+func lihat() string
+    if tp < len(tok)
+        return tok[tp]
+    return ""
+
+func maju()
+    be tp += 1
+
+func cariFungsi(nama string) int
+    be fi = indexOf(funcNama, nama)
+    if fi < 0
+        be tanpaArg list string
+        galatNamaTakAda(nama, 0, tanpaArg)
+    return fi
+
+# panggil fungsi bernama (argumen sudah di stack): call, bersihkan argumen, push hasil
+func panggilNama(nama string, jumlahArg int)
+    be fi = cariFungsi(nama)
+    hex("E8")
+    add(callPos, kur)
+    add(callFn, fi)
+    d32(0)
+    if jumlahArg > 0
+        hex("48 81 C4")                   # add rsp, 8 * jumlahArg
+        d32(8 * jumlahArg)
+    hex("50")                             # push rax
+
+# ---- variabel: lokal (stack) atau global (slot di image)
+# muatVar: push nilai variabel ke stack, hasil = tipenya
+func muatVar(nama string) string
+    be idx = indexOf(scNama, nama)
+    if idx >= 0
+        hex("48 8B 85")                   # mov rax, [rbp + disp32]
+        d32(scDisp[idx])
+        hex("50")
+        return scTipe[idx]
+    if globalOK
+        be gx = indexOf(gNama, nama)
+        if gx >= 0
+            hex("48 8B 05")               # mov rax, [rip + slot global]
+            add(gloPos, kur)
+            add(gloIdx, gx)
+            d32(0)
+            hex("50")
+            return gTipe[gx]
+    galatK(3, "variable " + nama + " has not been created (if you meant text, use quotes: \"" + nama + "\")")
+    return "int"
+
+# ---- struct dan akses berantai
+func cariStruct(t string) int
+    return indexOf(structNama, t)
+
+func fieldIdx(sx int, f string) int
+    be nama = split(structFN[sx], ",")
+    be k = indexOf(nama, f)
+    if k < 0
+        galatK(27, structNama[sx] + " has no field " + f)
+    return k
+
+func fieldTipe(sx int, k int) string
+    be tp2 = split(structFT[sx], ";")
+    return tp2[k]
+
+# rcx = indeks, rax = list: lempar galat kalau indeks di luar 0..panjang-1 (rdx tidak disentuh)
+func cekIndeks()
+    hex("48 3B 08 72")                    # cmp rcx, [rax]; jb ok (tak bertanda: negatif ikut gagal)
+    be pk = kur
+    hex("00")
+    hex("51 FF 30")                       # push rcx; push [rax]
+    panggilNama("idxGalat", 2)
+    w8(sek(pk), kur - pk - 1)
+
+# satu langkah akses di posisi tp: [indeks] atau .field. Nilai penampung ada di stack; ganti dengan hasilnya.
+func langkahBaca(tipe string) string
+    if lihat() == "["
+        if tipe == "json"
+            maju()
+            be tIdx = logika()
+            if lihat() != "]"
+                galatK(35, "missing ]")
+            maju()
+            if tIdx == "string"
+                panggilNama("jAmbilK", 2)     # (json, key) -> json
+            else if tIdx == "int"
+                panggilNama("jAmbilI", 2)     # (json, indeks) -> json
+            else
+                galat("indeks json harus teks atau int")
+            return "json"
+        if tipeMap(tipe)
+            maju()
+            be tKey = logika()
+            if tKey == "int" or tKey == "double"
+                jadiTeks(tKey)
+            else if tKey != "string"
+                galat("key map harus berupa teks")
+            if lihat() != "]"
+                galatK(35, "missing ]")
+            maju()
+            panggilNama("mapGet", 2)     # (map, key) -> nilai; error kalau key tidak ada
+            return slice(tipe, 4)
+        if tipe == "string"
+            maju()                        # s[i] = satu huruf
+            harusIndeks(logika())
+            if lihat() != "]"
+                galatK(35, "missing ]")
+            maju()
+            dorongInt(1)
+            panggilNama("substr", 3)
+            return "string"
+        if not tipeList(tipe)
+            galatK(30, kataJenis(tipe) + " cannot be indexed with [ ]")
+        maju()
+        harusIndeks(logika())
+        if lihat() != "]"
+            galatK(35, "missing ]")
+        maju()
+        hex("59 58")                      # pop rcx (indeks); pop rax (list)
+        cekIndeks()
+        hex("48 8B 40 10 48 8B 04 C8 50") # rax=[rax+16]; rax=[rax+rcx*8]; push rax
+        return slice(tipe, 5)
+    maju()                                # lewati titik
+    be fn = lihat()
+    maju()
+    if lihat() == "(" and indexOf(funcNama, tipe + "__" + fn) < 0 and cariStruct(tipe) >= 0 and indexOf(split(structFN[cariStruct(tipe)], ","), fn) < 0
+        galatK(257, "type " + tipe + " has no method " + fn)
+    if lihat() == "(" and indexOf(funcNama, tipe + "__" + fn) >= 0
+        # pemanggilan metode: obj.metode(a, b)  ->  Tipe__metode(obj, a, b)
+        maju()
+        be ta list string
+        add(ta, tipe)
+        loop lihat() != ")"
+            add(ta, logika())
+            if lihat() == ","
+                maju()
+        maju()
+        return panggilBuatan(tipe + "__" + fn, ta)
+    be sx = cariStruct(tipe)
+    if sx < 0
+        galatK(27, kataJenis(tipe) + " has no field " + fn)
+    be fi = fieldIdx(sx, fn)
+    hex("58 48 8B 80")                    # pop rax; mov rax, [rax + disp32]
+    d32(8 * fi)
+    hex("50")
+    return fieldTipe(sx, fi)
+
+# indeks token tepat setelah langkah akses yang dimulai di tp
+func batasStep() int
+    if lihat() == "."
+        return tp + 2
+    if lihat() != "["
+        galat("akses tidak valid: " lihat())
+    be dalam = 0
+    be k = tp
+    loop k < len(tok)
+        if tok[k] == "["
+            be dalam += 1
+        if tok[k] == "]"
+            be dalam -= 1
+            if dalam == 0
+                return k + 1
+        be k += 1
+    galatK(35, "missing ]")
+    return k
+
+# be a.b[i].c = nilai : akses semua langkah kecuali yang terakhir, lalu simpan
+# variabel global yang di-lock oleh pengguna (dan tidak tertutup oleh variabel lokal bernama sama)
+func terkunciUser(nm string) bool
+    if indexOf(scNama, nm) >= 0 or not globalOK
+        return false
+    be gk = indexOf(gNama, nm)
+    return gk >= 0 and gKunci[gk] == 1
+
+func simpanLval(lhs string, nilai string, aug bool)
+    be tok list string = pecah(lhs)
+    be tp = 0
+    be nm = lihat()
+    maju()
+    if terkunciUser(nm)
+        lemparTeks(nm + " is locked, its contents cannot be changed", 81)
+    be tipe = muatVar(nm)
+    loop batasStep() != len(tok)
+        be tipe = langkahBaca(tipe)
+    if lihat() == "."
+        maju()
+        be fn = lihat()
+        maju()
+        be sx = cariStruct(tipe)
+        if sx < 0
+            galatK(27, kataJenis(tipe) + " has no field " + fn)
+        be fi = fieldIdx(sx, fn)
+        be tf = fieldTipe(sx, fi)
+        be tv = ekspresiDari(nilai)
+        if not samakan(tf, tv)
+            galatK(256, "field " + fn + " in type " + tipe + " has type " + tf + ", it cannot hold " + tv)
+        hex("5A 58 48 89 90")             # pop rdx; pop rax; mov [rax + disp32], rdx
+        d32(8 * fi)
+    else if tipe == "json"
+        maju()
+        be tIdx = logika()
+        if lihat() != "]"
+            galatK(35, "missing ]")
+        maju()
+        if tp < len(tok)
+            galatK(39, "not understood: " + lihat())
+        if tIdx != "string" and tIdx != "int"
+            galat("indeks json harus teks atau int")
+        if aug
+            galat("+= pada elemen json belum didukung; tulis be x[k] = x[k] + ...")
+        be tvj = ekspresiDari(nilai)
+        if tvj != "json"
+            koersiJson(0, tvj, "json")
+        if tIdx == "string"
+            panggilNama("jIsiK", 3)
+        else
+            panggilNama("jIsiI", 3)
+        hex("58")
+    else if tipeMap(tipe)
+        maju()
+        if logika() != "string"
+            galat("key map harus berupa teks")
+        if lihat() != "]"
+            galatK(35, "missing ]")
+        maju()
+        if tp < len(tok)
+            galatK(39, "not understood: " + lihat())
+        be tvm = slice(tipe, 4)
+        if aug
+            # be m[k] += x : key yang belum ada dimulai dari nilai kosong
+            hex("48 8B 44 24 08 50 48 8B 44 24 08 50")   # salin (map, key) ke puncak stack
+            if tvm == "string"
+                add(litTeks, "")
+                hex("48 8D 05")
+                add(litPos, kur)
+                add(litIdx, len(litTeks) - 1)
+                d32(0)
+                hex("50")
+            else
+                hex("6A 00")
+            panggilNama("mapDefault", 3)
+            hex("58")
+        be tv = ekspresiDari(nilai)
+        if not samakan(tvm, tv)
+            galatK(228, nm + " holds " + tvm + " values, it cannot hold " + tv)
+        panggilNama("mapSet", 3)
+        hex("58")
+    else
+        if not tipeList(tipe)
+            galatK(30, kataJenis(tipe) + " cannot be indexed with [ ]")
+        maju()
+        harusIndeks(logika())
+        if lihat() != "]"
+            galatK(35, "missing ]")
+        maju()
+        if tp < len(tok)
+            galatK(39, "not understood: " + lihat())
+        be tv = ekspresiDari(nilai)
+        if not samakan(slice(tipe, 5), tv)
+            galatK(228, nm + " holds " + slice(tipe, 5) + " values, it cannot hold " + tv)
+        hex("5A 59 58")                   # pop rdx (nilai); pop rcx (indeks); pop rax (list)
+        cekIndeks()
+        hex("48 8B 40 10 48 89 14 C8")    # rax=[rax+16]; [rax+rcx*8]=rdx
+
+# faktor: angka | "teks" | variabel | a[i] | a.field | fungsi(arg, ...) | ( ekspresi ) | - faktor | not faktor
+# apakah token t bisa memulai satu nilai (teks, angka, nama, kurung buka)? Dipakai untuk nilai berjejer
+func awalItem(t string) bool
+    if t == "" or t == "and" or t == "or" or t == "in" or t == "not"
+        return false
+    be c = substr(t, 0, 1)
+    return c == "\"" or c == "(" or contains(HURUF, c) or contains(DIGIT, c)
+
+func faktor() string
+    be t = lihat()
+    be hasil = "int"
+    be akses = t == "(" or t == "[" or t == "{" or substr(t, 0, 1) == "\""
+    if t == ""
+        galat("ekspresi belum lengkap")
+    if t == "("
+        maju()
+        be hasil = logika()
+        if lihat() != ")"
+            galatK(34, "missing )")
+        maju()
+    else if t == "-"
+        maju()
+        be tn = faktor()
+        if tn == "double"
+            hex("58 B9 01 00 00 00 48 C1 E1 3F 48 31 C8 50")   # pop rax; rcx = 1 << 63; xor rax, rcx; push rax
+            be hasil = "double"
+        else
+            if tn != "int"
+                galatK(41, "- needs a number")
+            hex("58 48 F7 D8 50")         # pop rax; neg rax; push rax
+    else if t == "["
+        # [a, b, c]  (semua isi satu jenis; int boleh bercampur ke double kalau yang pertama double)
+        maju()
+        panggilNama("listBaru", 0)
+        be te = ""
+        # ada literal desimal di dalam list ini? maka semua isi menjadi double
+        be adaDbl = false
+        be sd = 0
+        be sp = tp
+        loop sp < len(tok)
+            be st = tok[sp]
+            if st == "(" or st == "[" or st == "{"
+                be sd += 1
+            else if st == ")" or st == "]" or st == "}"
+                be sd -= 1
+                if sd < 0
+                    break
+            else if sd == 0 and contains(st, ".") and contains("0123456789", substr(st, 0, 1))
+                be adaDbl = true
+            be sp += 1
+        if adaDbl
+            be te = "double"
+        loop lihat() != "]"
+            hex("48 8B 04 24 50")         # salin penunjuk list di puncak stack
+            be tv = logika()
+            if te == ""
+                be te = tv
+            else if not samakan(te, tv)
+                galatK(233, "list items must all be one type, but found " + te + " and " + tv)
+            panggilNama("listTambah", 2)
+            hex("58")
+            if lihat() == ","
+                maju()
+            else if lihat() != "]"
+                galatK(35, "missing ]")
+        maju()
+        if te == ""
+            galat("[] kosong tidak diketahui jenis isinya; tulis: be x list int")
+        be hasil = "list " + te
+    else if t == "{"
+        # {"kunci": nilai, ...}
+        maju()
+        panggilNama("mapBaru", 0)
+        be te = ""
+        loop lihat() != "}"
+            hex("48 8B 04 24 50")         # salin penunjuk map di puncak stack
+            if logika() != "string"
+                galat("key map harus berupa teks")
+            if lihat() != ":"
+                galat("tanda : diharapkan setelah key map")
+            maju()
+            be tv = logika()
+            if te == ""
+                be te = tv
+            else if not samakan(te, tv)
+                galatK(233, "map values must all be one type, but found " + te + " and " + tv)
+            panggilNama("mapSet", 3)
+            hex("58")
+            if lihat() == ","
+                maju()
+            else if lihat() != "}"
+                galatK(33, "missing }")
+        maju()
+        if te == ""
+            galat("{} kosong tidak diketahui jenis isinya; tulis: be x map int")
+        be hasil = "map " + te
+    else if t == "not"
+        maju()
+        harusBool(faktor())
+        hex("58 48 85 C0 0F 94 C0 0F B6 C0 50")   # pop rax; test; sete al; movzx eax, al; push rax
+        be hasil = "bool"
+    else if substr(t, 0, 1) == "\""
+        maju()
+        add(litTeks, slice(t, 1))
+        hex("48 8D 05")                   # lea rax, [literal]  (alamat ditambal di akhir)
+        add(litPos, kur)
+        add(litIdx, len(litTeks) - 1)
+        d32(0)
+        hex("50")
+        be hasil = "string"
+    else if contains(DIGIT, substr(t, 0, 1))
+        maju()
+        if contains(t, ".") or contains(t, "e") or contains(t, "E")
+            literalDouble(t)
+            be hasil = "double"
+        else
+            hex("48 B8")                  # mov rax, imm64
+            w64(sek(kur), int(t))
+            be kur += 8
+            hex("50")                     # push rax
+    else if contains(HURUF, substr(t, 0, 1))
+        maju()
+        if t == "true"
+            hex("6A 01")                  # push 1
+            be hasil = "bool"
+        else if t == "false"
+            hex("6A 00")                  # push 0
+            be hasil = "bool"
+        else if t == "ask" and (awalItem(lihat()) or (lihat() == "." and tp + 1 < len(tok) and tok[tp + 1] == "int"))
+            # ask "prompt" nilai ...: nilai berjejer digabung jadi prompt; cetak lalu baca satu baris dari stdin (askLine di prelude)
+            # ask.int "prompt": ulangi sampai bilangan bulat (askInt)
+            be askBulat = false
+            if lihat() == "."
+                maju()
+                maju()
+                be askBulat = true
+            jadiTeks(ekspresi())
+            loop awalItem(lihat())
+                jadiTeks(ekspresi())
+                panggilNama("strGabung", 2)
+            if askBulat
+                panggilNama("askInt", 1)
+                be hasil = "int"
+            else
+                panggilNama("askLine", 1)
+                be hasil = "string"
+        else if t == "ask" and indexOf(scNama, "ask") < 0
+            # ask tanpa prompt: baca satu baris
+            add(litTeks, "")
+            hex("48 8D 05")
+            add(litPos, kur)
+            add(litIdx, len(litTeks) - 1)
+            d32(0)
+            hex("50")
+            panggilNama("askLine", 1)
+            be hasil = "string"
+        else if t == "wait" and lihat() == "." and tp + 2 < len(tok) and (tok[tp + 1] == "float" or tok[tp + 1] == "double") and tok[tp + 2] == "("
+            maju()                        # wait.float(x) / wait.double(x) = wait(x)
+            maju()
+            be hasil = panggil(t)
+        else if lihat() == "("
+            be hasil = panggil(t)
+            be akses = true
+        else
+            be hasil = muatVar(t)
+            loop lihat() == "[" or lihat() == "."
+                be hasil = langkahBaca(hasil)
+    else
+        galatK(39, "not understood: " + t)
+    if akses
+        # hasil pemanggilan / kurung / literal boleh langsung diindeks: split(t)[0], [1, 2][0], "abc"[1], f().field
+        loop lihat() == "[" or lihat() == "."
+            be hasil = langkahBaca(hasil)
+    return hasil
+
+# ubah nilai di puncak stack menjadi string (int -> str, bool -> true/false)
+func jadiTeks(t string)
+    if t == "int"
+        panggilNama("str", 1)
+    else if t == "bool"
+        panggilNama("boolStr", 1)
+    else if t == "double"
+        panggilNama("dblStr", 1)
+    else if t == "json"
+        panggilNama("jTeks", 1)
+    else if tipeList(t) or tipeMap(t) or cariStruct(t) >= 0
+        be nmK = "koleksiStr__" + replace(t, " ", "_")
+        if cariStruct(t) >= 0
+            be nmK = "strukStr__" + t
+        if indexOf(funcNama, nmK) < 0
+            buatFungsiTeks(t, nmK)
+        panggilNama(nmK, 1)
+    else if t != "string"
+        galat("tidak bisa digabung sebagai teks: " t)
+
+# fungsi buatan compiler: ubah list / map / type jadi teks (Player{nama: Budi, hp: 70}); ditulis sebagai teks nrxl lalu dibaca seperti file
+func buatFungsiTeks(t string, nmK string)
+    be src = ""
+    if cariStruct(t) >= 0
+        be sx = cariStruct(t)
+        be fN = split(structFN[sx], ",")
+        be ekspr = "\"" + t + "{\""
+        for k in range(len(fN))
+            if k > 0
+                be ekspr = ekspr + " + \", \""
+            be ekspr = ekspr + " + \"" + fN[k] + ": \" + o." + fN[k]
+        be ekspr = ekspr + " + \"}\""
+        be src = "func " + nmK + "(o " + t + ") string\n    return " + ekspr + "\n"
+    else if tipeList(t)
+        be src = "func " + nmK + "(xs " + t + ") string\n    be r = \"[\"\n    for i in range(len(xs))\n        if i > 0\n            be r = r + \", \"\n        be r = r + xs[i]\n    return r + \"]\"\n"
+    else
+        be src = "func " + nmK + "(m " + t + ") string\n    be ks = keys(m)\n    be r = \"{\"\n    for i in range(len(ks))\n        if i > 0\n            be r = r + \", \"\n        be r = r + ks[i] + \": \" + m[ks[i]]\n    return r + \"}\"\n"
+    be teksOverride = src
+    be tpS = tp
+    be tokS = tok
+    bacaSumber("sintesis")
+    be tp = tpS
+    be tok = tokS
+# pemanggilan: intrinsik atau fungsi buatan. Argumen dihitung kiri ke kanan dan ditaruh di stack.
+func panggil(nama string) string
+    maju()                                # lewati (
+    be tipeArg list string
+    be tp0 = tp
+    if lihat() != ")"
+        be terus = true
+        loop terus
+            be ta = logika()
+            # beberapa ekspresi berurutan tanpa koma dalam satu argumen = digabung jadi teks
+            loop lihat() != "," and lihat() != ")" and lihat() != ""
+                jadiTeks(ta)
+                jadiTeks(logika())
+                panggilNama("strGabung", 2)
+                be ta = "string"
+            add(tipeArg, ta)
+            if lihat() == ","
+                maju()
+            else
+                be terus = false
+    if lihat() != ")"
+        galatK(37, "missing ) after the arguments of " + nama)
+    maju()
+    be n = len(tipeArg)
+    if (nama == "add" or nama == "remove" or nama == "takeLast") and n >= 1 and berkasPengguna(berkNama)
+        # isi list/map yang di-lock tidak boleh diubah
+        if tp - tp0 >= 1 and terkunciUser(tok[tp0]) and (tp0 + 1 == tp - 1 or tok[tp0 + 1] == ",")
+            lemparTeks(nama + ": its contents are locked and cannot be changed", 44)
+    # --- intrinsik
+    if nama == "poke" and n == 4
+        # poke(p, offset, "int8"|"int16"|"int"|"int64"|"pointer"|"float"|"double", nilai): jenis dibaca dari literal di sumber
+        if tipeArg[0] != "int" or tipeArg[1] != "int" or tipeArg[2] != "string" or (tipeArg[3] != "int" and tipeArg[3] != "double")
+            galat("poke(p int, offset int, \"tipe\", nilai)")
+        be jn = ""
+        for k in range(tp0, tp)
+            if len(tok[k]) > 0 and substr(tok[k], 0, 1) == "\""
+                be jn = substr(tok[k], 1, len(tok[k]) - 1)
+        if (jn == "double" or jn == "float") and tipeArg[3] == "int"
+            konversiArg(0)
+        else if jn != "double" and jn != "float" and tipeArg[3] != "int"
+            galat("poke: nilai untuk " jn " harus bilangan bulat")
+        hex("5A 58 59 58")                # pop rdx (nilai); pop rax (jenis, dibuang); pop rcx (offset); pop rax (p)
+        if jn == "int8"
+            hex("88 14 08")
+        else if jn == "int16"
+            hex("66 89 14 08")
+        else if jn == "int"
+            hex("89 14 08")
+        else if jn == "int64" or jn == "pointer" or jn == "double"
+            hex("48 89 14 08")
+        else if jn == "float"
+            hex("66 48 0F 6E C2 F2 0F 5A C0 66 0F 7E C2 89 14 08")   # movq xmm0,rdx; cvtsd2ss; movd edx,xmm0; mov [rax+rcx], edx
+        else
+            galat("poke: jenis tidak dikenal " jn)
+        hex("6A 00")
+        return "int"
+    if nama == "peek" and n == 3
+        # peek(p, offset, "jenis"): hasil int (int8/int16/int bertanda) atau double (float/double)
+        if tipeArg[0] != "int" or tipeArg[1] != "int" or tipeArg[2] != "string"
+            galat("peek(p int, offset int, \"tipe\")")
+        be jp = ""
+        for k in range(tp0, tp)
+            if len(tok[k]) > 0 and substr(tok[k], 0, 1) == "\""
+                be jp = substr(tok[k], 1, len(tok[k]) - 1)
+        hex("58 59 58")                   # buang jenis; pop rcx (offset); pop rax (p)
+        be hasilP = "int"
+        if jp == "int8"
+            hex("48 0F BE 04 08")
+        else if jp == "int16"
+            hex("48 0F BF 04 08")
+        else if jp == "int"
+            hex("48 63 04 08")
+        else if jp == "int64" or jp == "pointer"
+            hex("48 8B 04 08")
+        else if jp == "double"
+            hex("48 8B 04 08")
+            be hasilP = "double"
+        else if jp == "float"
+            hex("F3 0F 10 04 08 F3 0F 5A C0 66 48 0F 7E C0")
+            be hasilP = "double"
+        else
+            galat("peek: jenis tidak dikenal " jp)
+        hex("50")
+        return hasilP
+    if nama == "write" and n >= 2
+        # write(a, b, c) = print tanpa baris baru: semua argumen digabung jadi teks
+        jadiTeks(tipeArg[n - 1])
+        be kk = n - 2
+        loop kk >= 0
+            hex("58 59 50 51")
+            jadiTeks(tipeArg[kk])
+            hex("58 59 50 51")
+            panggilNama("strGabung", 2)
+            be kk -= 1
+        panggilNama("write__string", 1)
+        return funcRet[cariFungsi("write__string")]
+    if nama == "array" and n == 1 and (tipeArg[0] == "list int" or tipeArg[0] == "list double")
+        if tipeArg[0] == "list int"
+            panggilNama("arrayDariI", 1)
+        else
+            panggilNama("arrayDariD", 1)
+        return "list double"
+    if nama == "array" and n >= 1 and n <= 2 and tipeArg[0] == "int"
+        if n == 1
+            hex("6A 00")
+        else if tipeArg[1] == "int"
+            konversiArg(0)
+        else if tipeArg[1] != "double"
+            galat("array(n, nilai): nilai harus angka")
+        panggilNama("filledRaw", 2)
+        return "list double"
+    if nama == "alloc" or nama == "newBuffer"
+        if n != 1 or tipeArg[0] != "int"
+            galat("alloc(n int)")
+        hex("59 E8")                      # pop rcx; call alloc
+        relatif(offAlloc)
+        hex("50")
+        return "int"
+    if nama == "free" or nama == "freeBuffer"
+        if n != 1 or tipeArg[0] != "int"
+            galat("free(p int)")
+        hex("59 E8")                      # pop rcx; call free
+        relatif(offFree)
+        hex("6A 00")                      # push 0
+        return "int"
+    if nama == "api"
+        # api(indeks, a1..a7): panggil fungsi Windows lewat tabel impor; semua int; hasil rax
+        if n != 8
+            galat("api(indeks, a1, a2, a3, a4, a5, a6, a7) butuh 8 argumen")
+        for k in range(8)
+            if tipeArg[k] != "int"
+                galat("semua argumen api() harus int")
+        hex("E8")
+        relatif(offApi)
+        hex("48 81 C4")                   # add rsp, 64
+        d32(64)
+        hex("50")
+        return "int"
+    if nama == "typeOf" and n == 1
+        # typeOf(x): nama tipe sebagai teks; untuk json diputuskan saat jalan
+        if tipeArg[0] == "json"
+            panggilNama("jTipe", 1)
+            return "string"
+        be tn = tipeArg[0]
+        if tipeList(tn)
+            be tn = "list"
+        else if tipeMap(tn)
+            be tn = "map"
+        hex("58")                         # pop rax (nilai dibuang)
+        add(litTeks, tn)
+        hex("48 8D 05")                   # lea rax, [nama tipe]
+        add(litPos, kur)
+        add(litIdx, len(litTeks) - 1)
+        d32(0)
+        hex("50")
+        return "string"
+    if nama == "_callback" or nama == "callback"
+        # _callback("fungsi"): alamat pintu masuk yang bisa dipanggil Windows (thread, WndProc); argumen Windows (rcx, rdx, r8, r9)
+        # didorong ke stack sesuai arity fungsi nrxl; rbx (handle stdout) dipulihkan
+        if n != 1 or tipeArg[0] != "string"
+            galat("_callback(\"nama fungsi\")")
+        be cbNama = ""
+        for k in range(tp0, tp)
+            if len(tok[k]) > 0 and substr(tok[k], 0, 1) == "\""
+                be cbNama = substr(tok[k], 1, len(tok[k]) - 1)
+        be cbFi = cariFungsi(cbNama)
+        if funcArity[cbFi] > 4
+            galat("_callback: fungsi " cbNama " maksimal 4 parameter")
+        hex("58")                         # pop rax (literal nama, dibuang)
+        hex("E9")                         # jmp lewati
+        be cbLewat = kur
+        d32(0)
+        be cbPos = kur
+        hex("53")                         # push rbx
+        ripGlobal("48 8B 1D", 11)         # mov rbx, [$stdout]
+        if funcArity[cbFi] >= 1
+            hex("51")                     # push rcx
+        if funcArity[cbFi] >= 2
+            hex("52")                     # push rdx
+        if funcArity[cbFi] >= 3
+            hex("41 50")                  # push r8
+        if funcArity[cbFi] >= 4
+            hex("41 51")                  # push r9
+        hex("E8")
+        add(callPos, kur)
+        add(callFn, cbFi)
+        d32(0)
+        if funcArity[cbFi] > 0
+            hex("48 83 C4")               # add rsp, 8 * arity
+            hex("00")
+            w8(sek(kur - 1), 8 * funcArity[cbFi])
+        hex("5B C3")                      # pop rbx; ret
+        tambal(cbLewat, kur)
+        hex("48 8D 05")                   # lea rax, [shim]
+        relatif(cbPos)
+        hex("50")
+        return "int"
+    if nama == "callp"
+        # callp(alamat, a1..a12): panggil fungsi Windows lewat pointer (hasil GetProcAddress); argumen yang kurang diisi 0
+        if n < 1 or n > 13
+            galat("callp(alamat, a1..a12) butuh 1 sampai 13 argumen")
+        for k in range(n)
+            if tipeArg[k] != "int"
+                galat("semua argumen callp() harus int")
+        for k in range(13 - n)
+            hex("6A 00")                  # push 0
+        hex("E8")
+        relatif(offCallp)
+        hex("48 81 C4")                   # add rsp, 104
+        d32(104)
+        hex("50")
+        return "int"
+    if nama == "_sqrt" or nama == "_sin" or nama == "_cos" or nama == "_tan" or nama == "_atan2" or nama == "_fpow"
+        # fungsi bilangan desimal lewat SSE / x87 (untuk pustaka). _atan2(y, x), _fpow(x, y); selebihnya satu argumen
+        be na = 1
+        if nama == "_atan2" or nama == "_fpow"
+            be na = 2
+        if n != na
+            galat(nama " butuh " na " argumen")
+        for k in range(n)
+            if tipeArg[k] == "int"
+                konversiArg(n - 1 - k)
+            else if tipeArg[k] != "double"
+                galat(nama " butuh angka")
+        if nama == "_sqrt"
+            hex("F2 0F 10 04 24 F2 0F 51 C0 F2 0F 11 04 24")          # movsd xmm0,[rsp]; sqrtsd; movsd [rsp],xmm0
+        else if nama == "_sin"
+            hex("DD 04 24 D9 FE DD 1C 24")                           # fld [rsp]; fsin; fstp [rsp]
+        else if nama == "_cos"
+            hex("DD 04 24 D9 FF DD 1C 24")
+        else if nama == "_tan"
+            hex("DD 04 24 D9 F2 DD D8 DD 1C 24")                     # fptan; fstp st0
+        else if nama == "_atan2"
+            hex("DD 44 24 08 DD 04 24 D9 F3 DD 5C 24 08 48 83 C4 08")   # fld y; fld x; fpatan; fstp [rsp+8]; add rsp,8
+        else
+            # x^y = 2^(y*log2 x)
+            hex("DD 04 24 DD 44 24 08 D9 F1 D9 C0 D9 FC DC E9 D9 C9 D9 F0 D9 E8 DE C1 D9 FD DD D9 DD 5C 24 08 48 83 C4 08")
+        return "double"
+    if nama == "filled" and n == 2
+        if tipeArg[0] != "int"
+            galat("filled(n, nilai)")
+        panggilNama("filledRaw", 2)
+        return "list " + tipeArg[1]
+    if (nama == "slice" or nama == "reverse") and n >= 1 and tipeList(tipeArg[0])
+        # list apa pun: isi 8 byte, jadi pakai versi list int; tipe hasil sama dengan tipe masukan
+        if nama == "slice"
+            if n == 2
+                panggilNama("sliceList1", 2)
+            else
+                panggilNama("sliceList2", 3)
+        else
+            panggilNama("reverseList", 1)
+        return tipeArg[0]
+    if nama == "indexOf" and n == 2 and tipeList(tipeArg[0])
+        if tipeArg[0] == "list string"
+            panggilNama("cariS", 2)
+        else
+            panggilNama("cariI", 2)
+        return "int"
+    if nama == "_callfn"
+        # _callfn(alamat, a1..ak): panggil fungsi nrxl lewat alamatnya (handler window); argumen apa pun (8 byte), hasil rax
+        if n < 1 or tipeArg[0] != "int"
+            galat("_callfn(alamat, argumen...)")
+        hex("FF 94 24")                   # call [rsp + 8k]
+        d32(8 * (n - 1))
+        hex("48 81 C4")                   # add rsp, 8n
+        d32(8 * n)
+        hex("50")
+        return "int"
+    if n == 0 and len(nama) > 7 and slice(nama, -7) == "__alloc" and cariStruct(slice(nama, 0, len(nama) - 7)) >= 0
+        # Tipe__alloc(): objek baru dengan nilai bawaan tiap field (dipakai pembuat Tipe__new untuk init)
+        be sa = cariStruct(slice(nama, 0, len(nama) - 7))
+        be nmA = split(structFN[sa], ",")
+        be tpA = split(structFT[sa], ";")
+        be dfA = split(structDef[sa], "\n")
+        hex("B9")
+        d32(8 * len(nmA))
+        hex("E8")
+        relatif(offAlloc)
+        hex("50")
+        for k in range(len(nmA))
+            if k < len(dfA) and dfA[k] != ""
+                be tdA = ekspresiDari(dfA[k])
+                if tpA[k] == "double" and tdA == "int"
+                    konversiArg(0)
+            else if tpA[k] == "string"
+                dorongTeks("")
+            else if tipeList(tpA[k])
+                panggilNama("listBaru", 0)
+            else if tipeMap(tpA[k])
+                panggilNama("mapBaru", 0)
+            else
+                hex("6A 00")
+            hex("5A 48 8B 04 24 48 89 90")      # pop rdx; mov rax,[rsp]; mov [rax + disp32], rdx
+            d32(8 * k)
+        return structNama[sa]
+    # --- konstruktor type: Titik(1, 2) = satu nilai per field, sesuai urutan
+    be sc2 = cariStruct(nama)
+    if sc2 >= 0 and indexOf(funcNama, nama + "__new") >= 0
+        return panggilBuatan(nama + "__new", tipeArg)
+    if sc2 >= 0
+        be nmF = split(structFN[sc2], ",")
+        be tpF = split(structFT[sc2], ";")
+        if n < len(nmF) and n >= 0
+            # field yang tidak diisi memakai nilai bawaannya
+            be dfl = split(structDef[sc2], "\n")
+            for k in range(n, len(nmF))
+                if k >= len(dfl) or dfl[k] == ""
+                    galatK(67, nama + " needs " + str(len(nmF)) + " values (" + str(len(nmF)) + " fields), but got " + str(n))
+                add(tipeArg, ekspresiDari(dfl[k]))
+            be n = len(nmF)
+        if n != len(nmF)
+            galatK(254, nama + " has " + str(len(nmF)) + " fields, but got " + str(n) + " values")
+        for k in range(n)
+            if tpF[k] == "double" and tipeArg[k] == "int"
+                konversiArg(n - 1 - k)
+            else if tpF[k] != tipeArg[k]
+                galatK(256, "field " + nmF[k] + " in type " + nama + " has type " + tpF[k] + ", it cannot hold " + tipeArg[k])
+        hex("B9")                         # mov ecx, ukuran blok
+        d32(8 * n)
+        hex("E8")                         # call alloc
+        relatif(offAlloc)
+        for k in range(n)
+            hex("5A 48 89 90")            # pop rdx; mov [rax + disp32], rdx   (dari field terakhir)
+            d32(8 * (n - 1 - k))
+        hex("50")
+        return nama
+    if nama == "peek8" or nama == "peek64"
+        if n != 2 or tipeArg[0] != "int" or tipeArg[1] != "int"
+            galat(nama "(p int, offset int)")
+        if nama == "peek8"
+            hex("59 58 0F B6 04 08 50")   # movzx eax, byte [rax+rcx]
+        else
+            hex("59 58 48 8B 04 08 50")   # mov rax, [rax+rcx]
+        return "int"
+    if nama == "poke8" or nama == "poke64"
+        if n != 3 or tipeArg[0] != "int" or tipeArg[1] != "int" or tipeArg[2] != "int"
+            galat(nama "(p int, offset int, nilai int)")
+        if nama == "poke8"
+            hex("5A 59 58 88 14 08 6A 00")      # mov [rax+rcx], dl; push 0
+        else
+            hex("5A 59 58 48 89 14 08 6A 00")   # mov [rax+rcx], rdx; push 0
+        return "int"
+    if nama == "asString" or nama == "asListI" or nama == "asListS" or nama == "asListD"
+        if n != 1 or tipeArg[0] != "int"
+            galat(nama "(p int)")
+        if nama == "asString"
+            return "string"
+        if nama == "asListI"
+            return "list int"
+        if nama == "asListD"
+            return "list double"
+        return "list string"
+    if nama == "asJson"
+        if n != 1 or tipeArg[0] != "int"
+            galat("asJson(p int)")
+        return "json"
+    if nama == "asListJ"
+        if n != 1 or tipeArg[0] != "int"
+            galat("asListJ(p int)")
+        return "list json"
+    if nama == "asDouble"
+        if n != 1 or tipeArg[0] != "int"
+            galat("asDouble(bit int)")
+        return "double"
+    if nama == "asInt"
+        if n != 1 or (tipeArg[0] != "string" and tipeArg[0] != "map" and tipeArg[0] != "list" and tipeArg[0] != "json" and tipeArg[0] != "double" and not tipeList(tipeArg[0]) and not tipeMap(tipeArg[0]))
+            galat("asInt(string, list, map, json, atau double)")
+        return "int"
+    if nama == "len" and n == 1 and tipeArg[0] == "json"
+        panggilNama("jPanjang", 1)
+        return "int"
+    if nama == "add" and n == 2 and tipeArg[0] == "json"
+        if tipeArg[1] != "json"
+            koersiJson(0, tipeArg[1], "json")
+        panggilNama("jTambah", 2)
+        return "int"
+    if nama == "len"
+        if n == 1 and (tipeArg[0] == "int" or tipeArg[0] == "double" or tipeArg[0] == "bool")
+            jadiTeks(tipeArg[0])
+            be tipeArg[0] = "string"
+        if n != 1 or (tipeArg[0] != "string" and not tipeList(tipeArg[0]) and not tipeMap(tipeArg[0]))
+            galat("len(string, list, atau map)")
+        if tipeMap(tipeArg[0])
+            hex("58 48 8B 00 48 8B 00 50")   # pop rax; rax = daftar key; rax = jumlahnya
+        else
+            hex("58 48 8B 00 50")         # pop rax; mov rax, [rax]; push rax
+        return "int"
+    if nama == "add"
+        if n >= 1 and not tipeList(tipeArg[0])
+            galatK(43, "the first argument of add must be a list")
+        if n != 2
+            galatK(6, "add needs 2 arguments, but got " + str(n))
+        if not samakan(slice(tipeArg[0], 5), tipeArg[1])
+            galatK(228, "list holds " + slice(tipeArg[0], 5) + " values, it cannot hold " + tipeArg[1])
+        panggilNama("listTambah", 2)
+        return "int"
+    if nama == "_lempar"
+        # _lempar(pesan string): lempar galat yang bisa ditangkap try/catch (untuk pustaka)
+        if n != 1 or tipeArg[0] != "string"
+            galat("_lempar(pesan string)")
+        hex("58 E8")                      # pop rax; call lempar
+        relatif(offLempar)
+        hex("6A 00")                      # push 0 (tidak pernah tercapai)
+        return "int"
+    if nama == "_lemparK"
+        # _lemparK(kode, pesan): seperti _lempar, dengan nomor E#### untuk galat yang tidak tertangkap
+        if n != 2 or tipeArg[0] != "int" or tipeArg[1] != "string"
+            galat("_lemparK(kode int, pesan string)")
+        hex("58 59")                      # pop rax (pesan); pop rcx (kode)
+        ripGlobal("48 89 0D", 14)         # mov [kode], rcx
+        hex("E8")
+        relatif(offLempar)
+        hex("6A 00")
+        return "int"
+    if nama == "_gget"
+        # _gget(k): baca slot global tersembunyi k (0..7) milik library
+        if n != 1 or tipeArg[0] != "int"
+            galat("_gget(k int)")
+        hex("59")                         # pop rcx
+        ripGlobal("48 8D 05", 2)          # lea rax, [slot $S0]
+        hex("48 8B 04 C8 50")             # mov rax, [rax + rcx*8]; push rax
+        return "int"
+    if nama == "_gset"
+        # _gset(k, v): tulis slot global tersembunyi k
+        if n != 2 or tipeArg[0] != "int" or tipeArg[1] != "int"
+            galat("_gset(k int, v int)")
+        hex("5A 59")                      # pop rdx (nilai); pop rcx (indeks)
+        ripGlobal("48 8D 05", 2)          # lea rax, [slot $S0]
+        hex("48 89 14 C8 6A 00")          # mov [rax + rcx*8], rdx; push 0
+        return "int"
+    if nama == "idiv"
+        # pembagian bilangan bulat (hanya untuk prelude / pustaka; nrxl asli tidak punya)
+        if n != 2 or tipeArg[0] != "int" or tipeArg[1] != "int"
+            galat("idiv(a int, b int)")
+        hex("59 58 48 99 48 F7 F9 50")    # pop rcx; pop rax; cqo; idiv rcx; push rax
+        return "int"
+    if nama == "takeLast" and n == 1 and tipeList(tipeArg[0]) and tipeArg[0] != "list int"
+        panggilNama("takeLast__list_int", 1)     # semua isi list 8 byte; hanya tipe hasilnya yang berbeda
+        return slice(tipeArg[0], 5)
+    if nama == "int" and n == 1 and tipeArg[0] == "double"
+        hex("58 66 48 0F 6E C0 F2 48 0F 2C C0 50")   # pop rax; movq xmm0, rax; cvttsd2si rax, xmm0; push rax (potong ke nol)
+        return "int"
+    if (nama == "float" or nama == "double") and n == 1 and (tipeArg[0] == "int" or tipeArg[0] == "double")
+        if tipeArg[0] == "int"
+            konversiArg(0)
+        return "double"
+    return panggilBuatan(nama, tipeArg)
+
+# fungsi buatan (prelude / pustaka). Pilih overload: nama_aN__tipe, nama_aN, nama__tipe, nama__list / nama__map, nama
+# tebak tipe hasil fungsi tanpa tipe: kompilasi percobaan (kode dibuang) lalu ambil tipe return pertama
+func inferRet(fi int)
+    be funcRet[fi] = "int"                # sementara (rekursi)
+    be kurS = kur
+    be cpS = len(callPos)
+    be lpS = len(litPos)
+    be gpS = len(gloPos)
+    be bpS = len(brkPos)
+    be cnS = len(cntPos)
+    be scNamaS = scNama
+    be scDispS = scDisp
+    be scTipeS = scTipe
+    be nLokalS = nLokal
+    be tryAktifS = tryAktif
+    be curRetS = curRet
+    be globalOKS = globalOK
+    be dalamFungsiS = dalamFungsi
+    be siS = si
+    be noBarisS = noBaris
+    be berkNamaS = berkNama
+    be tokS = tok
+    be tpS = tp
+    be paksaLokalS = paksaLokal
+    be retS = retInferensi
+    be scNama list string
+    be scDisp list int
+    be scTipe list string
+    be nLokal = 0
+    be tryAktif list int
+    be curFnS = curFnNama
+    be curFnNama = split(funcNama[fi], "#")[0]
+    be curRet = "?"
+    be retInferensi = ""
+    be dalamFungsi = true
+    be paksaLokal = false
+    be globalOK = berk[funcStmt[fi]] != "prelude.nrxl" and berk[funcStmt[fi]] != "pustaka.nrxl" and substr(berk[funcStmt[fi]], 0, 4) != "lib\\"
+    be ps3 = 0
+    if funcArity[fi] > 0
+        be tipeParam3 = split(funcPT[fi], ",")
+        for pn in split(isiB[funcStmt[fi]], ",")
+            add(scNama, trim(pn))
+            add(scDisp, 16 + 8 * (funcArity[fi] - 1 - ps3))
+            add(scTipe, tipeParam3[ps3])
+            be ps3 += 1
+    be si = funcStmt[fi] + 1
+    be noBaris = nomor[funcStmt[fi]]
+    be berkNama = berk[funcStmt[fi]]
+    blok(anak(inden[funcStmt[fi]]))
+    be hasilT = retInferensi
+    if hasilT == ""
+        be hasilT = "int"
+    loop len(callPos) > cpS
+        takeLast(callPos)
+        takeLast(callFn)
+    loop len(litPos) > lpS
+        takeLast(litPos)
+        takeLast(litIdx)
+    loop len(gloPos) > gpS
+        takeLast(gloPos)
+        takeLast(gloIdx)
+    loop len(brkPos) > bpS
+        takeLast(brkPos)
+    loop len(cntPos) > cnS
+        takeLast(cntPos)
+    be kur = kurS
+    be scNama = scNamaS
+    be scDisp = scDispS
+    be scTipe = scTipeS
+    be nLokal = nLokalS
+    be tryAktif = tryAktifS
+    be curRet = curRetS
+    be curFnNama = curFnS
+    be globalOK = globalOKS
+    be dalamFungsi = dalamFungsiS
+    be si = siS
+    be noBaris = noBarisS
+    be berkNama = berkNamaS
+    be tok = tokS
+    be tp = tpS
+    be paksaLokal = paksaLokalS
+    be retInferensi = retS
+    be funcRet[fi] = hasilT
+func panggilBuatan(nama string, tipeArg list string) string
+    be n = len(tipeArg)
+    if indexOf(funcNama, "u$" + nama) >= 0 and berk[si] != "prelude.nrxl" and berk[si] != "pustaka.nrxl" and substr(berk[si], 0, 4) != "lib\\"
+        be nama = "u$" + nama
+    if nama == "wait" and indexOf(funcNama, "winTunggu__int") >= 0
+        be nama = "winTunggu"
+    if (nama == "max" or nama == "min" or ((nama == "atan2" or nama == "pow") and n == 2)) and n >= 2 and n <= 4
+        be semuaAngka = true
+        be adaDouble = false
+        for k in range(n)
+            if tipeArg[k] != "int" and tipeArg[k] != "double"
+                be semuaAngka = false
+            if tipeArg[k] == "double"
+                be adaDouble = true
+        if semuaAngka and adaDouble
+            for k in range(n)
+                if tipeArg[k] == "int"
+                    konversiArg(n - 1 - k)
+                    be tipeArg[k] = "double"
+    be nm2 = nama
+    be tsuf = ""
+    if n > 0
+        be tsuf = "__" + replace(tipeArg[0], " ", "_")
+    be pilihan list string
+    add(pilihan, nama + "_a" + str(n) + tsuf)
+    add(pilihan, nama + "_a" + str(n))
+    add(pilihan, nama + tsuf)
+    add(pilihan, nama + "__list")
+    add(pilihan, nama + "__map")
+    for pc in pilihan
+        if pc == nama + "__list" and not (n > 0 and tipeList(tipeArg[0]))
+            continue
+        if pc == nama + "__map" and not (n > 0 and tipeMap(tipeArg[0]))
+            continue
+        if indexOf(funcNama, pc) >= 0
+            be nm2 = pc
+            break
+    if indexOf(funcNama, nm2) < 0
+        galatNamaTakAda(nama, n, tipeArg)
+    if (nama == "readFile" or nama == "writeFile" or nama == "fileExists") and berkasPengguna(berkNama) and indexOf(libMuat, "nrx_crudfile.nrxl") < 0
+        galatK(66, nama + "() needs the file library, add at the top: lib nrx_crudfile.h")
+    be fi = cariFungsi(nm2)
+    if n != funcArity[fi]
+        galatArity(nama, fi, n)
+    if n > 0 and indexOf(funcPT[fi], "?") >= 0
+        # fungsi dengan parameter tanpa tipe: buat salinan untuk kombinasi tipe argumen ini
+        be tpAsal = split(funcPT[fi], ",")
+        be konk list string
+        for k in range(n)
+            if tpAsal[k] == "?"
+                add(konk, tipeArg[k])
+            else
+                add(konk, tpAsal[k])
+        be kunciF = nm2 + "#" + join(konk, ",")
+        if indexOf(funcNama, kunciF) < 0
+            add(funcNama, kunciF)
+            add(funcArity, n)
+            add(funcStmt, funcStmt[fi])
+            add(funcPT, join(konk, ","))
+            add(funcRet, funcRet[fi])
+        be nm2 = kunciF
+        be fi = cariFungsi(nm2)
+    if n > 0
+        be tipeParam = split(funcPT[fi], ",")
+        for k in range(n)
+            if tipeParam[k] == "list" and tipeList(tipeArg[k])
+                be okParam = true         # parameter bertipe "list" menerima list apa pun
+            else if tipeParam[k] == "map" and tipeMap(tipeArg[k])
+                be okParam2 = true        # parameter bertipe "map" menerima map apa pun
+            else if tipeParam[k] == "double" and tipeArg[k] == "int"
+                konversiArg(n - 1 - k)    # int boleh dipakai di tempat double
+            else if tipeParam[k] != tipeArg[k] and bisaJson(tipeArg[k], tipeParam[k])
+                koersiJson(n - 1 - k, tipeArg[k], tipeParam[k])
+            else if tipeParam[k] == "string" and (tipeArg[k] == "int" or tipeArg[k] == "double") and not berkasPengguna(berk[funcStmt[fi]])
+                koersiTeks(n - 1 - k, tipeArg[k])     # fungsi teks bawaan menerima angka sebagai teks
+            else if tipeParam[k] != tipeArg[k]
+                galatK(240, "parameter " + trim(split(isiB[funcStmt[fi]], ",")[k]) + " of function " + namaTampil(nama) + " has type " + tipeParam[k] + ", it cannot hold " + tipeArg[k])
+    if funcRet[fi] == "?"
+        inferRet(fi)
+    panggilNama(nm2, n)
+    # tipe hasil yang bergantung pada tipe argumen
+    if nm2 == "values__map"
+        return "list " + slice(tipeArg[0], 4)
+    if nm2 == "remove__map"
+        return slice(tipeArg[0], 4)
+    if nm2 == "remove__list"
+        return slice(tipeArg[0], 5)
+    return funcRet[fi]
+# operasi dengan nilai json: kedua sisi dijadikan json, hitungan / perbandingan diputuskan saat jalan (jAritm / jBanding di lib nrx_json)
+func opJson(tl string, tr string, kode int, fn string)
+    if tr != "json"
+        koersiJson(0, tr, "json")
+    if tl != "json"
+        koersiJson(1, tl, "json")
+    dorongInt(kode)
+    panggilNama(fn, 3)
+# suku: faktor { (* | / | %) faktor }
+func suku() string
+    be tl = faktor()
+    loop lihat() == "*" or lihat() == "/" or lihat() == "%"
+        be op = lihat()
+        be opNow = op
+        maju()
+        be pR = kur
+        be kp = lastPush == kur and barrierKur < kur
+        be tr = faktor()
+        if tl == "json" or tr == "json"
+            be kj = 3
+            if op == "/"
+                be kj = 4
+            if op == "%"
+                be kj = 5
+            opJson(tl, tr, kj, "jAritm")
+            be tl = "json"
+            continue
+        if op == "/" or tl == "double" or tr == "double"
+            if op == "%"
+                if tl == "int"
+                    konversiArg(1)
+                if tr == "int"
+                    konversiArg(0)
+                if (tl != "int" and tl != "double") or (tr != "int" and tr != "double")
+                    galat("% hanya untuk angka")
+                panggilNama("fmodD", 2)
+                be tl = "double"
+                continue
+            hex("59 58")                  # pop rcx (kanan); pop rax (kiri)
+            muatXmm(tl, tr)
+            if op == "*"
+                hex("F2 0F 59 C1")        # mulsd xmm0, xmm1
+            else
+                cekBagiNol()
+                hex("F2 0F 5E C1")        # divsd xmm0, xmm1
+            hex("66 48 0F 7E C0 50")      # movq rax, xmm0; push rax
+            be tl = "double"
+        else
+            harusAngka(tl)
+            harusAngka(tr)
+            be gk = gabungKanan(pR, kp)
+            if not gk
+                hex("59 58")              # pop rcx (kanan); pop rax (kiri)
+            if op == "*"
+                hex("48 0F AF C1 50")     # imul rax, rcx; push rax
+            else if gk and kknst >= 2 and kknst < 2147483648
+                # % dengan konstanta: tanpa idiv (buang "movabs rcx, konstanta" yang sudah ditulis)
+                be adaPop = kur - kknPos - 10
+                be kur = kknPos
+                be lastPush = -1
+                if adaPop == 1
+                    hex("58")
+                modKonstan(kknst)
+            else
+                hex("48 85 C9 75")        # test rcx, rcx; jnz +n (pembagi nol -> galat)
+                be pz = kur
+                hex("00")
+                lemparTeks("cannot divide by zero", 24)
+                w8(sek(pz), kur - pz - 1)
+                hex("48 99 48 F7 F9 52")  # cqo; idiv rcx; push rdx (sisa bagi)
+    return tl
+
+# ekspresi: suku { (+ | -) suku }     (+ juga menggabung string)
+func ekspresi() string
+    be tl = suku()
+    loop lihat() == "+" or lihat() == "-"
+        be op = lihat()
+        be opNow = op
+        maju()
+        be pR = kur
+        be kp = lastPush == kur and barrierKur < kur
+        be tr = suku()
+        if tl == "json" or tr == "json"
+            be kj = 1
+            if op == "-"
+                be kj = 2
+            opJson(tl, tr, kj, "jAritm")
+            be tl = "json"
+            continue
+        if op == "+" and tl == "string" and tr == "string"
+            panggilNama("strGabung", 2)
+        else if op == "+" and (tl == "string" or tr == "string") and tl != "json" and tr != "json"
+            # teks + nilai lain: nilai lain diubah jadi teks dulu ("n=" + 5 -> "n=5")
+            if tr != "string"
+                jadiTeks(tr)
+            if tl != "string"
+                hex("58 59 50 51")        # tukar: kiri di puncak
+                jadiTeks(tl)
+                hex("58 59 50 51")        # kembalikan urutannya
+            panggilNama("strGabung", 2)
+            be tl = "string"
+        else if tl == "double" or tr == "double"
+            hex("59 58")                  # pop rcx; pop rax
+            muatXmm(tl, tr)
+            if op == "+"
+                hex("F2 0F 58 C1")        # addsd xmm0, xmm1
+            else
+                hex("F2 0F 5C C1")        # subsd xmm0, xmm1
+            hex("66 48 0F 7E C0 50")      # movq rax, xmm0; push rax
+            be tl = "double"
+        else
+            harusAngka(tl)
+            harusAngka(tr)
+            if not gabungKanan(pR, kp)
+                hex("59 58")              # pop rcx; pop rax
+            if op == "+"
+                hex("48 01 C8 50")        # add rax, rcx; push rax
+            else
+                hex("48 29 C8 50")        # sub rax, rcx; push rax
+    return tl
+
+# bandingkan: ekspresi [ (== != < > <= >=) ekspresi ]  -> int 1 atau 0
+func bandingkan() string
+    be tl = ekspresi()
+    be op = lihat()
+    if op == "in" or (op == "not" and tp + 1 < len(tok) and tok[tp + 1] == "in")
+        # x in kumpulan / x not in kumpulan  ==  contains(kumpulan, x)
+        be tidak = op == "not"
+        if tidak
+            maju()
+        maju()
+        be tkum = ekspresi()
+        if tkum == "int" or tkum == "double" or tkum == "bool"
+            # x in 5 : cari di bentuk teks angkanya (seperti nrxlang)
+            jadiTeks(tkum)
+            be tkum = "string"
+            if tl != "string"
+                hex("58 59 50 51")
+                jadiTeks(tl)
+                hex("58 59 50 51")
+                be tl = "string"
+        hex("58 59 50 51")                # tukar dua nilai di puncak stack: (x, kumpulan) -> (kumpulan, x)
+        be ta2 list string
+        add(ta2, tkum)
+        add(ta2, tl)
+        panggilBuatan("contains", ta2)
+        if tidak
+            hex("58 48 83 F0 01 50")      # pop rax; xor rax, 1; push rax
+        return "bool"
+    if op == "==" or op == "!=" or op == "<" or op == ">" or op == "<=" or op == ">="
+        maju()
+        be pR = kur
+        be kp = lastPush == kur and barrierKur < kur
+        be tr = ekspresi()
+        if tl == "json" or tr == "json"
+            be kj = 1
+            if op == "!="
+                be kj = 2
+            if op == "<"
+                be kj = 3
+            if op == ">"
+                be kj = 4
+            if op == "<="
+                be kj = 5
+            if op == ">="
+                be kj = 6
+            opJson(tl, tr, kj, "jBanding")
+            return "bool"
+        if (op == "==" or op == "!=") and tl == tr and (tipeList(tl) or tipeMap(tl))
+            # list/map sama bila isinya sama: bandingkan bentuk teksnya
+            jadiTeks(tr)
+            hex("58 59 50 51")
+            jadiTeks(tl)
+            hex("58 59 50 51")
+            panggilNama("strSama", 2)
+            if op == "!="
+                hex("58 48 83 F0 01 50")
+            return "bool"
+        if tl != tr and not ((tl == "int" or tl == "double") and (tr == "int" or tr == "double"))
+            galatK(275, "cannot compare " + tl + " with " + tr + "; convert first with int(...), float(...), or str(...)")
+        if tl == "string" and tr == "string"
+            if op == "==" or op == "!="
+                panggilNama("strSama", 2)
+                if op == "!="
+                    hex("58 48 83 F0 01 50")  # pop rax; xor rax, 1; push rax
+                return "bool"
+            # urutan teks: a < b = strKurang(a, b); a > b = strKurang(b, a); <= dan >= adalah kebalikannya
+            if op == ">" or op == "<="
+                hex("58 59 50 51")        # tukar a dan b
+            panggilNama("strKurang", 2)
+            if op == "<=" or op == ">="
+                hex("58 48 83 F0 01 50")
+            return "bool"
+        if tl == "double" or tr == "double"
+            # perbandingan bilangan: ucomisd, lalu setcc gaya tanpa tanda (b/a/be/ae)
+            be scd = "94"
+            if op == "!="
+                be scd = "95"
+            if op == "<"
+                be scd = "92"
+            if op == ">"
+                be scd = "97"
+            if op == "<="
+                be scd = "96"
+            if op == ">="
+                be scd = "93"
+            hex("59 58")                  # pop rcx; pop rax
+            muatXmm(tl, tr)
+            hex("66 0F 2E C1")            # ucomisd xmm0, xmm1
+            hex("0F " + scd + " C0 0F B6 C0 50")
+            return "bool"
+        if not (tl == "bool" and tr == "bool" and (op == "==" or op == "!="))
+            harusInt(tl)
+            harusInt(tr)
+        be sc = "94"
+        if op == "!="
+            be sc = "95"
+        if op == "<"
+            be sc = "9C"
+        if op == ">"
+            be sc = "9F"
+        if op == "<="
+            be sc = "9E"
+        if op == ">="
+            be sc = "9D"
+        if not gabungKanan(pR, kp)
+            hex("59 58")                  # pop rcx; pop rax
+        hex("48 39 C8")                   # cmp rax, rcx
+        hex("0F " + sc + " C0 0F B6 C0 50")   # setcc al; movzx eax, al; push rax
+        return "bool"
+    return tl
+
+# not: lebih longgar dari perbandingan (not a > b = not (a > b)), lebih ketat dari and / or
+func bukan() string
+    if lihat() == "not"
+        maju()
+        harusBool(bukan())
+        hex("58 48 85 C0 0F 94 C0 0F B6 C0 50")   # pop rax; test; sete al; movzx eax, al; push rax
+        return "bool"
+    return bandingkan()
+
+# logika: bukan { (and | or) bukan }
+func logika() string
+    be tl = bukan()
+    loop lihat() == "and" or lihat() == "or"
+        be op = lihat()
+        maju()
+        harusBool(tl)
+        # hubung singkat: kalau sisi kiri sudah menentukan, sisi kanan tidak dihitung
+        hex("58 48 85 C0")                # pop rax; test rax, rax
+        if op == "and"
+            hex("0F 84")                  # jz selesai (rax = 0 = false)
+        else
+            hex("0F 85")                  # jnz selesai (rax != 0 = true)
+        be posLompat = kur
+        d32(0)
+        harusBool(bukan())
+        hex("58")                         # pop rax (nilai sisi kanan)
+        tambal(posLompat, kur)
+        hex("50")                         # push rax
+        be tl = "bool"
+    return tl
+
+# urai satu ekspresi dari teks; kode hasilnya meninggalkan nilai di puncak stack. Hasil: tipenya.
+func ekspresiDari(s string) string
+    be tok list string = pecah(s)
+    be tp = 0
+    be tipe = logika()
+    if tp < len(tok)
+        # nilai berjejer tanpa operator digabung jadi teks: "a" x 5
+        jadiTeks(tipe)
+        loop tp < len(tok)
+            jadiTeks(logika())
+            panggilNama("strGabung", 2)
+        be tipe = "string"
+    return tipe
+
+# ---------------------------------------------------------------- rutin bawaan (kode mesin)
+# Semua rutin menyejajarkan stack sendiri bila perlu, jadi aman dipanggil dari mana saja.
+
+# cetak: rax = bilangan bertanda -> tulis desimal + baris baru ke stdout (handle di rbx)
+func rutinCetak()
+    hex("56")                             # push rsi
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 50")                    # sub rsp, 0x50   (shadow 0x20, arg5 0x20, written 0x30, buffer 0x38..0x4F)
+    hex("48 8D 74 24 50")                 # lea rsi, [rsp+0x50]   (ujung buffer)
+    hex("45 31 D2")                       # xor r10d, r10d        (penanda negatif)
+    hex("48 85 C0")                       # test rax, rax
+    hex("79 09")                          # jns +9
+    hex("48 F7 D8")                       # neg rax
+    hex("41 BA 01 00 00 00")              # mov r10d, 1
+    hex("B9 0A 00 00 00")                 # mov ecx, 10
+    hex("31 D2")                          # .loop: xor edx, edx
+    hex("48 F7 F1")                       # div rcx
+    hex("80 C2 30")                       # add dl, '0'
+    hex("48 FF CE")                       # dec rsi
+    hex("88 16")                          # mov [rsi], dl
+    hex("48 85 C0")                       # test rax, rax
+    hex("75 EE")                          # jnz .loop (-18)
+    hex("45 85 D2")                       # test r10d, r10d
+    hex("74 06")                          # jz +6
+    hex("48 FF CE")                       # dec rsi
+    hex("C6 06 2D")                       # mov byte [rsi], '-'
+    hex("4C 8D 44 24 50")                 # lea r8, [rsp+0x50]
+    hex("49 29 F0")                       # sub r8, rsi           (panjang)
+    hex("48 89 F2")                       # mov rdx, rsi          (alamat)
+    hex("48 89 D9")                       # mov rcx, rbx          (handle)
+    hex("4C 8D 4C 24 30")                 # lea r9, [rsp+0x30]
+    hex("48 C7 44 24 20 00 00 00 00")     # mov qword [rsp+0x20], 0
+    hex("FF 15")                          # call [WriteFile]
+    relatif(OFF_IAT + 8)
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("5E")                             # pop rsi
+    hex("C3")                             # ret
+
+# cetakTeks: rdx = alamat teks, r8 = panjang -> tulis ke stdout
+func rutinCetakTeks()
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 40")                    # sub rsp, 0x40
+    hex("48 89 D9")                       # mov rcx, rbx
+    hex("4C 8D 4C 24 30")                 # lea r9, [rsp+0x30]
+    hex("48 C7 44 24 20 00 00 00 00")     # mov qword [rsp+0x20], 0
+    hex("FF 15")                          # call [WriteFile]
+    relatif(OFF_IAT + 8)
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("C3")                             # ret
+
+# cetakStr: rax = string (panjang di [rax], isi di rax+8) -> tulis isi (tanpa baris baru)
+func rutinCetakStr()
+    hex("48 89 C2")                       # mov rdx, rax
+    hex("48 83 C2 08")                    # add rdx, 8
+    hex("4C 8B 00")                       # mov r8, [rax]
+    hex("E9")                             # jmp cetakTeks (tail call)
+    relatif(offTek)
+
+# cetakNL: tulis satu baris baru
+func rutinCetakNL()
+    hex("48 8D 15")                       # lea rdx, [baris baru]
+    relatif(offNL)
+    hex("41 B8 01 00 00 00")              # mov r8d, 1
+    hex("E9")                             # jmp cetakTeks (tail call)
+    relatif(offTek)
+
+# alloc: rcx = ukuran -> rax = alamat blok baru yang berisi nol (HeapAlloc dari heap proses)
+func rutinAlloc()
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 40")                    # sub rsp, 0x40
+    hex("48 89 4C 24 30")                 # mov [rsp+0x30], rcx   (simpan ukuran)
+    hex("FF 15")                          # call [GetProcessHeap]
+    relatif(OFF_IAT + 24)
+    hex("48 89 C1")                       # mov rcx, rax          (heap)
+    hex("BA 08 00 00 00")                 # mov edx, 8            (HEAP_ZERO_MEMORY)
+    hex("4C 8B 44 24 30")                 # mov r8, [rsp+0x30]    (ukuran)
+    hex("FF 15")                          # call [HeapAlloc]
+    relatif(OFF_IAT + 32)
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("C3")                             # ret
+
+# free: rcx = alamat blok dari alloc -> kembalikan ke heap proses
+func rutinFree()
+    # alamat di dalam image .exe (literal string) bukan dari heap: abaikan, jangan dibebaskan
+    hex("48 89 C8")                       # mov rax, rcx
+    hex("48 BA")                          # mov rdx, 0x140001000 (awal section)
+    w64(sek(kur), 5368713216)
+    be kur += 8
+    hex("48 29 D0")                       # sub rax, rdx
+    hex("48 3D")                          # cmp rax, ukuran image (ditambal di akhir)
+    be posFreeLim = kur
+    d32(0)
+    hex("73 01 C3")                       # jae +1 ; ret   (di dalam image -> langsung kembali)
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 40")                    # sub rsp, 0x40
+    hex("48 89 4C 24 30")                 # mov [rsp+0x30], rcx   (simpan alamat)
+    hex("FF 15")                          # call [GetProcessHeap]
+    relatif(OFF_IAT + 24)
+    hex("48 89 C1")                       # mov rcx, rax          (heap)
+    hex("31 D2")                          # xor edx, edx          (flags = 0)
+    hex("4C 8B 44 24 30")                 # mov r8, [rsp+0x30]    (alamat)
+    hex("FF 15")                          # call [HeapFree]
+    relatif(OFF_IAT + 40)
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("C3")                             # ret
+
+# api: dipanggil dengan 8 nilai di stack (indeks impor, a1..a7; a1 paling dalam). Mengatur rcx, rdx,
+# r8, r9 dan argumen stack 5..7 sesuai konvensi Windows x64, memanggil [IAT + indeks*8], hasil di rax.
+func rutinApi()
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 40")                    # sub rsp, 0x40
+    hex("48 8B 4D 40")                    # mov rcx, [rbp+64]   a1
+    hex("48 8B 55 38")                    # mov rdx, [rbp+56]   a2
+    hex("4C 8B 45 30")                    # mov r8,  [rbp+48]   a3
+    hex("4C 8B 4D 28")                    # mov r9,  [rbp+40]   a4
+    hex("48 8B 45 20")                    # mov rax, [rbp+32]   a5
+    hex("48 89 44 24 20")                 # mov [rsp+0x20], rax
+    hex("48 8B 45 18")                    # mov rax, [rbp+24]   a6
+    hex("48 89 44 24 28")                 # mov [rsp+0x28], rax
+    hex("48 8B 45 10")                    # mov rax, [rbp+16]   a7
+    hex("48 89 44 24 30")                 # mov [rsp+0x30], rax
+    hex("48 8B 45 48")                    # mov rax, [rbp+72]   indeks impor
+    hex("4C 8D 15")                       # lea r10, [IAT]
+    relatif(OFF_IAT)
+    hex("41 FF 14 C2")                    # call [r10 + rax*8]
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("C3")                             # ret
+
+# callp: 13 nilai di stack (alamat fungsi, a1..a12; alamat paling dalam). Argumen 1-4 ke rcx/rdx/r8/r9, 5-12 ke stack.
+func rutinCallp()
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 70")                    # sub rsp, 0x70
+    hex("48 8B 4D 68")                    # mov rcx, [rbp+104]  a1
+    hex("48 8B 55 60")                    # mov rdx, [rbp+96]   a2
+    hex("4C 8B 45 58")                    # mov r8,  [rbp+88]   a3
+    hex("4C 8B 4D 50")                    # mov r9,  [rbp+80]   a4
+    for k in range(8)                     # a5..a12 -> [rsp+0x20+8k]; a(5+k) ada di [rbp+72-8k]
+        hex("48 8B 45")                   # mov rax, [rbp+disp8]
+        hex("00")
+        w8(sek(kur - 1), 72 - 8 * k)
+        hex("48 89 44 24")                # mov [rsp+disp8], rax
+        hex("00")
+        w8(sek(kur - 1), 32 + 8 * k)
+    hex("48 8B 45 70")                    # mov rax, [rbp+112]  alamat fungsi
+    hex("FF D0")                          # call rax
+    hex("48 89 EC")                       # mov rsp, rbp
+    hex("5D")                             # pop rbp
+    hex("C3")                             # ret
+
+# ---------------------------------------------------------------- perintah (lewatan 2)
+# lompatan jz ke depan untuk kondisi; hasil = posisi disp32 yang harus ditambal
+func kondisi(teks string) int
+    harusBool(ekspresiDari(teks))
+    # peephole: cmp rax, rcx; setcc al; movzx eax, al; push rax  ->  langsung lompat dengan kondisi kebalikan
+    if lastPush == kur and kur - 10 > barrierKur and bacaB(kur - 10) == 72 and bacaB(kur - 9) == 57 and bacaB(kur - 8) == 200 and bacaB(kur - 7) == 15 and bacaB(kur - 5) == 192 and bacaB(kur - 4) == 15 and bacaB(kur - 3) == 182 and bacaB(kur - 2) == 192
+        be cc = bacaB(kur - 6) - 144
+        if cc >= 0 and cc < 16
+            be inv = cc + 1
+            if cc % 2 == 1
+                be inv = cc - 1
+            be kur -= 7
+            be lastPush = -1
+            hex("0F")
+            w8(sek(kur), 128 + inv)
+            be kur += 1
+            be pQ = kur
+            d32(0)
+            return pQ
+    hex("58 48 85 C0")                    # pop rax; test rax, rax
+    hex("0F 84")                          # jz rel32
+    be p = kur
+    d32(0)
+    return p
+
+# indentasi blok anak: baris berikutnya harus lebih menjorok daripada ind
+func anak(ind int) int
+    if si >= nStmt
+        galat("blok kosong di akhir file")
+    if inden[si] <= ind
+        be noBaris = nomor[si]
+        galat("blok kosong: baris setelahnya harus lebih menjorok")
+    return ind + 1
+
+# simpan nilai di rax ke variabel (buat slot baru kalau belum ada); tipe harus konsisten
+#   Aturan seperti nrxl: di luar fungsi selalu global. Di dalam fungsi: lokal kalau sudah ada
+#   (parameter / variabel lokal), kalau tidak global yang sudah ada diubah, kalau tidak buat lokal baru.
+func simpanVar(nama string, tipe string)
+    be idx = indexOf(scNama, nama)
+    if idx >= 0
+        if scTipe[idx] != tipe
+            galatTipeVar(nama, scTipe[idx], tipe)
+        hex("48 89 85")                   # mov [rbp + disp32], rax
+        d32(scDisp[idx])
+        return
+    be gx = -1
+    if globalOK and not paksaLokal
+        be gx = indexOf(gNama, nama)
+    if gx < 0 and globalOK and not dalamFungsi
+        add(gNama, nama)
+        add(gTipe, tipe)
+        add(gKunci, 0)
+        add(vbNama, nama)
+        add(vbBaris, noBaris)
+        be gx = len(gNama) - 1
+    if gx >= 0
+        if gTipe[gx] != tipe
+            galatTipeVar(nama, gTipe[gx], tipe)
+        if gKunci[gx] == 1
+            lemparTeks(nama + " is locked, its value cannot be changed", 5)
+            return
+        hex("48 89 05")                   # mov [rip + slot global], rax
+        add(gloPos, kur)
+        add(gloIdx, gx)
+        d32(0)
+        return
+    be nLokal += 1                        # variabel lokal baru di dalam fungsi
+    add(scNama, nama)
+    add(scDisp, -8 * nLokal)
+    add(scTipe, tipe)
+    add(vbNama, nama)
+    add(vbBaris, noBaris)
+    hex("48 89 85")
+    d32(-8 * nLokal)
+
+# ---- loop: break / continue / slot tersembunyi
+func slotBaru() int
+    be nLokal += 1
+    return -8 * nLokal
+
+func mulaiLoop()
+    add(brkBase, len(brkPos))
+    add(cntBase, len(cntPos))
+    add(tryBase, len(tryAktif))
+
+# tambal semua break ke tujuanBreak dan semua continue ke tujuanCont, lalu tutup loop
+func akhiriLoop(tujuanBreak int, tujuanCont int)
+    be bb = takeLast(brkBase)
+    loop len(brkPos) > bb
+        tambal(takeLast(brkPos), tujuanBreak)
+    be cb = takeLast(cntBase)
+    loop len(cntPos) > cb
+        tambal(takeLast(cntPos), tujuanCont)
+    be tb = takeLast(tryBase)
+
+# mov [rbp + d], rax   /   mov rax, [rbp + d]
+func simpanSlot(d int)
+    hex("48 89 85")
+    d32(d)
+
+func muatSlot(d int)
+    hex("48 8B 85")
+    d32(d)
+
+# pecah argumen pada koma yang tidak berada di dalam kurung
+func pecahArg(s string) list string
+    be hasil list string
+    be dlm = 0
+    be mulai = 0
+    be dlmStr = false
+    be lewat = false
+    for i in range(len(s))
+        be ch = substr(s, i, 1)
+        if dlmStr
+            if lewat
+                be lewat = false
+            else if ch == "\\"
+                be lewat = true
+            else if ch == "\""
+                be dlmStr = false
+        else if ch == "\""
+            be dlmStr = true
+        else if ch == "(" or ch == "[" or ch == "{"
+            be dlm += 1
+        else if ch == ")" or ch == "]" or ch == "}"
+            be dlm -= 1
+        else if ch == "," and dlm == 0
+            add(hasil, trim(slice(s, mulai, i)))
+            be mulai = i + 1
+    add(hasil, trim(slice(s, mulai)))
+    return hasil
+
+# for v in range(...) / list / string : badan loop dikompilasi oleh pemanggil lewat blok(anak(ind))
+func kompilasiFor(vNama string, eks string, ind int)
+    be sA = slotBaru()
+    be sB = slotBaru()
+    be sC = slotBaru()
+    be fin1 = 0
+    be fin2 = 0
+    be posTop = 0
+    if substr(eks, 0, 6) == "range(" and slice(eks, -1) == ")"
+        be ar = pecahArg(slice(eks, 6, len(eks) - 1))
+        if len(ar) < 1 or len(ar) > 3 or (len(ar) == 1 and trim(ar[0]) == "")
+            galatK(48, "range needs 1 to 3 arguments: range(end), range(start, end), range(start, end, step)")
+        # sA = awal, sB = batas, sC = langkah (semua dihitung sekali)
+        if len(ar) == 1
+            hex("31 C0")                  # xor eax, eax
+            simpanSlot(sA)
+            harusInt(ekspresiDari(ar[0]))
+        else
+            harusInt(ekspresiDari(ar[0]))
+            hex("58")
+            simpanSlot(sA)
+            harusInt(ekspresiDari(ar[1]))
+        hex("58")
+        simpanSlot(sB)
+        if len(ar) == 3
+            harusInt(ekspresiDari(ar[2]))
+            hex("58")
+        else
+            hex("B8 01 00 00 00")         # mov eax, 1
+        simpanSlot(sC)
+        be posTop = kur
+        be barrierKur = kur
+        mulaiLoop()
+        muatSlot(sA)                      # rax = hitungan
+        hex("48 8B 8D")                   # mov rcx, [batas]
+        d32(sB)
+        hex("48 8B 95")                   # mov rdx, [langkah]
+        d32(sC)
+        hex("48 85 D2")                   # test rdx, rdx
+        hex("0F 8F")                      # jg positif
+        be pPos = kur
+        d32(0)
+        hex("48 39 C8")                   # (langkah negatif) cmp rax, rcx
+        hex("0F 8E")                      # jle selesai
+        be fin1 = kur
+        d32(0)
+        hex("E9")                         # jmp isi
+        be pOk = kur
+        d32(0)
+        tambal(pPos, kur)                 # positif:
+        hex("48 39 C8")                   # cmp rax, rcx
+        hex("0F 8D")                      # jge selesai
+        be fin2 = kur
+        d32(0)
+        tambal(pOk, kur)                  # isi:
+        paksaLokalSet()
+        be untukFor = true
+        simpanVar(vNama, "int")           # v = hitungan (rax)
+        be untukFor = false
+        be paksaLokal = false
+        be si += 1
+        blok(anak(ind))
+        be lblCont = kur
+        be barrierKur = kur
+        muatSlot(sA)                      # hitungan += langkah
+        hex("48 03 85")                   # add rax, [langkah]
+        d32(sC)
+        simpanSlot(sA)
+        hex("E9")                         # jmp atas
+        tambal(kur, posTop)
+        be kur += 4
+        tambal(fin1, kur)
+        tambal(fin2, kur)
+        akhiriLoop(kur, lblCont)
+        return
+    # list atau string
+    be te = ekspresiDari(eks)
+    if tipeMap(te)
+        hex("58 48 8B 00 50")             # for k in map: ulangi daftar key (map -> list key)
+        be te = "list string"
+    if te == "json"
+        panggilNama("jIter", 1)           # json -> list json (isi list, atau key objek)
+        be te = "list json"
+    if te != "string" and not tipeList(te)
+        galatK(99, "for needs a list, text, or map; for numbers use range(), example: for i in range(10)")
+    hex("58")                             # pop rax
+    simpanSlot(sA)                        # sA = list / string
+    hex("31 C0")                          # xor eax, eax
+    simpanSlot(sB)                        # sB = indeks
+    be posTop = kur
+    be barrierKur = kur
+    mulaiLoop()
+    muatSlot(sB)                          # rax = indeks
+    hex("48 8B 8D")                       # mov rcx, [sA]
+    d32(sA)
+    hex("48 3B 01")                       # cmp rax, [rcx]   (panjang list / string ada di offset 0)
+    hex("0F 8D")                          # jge selesai
+    be fin1 = kur
+    d32(0)
+    be tElem = "string"
+    if te == "string"
+        hex("0F B6 44 01 08")             # movzx eax, byte [rcx + rax + 8]
+        hex("50")
+        panggilNama("chr", 1)             # huruf sebagai string
+        hex("58")
+    else
+        hex("48 8B 49 10")                # mov rcx, [rcx + 16]  (alamat data)
+        hex("48 8B 04 C1")                # mov rax, [rcx + rax*8]
+        be tElem = slice(te, 5)
+    paksaLokalSet()
+    be untukFor = true
+    simpanVar(vNama, tElem)
+    be untukFor = false
+    be paksaLokal = false
+    be si += 1
+    blok(anak(ind))
+    be lblCont2 = kur
+    be barrierKur = kur
+    muatSlot(sB)
+    hex("48 FF C0")                       # inc rax
+    simpanSlot(sB)
+    hex("E9")                             # jmp atas
+    tambal(kur, posTop)
+    be kur += 4
+    tambal(fin1, kur)
+    akhiriLoop(kur, lblCont2)
+
+# ---------------------------------------------------------------- window (lib nrx_window): templateStyle / windowTemplate / newWindow
+func cariMeta(jn string, nm string) int
+    for i in range(len(metaNama))
+        if metaJenis[i] == jn and metaNama[i] == nm
+            return i
+    return 0 - 1
+
+# argumen dari teks "nama(a, b, c)"
+func argPanggil(teks string) list string
+    be ps = indexOf(teks, "(")
+    be rp = len(teks) - 1 - indexOf(reverse(teks), ")")
+    be dalam = trim(slice(teks, ps + 1, rp))
+    if dalam == ""
+        be kosong list string
+        return kosong
+    return pecahArg(dalam)
+
+func dorongTeks(s string)
+    add(litTeks, s)
+    hex("48 8D 05")                       # lea rax, [teks]
+    add(litPos, kur)
+    add(litIdx, len(litTeks) - 1)
+    d32(0)
+    hex("50")
+
+func dorongInt(n int)
+    hex("48 C7 C0")                       # mov rax, imm32 (bertanda)
+    d32(n)
+    hex("50")
+
+func panggilBuang(nama string, n int)
+    panggilNama(nama, n)
+    hex("58")
+
+# nilai ekspresi bertipe int (atau teks) didorong ke stack
+func dorongInt2(eks string)
+    harusInt(ekspresiDari(eks))
+
+func dorongTeks2(eks string)
+    be t = ekspresiDari(eks)
+    jadiTeks(t)
+
+# salinan fungsi generik untuk kombinasi tipe argumen (nama fungsi hasilnya)
+func buatSalinan(nm2 string, tipeArg list string) string
+    be fi = cariFungsi(nm2)
+    if indexOf(funcPT[fi], "?") < 0
+        return nm2
+    be tpAsal = split(funcPT[fi], ",")
+    be konk list string
+    for k in range(len(tpAsal))
+        if tpAsal[k] == "?"
+            add(konk, tipeArg[k])
+        else
+            add(konk, tpAsal[k])
+    be kunciF = nm2 + "#" + join(konk, ",")
+    if indexOf(funcNama, kunciF) < 0
+        add(funcNama, kunciF)
+        add(funcArity, len(tpAsal))
+        add(funcStmt, funcStmt[fi])
+        add(funcPT, join(konk, ","))
+        add(funcRet, funcRet[fi])
+    return kunciF
+
+# dorong alamat handler (fungsi nrxl) dan jumlah parameternya; tipeKirim = tipe nilai yang dikirim window
+func dorongHandler(fn string, tipeKirim list string)
+    be fi0 = cariFungsi(fn)
+    be k = funcArity[fi0]
+    if k > len(tipeKirim)
+        galat("handler " fn " menerima paling banyak " len(tipeKirim) " parameter")
+    be potong list string
+    for i in range(k)
+        add(potong, tipeKirim[i])
+    be fi = cariFungsi(buatSalinan(fn, potong))
+    hex("48 8D 05")                       # lea rax, [fungsi]
+    add(callPos, kur)
+    add(callFn, fi)
+    d32(0)
+    hex("50")
+    dorongInt(k)
+
+# nama fungsi dari "f()" atau "f(x)"
+func namaDari(teks string) string
+    be ps = indexOf(teks, "(")
+    if ps < 0
+        return trim(teks)
+    return trim(slice(teks, 0, ps))
+
+# panggil lib untuk tiap properti "kunci: nilai" dari style-style bernama; id elemen/window ada di slot s
+func terapkanGaya(fnLib string, s int, gaya list string)
+    for gn in gaya
+        be gi = cariMeta("s", gn)
+        if gi < 0
+            galat("templateStyle tidak dikenal: " gn)
+        for ln in split(metaBody[gi], "\n")
+            be kv = indexOf(ln, ":")
+            if kv > 0
+                be kunci = trim(slice(ln, 0, kv))
+                be nilai = trim(slice(ln, kv + 1))
+                if len(nilai) >= 2 and substr(nilai, 0, 1) == "\""
+                    be nilai = slice(nilai, 1, len(nilai) - 1)
+                muatSlot(s)
+                hex("50")
+                dorongTeks(kunci)
+                dorongTeks(nilai)
+                panggilBuang(fnLib, 3)
+
+# pisahkan argumen ekor: nama style masuk ke 'gaya', sisanya tetap di 'sisa'
+func pisahGaya(ar list string, dari int, gaya list string, sisa list string)
+    for k in range(dari, len(ar))
+        if cariMeta("s", ar[k]) >= 0
+            add(gaya, ar[k])
+        else
+            add(sisa, ar[k])
+
+func kompilasiItem(baris string, sW int, sE int)
+    be nm = namaDari(baris)
+    be ar = argPanggil(baris)
+    be gaya list string
+    be sisa list string
+    if nm == "newCanvas"
+        if len(ar) < 5
+            galat("newCanvas(nama, x, y, lebar, tinggi)")
+        muatSlot(sW)
+        hex("50")
+        dorongTeks(ar[0])
+        for k in range(1, 5)
+            dorongInt2(ar[k])
+        panggilNama("winCanvas", 6)
+        hex("58")
+        simpanSlot(sE)
+        muatSlot(sE)
+        simpanVar(ar[0], "int")           # variabel canvas untuk fungsi gambar
+        pisahGaya(ar, 5, gaya, sisa)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "newInput"
+        if len(ar) < 3
+            galat("newInput(variabel, x, y, lebar, ukuran)")
+        if indexOf(gNama, ar[0]) < 0
+            dorongTeks("")
+            hex("58")
+            simpanVar(ar[0], "string")
+        be gx = indexOf(gNama, ar[0])
+        if gx < 0 or gTipe[gx] != "string"
+            galat("newInput butuh variabel global bertipe teks: " ar[0])
+        pisahGaya(ar, 3, gaya, sisa)
+        muatSlot(sW)
+        hex("50")
+        ripGlobal("48 8D 05", gx)         # lea rax, [slot variabel]
+        hex("50")
+        dorongInt2(ar[1])
+        dorongInt2(ar[2])
+        if len(sisa) >= 1
+            dorongInt2(sisa[0])
+        else
+            dorongInt(200)
+        if len(sisa) >= 2
+            dorongInt2(sisa[1])
+        else
+            dorongInt(0)
+        panggilNama("winInput", 6)
+        hex("58")
+        simpanSlot(sE)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "newCheck" or nm == "newSelect" or nm == "newList"
+        be dasar = 4
+        if nm == "newCheck" and len(ar) < 4
+            galat("newCheck(variabel, \"teks\", x, y, ukuran)")
+        if nm != "newCheck" and len(ar) < 5
+            galat(nm "(variabel, pilihan, x, y, lebar, ...)")
+        be tv = "string"
+        if nm == "newCheck"
+            be tv = "bool"
+        if indexOf(gNama, ar[0]) < 0
+            if tv == "bool"
+                dorongInt(0)
+            else
+                dorongTeks("")
+            hex("58")
+            simpanVar(ar[0], tv)
+        be gx2 = indexOf(gNama, ar[0])
+        if gx2 < 0 or gTipe[gx2] != tv
+            galat(nm " butuh variabel global bertipe " tv ": " ar[0])
+        pisahGaya(ar, 4, gaya, sisa)
+        muatSlot(sW)
+        hex("50")
+        ripGlobal("48 8D 05", gx2)        # lea rax, [slot variabel]
+        hex("50")
+        if nm == "newCheck"
+            dorongTeks2(ar[1])
+        else
+            if ekspresiDari(ar[1]) != "list string"
+                galat(nm ": pilihan harus list teks")
+        dorongInt2(ar[2])
+        dorongInt2(ar[3])
+        be jmlSisa = 1
+        if nm == "newSelect"
+            be jmlSisa = 2
+        if nm == "newList"
+            be jmlSisa = 3
+        for k in range(jmlSisa)
+            if k < len(sisa)
+                dorongInt2(sisa[k])
+            else
+                dorongInt(0)
+        panggilNama("win" + slice(nm, 3), 5 + jmlSisa)
+        hex("58")
+        simpanSlot(sE)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "newText"
+        if len(ar) < 3
+            galat("newText(teks, x, y, ukuran, warna)")
+        pisahGaya(ar, 3, gaya, sisa)
+        muatSlot(sW)
+        hex("50")
+        dorongTeks2(ar[0])
+        dorongInt2(ar[1])
+        dorongInt2(ar[2])
+        if len(sisa) >= 1
+            dorongInt2(sisa[0])
+        else
+            dorongInt(0)
+        if len(sisa) >= 2
+            dorongTeks2(sisa[1])
+        else
+            dorongTeks("")
+        if not dalamFungsi and (len(pecah(ar[0])) != 1 or substr(ar[0], 0, 1) != "\"")
+            # teks berisi variabel: fungsi kecil yang menghitung ulang teks setiap kali window digambar
+            hex("E9")                     # jmp lewat
+            be pLewat = kur
+            d32(0)
+            be awalFn = kur
+            hex("55 48 89 E5")            # push rbp; mov rbp, rsp
+            dorongTeks2(ar[0])
+            hex("58 5D C3")               # pop rax; pop rbp; ret
+            tambal(pLewat, kur)
+            hex("48 8D 05")               # lea rax, [fungsi teks]
+            relatif(awalFn)
+            hex("50")
+        else
+            dorongInt(0)
+        panggilNama("winText", 7)
+        hex("58")
+        simpanSlot(sE)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "newImage"
+        if len(ar) < 3
+            galat("newImage(\"file.png\", x, y, lebar, tinggi)")
+        pisahGaya(ar, 3, gaya, sisa)
+        muatSlot(sW)
+        hex("50")
+        dorongTeks2(ar[0])
+        dorongInt2(ar[1])
+        dorongInt2(ar[2])
+        for k in range(2)
+            if k < len(sisa)
+                dorongInt2(sisa[k])
+            else
+                dorongInt(0)
+        panggilNama("winGambarEl", 6)
+        hex("58")
+        simpanSlot(sE)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "newButton"
+        if len(ar) < 4
+            galat("newButton(onclick(fungsi()), teks, x, y, ukuran)")
+        pisahGaya(ar, 4, gaya, sisa)
+        be kosong list string
+        muatSlot(sW)
+        hex("50")
+        dorongTeks2(ar[1])
+        dorongInt2(ar[2])
+        dorongInt2(ar[3])
+        if len(sisa) >= 1
+            dorongInt2(sisa[0])
+        else
+            dorongInt(0)
+        be fnK = ar[0]
+        if substr(fnK, 0, 8) == "onclick("
+            be fnK = slice(fnK, 8, len(fnK) - 1)
+        dorongHandler(namaDari(fnK), kosong)
+        panggilNama("winTombol", 7)
+        hex("58")
+        simpanSlot(sE)
+        terapkanGaya("winGayaEl", sE, gaya)
+    else if nm == "onKey"
+        be tk list string
+        add(tk, "string")
+        muatSlot(sW)
+        hex("50")
+        dorongHandler(namaDari(ar[0]), tk)
+        panggilBuang("winOnKey", 3)
+    else if nm == "onMouse"
+        be tm list string
+        add(tm, "int")
+        add(tm, "int")
+        add(tm, "string")
+        add(tm, "string")
+        muatSlot(sW)
+        hex("50")
+        dorongHandler(namaDari(ar[0]), tm)
+        panggilBuang("winOnMouse", 3)
+    else if nm == "onTimer"
+        be kt list string
+        if len(ar) < 2
+            galat("onTimer(fungsi(), detik)")
+        muatSlot(sW)
+        hex("50")
+        dorongHandler(namaDari(ar[0]), kt)
+        be tdt = ekspresiDari(ar[1])
+        if tdt == "int"
+            konversiArg(0)
+        else if tdt != "double"
+            galat("onTimer: detik harus angka")
+        panggilBuang("winOnTimer", 4)
+    else
+        galat("isi windowTemplate yang belum didukung: " nm)
+
+# newWindow("Judul", lebar, tinggi, template, style)  (pernyataan; teks asli dari sumber)
+func kompilasiWindow(teks string)
+    be ar = argPanggil(teks)
+    if len(ar) < 3
+        galat("newWindow(judul, lebar, tinggi, template, style)")
+    be sW = slotBaru()
+    be sE = slotBaru()
+    dorongTeks2(ar[0])
+    dorongInt2(ar[1])
+    dorongInt2(ar[2])
+    panggilNama("winBuka", 3)
+    hex("58")
+    simpanSlot(sW)
+    be tplI = 0 - 1
+    be gayaWin list string
+    for k in range(3, len(ar))
+        if cariMeta("t", ar[k]) >= 0
+            be tplI = cariMeta("t", ar[k])
+        else if cariMeta("s", ar[k]) >= 0
+            add(gayaWin, ar[k])
+        else
+            galat("windowTemplate / templateStyle tidak dikenal: " ar[k])
+    terapkanGaya("winGayaWin", sW, gayaWin)
+    if tplI >= 0
+        for ln in split(metaBody[tplI], "\n")
+            kompilasiItem(ln, sW, sE)
+    muatSlot(sW)
+    hex("50")
+    panggilBuang("winMuncul", 1)
+
+# variabel for di dalam fungsi selalu lokal; di luar fungsi tetap global
+func paksaLokalSet()
+    be paksaLokal = dalamFungsi
+
+func berkasPengguna(b string) bool
+    return b != "prelude.nrxl" and b != "pustaka.nrxl" and b != "sintesis" and substr(b, 0, 4) != "lib\\"
+
+# slot berkas = alamat nama file (teks) yang sedang berjalan
+func catatBerkas(b string)
+    add(litTeks, b)
+    hex("48 8D 05")                       # lea rax, [nama berkas]
+    add(litPos, kur)
+    add(litIdx, len(litTeks) - 1)
+    d32(0)
+    ripGlobal("48 89 05", 15)
+
+func blok(batas int)
+    loop si < nStmt and inden[si] >= batas
+        be noBaris = nomor[si]
+        be berkNama = berk[si]
+        be ind = inden[si]
+        be j = jenis[si]
+        if berkasPengguna(berkNama)
+            if banyakBerkas
+                catatBerkas(berkNama)
+            hex("B8")                         # mov eax, baris
+            d32(noBaris)
+            ripGlobal("48 89 05", 13)         # mov [baris], rax  (untuk pesan galat tak tertangkap)
+        if j == "p"
+            # print a b "c": semua nilai ditulis berjejer tanpa spasi, lalu satu baris baru
+            be tok list string = pecah(arg[si])
+            be tp = 0
+            be gabung = false                 # beberapa nilai: gabung dulu (galat di tengah tidak mencetak separuh baris)
+            loop tp < len(tok)
+                be tp1 = logika()
+                if gabung
+                    jadiTeks(tp1)
+                    panggilNama("strGabung", 2)
+                    continue
+                if tp < len(tok)
+                    be gabung = true
+                    jadiTeks(tp1)
+                    continue
+                if tp1 == "json"
+                    panggilNama("jTeks", 1)
+                    be tp1 = "string"
+                if tp1 == "bool"
+                    panggilNama("boolStr", 1)     # true / false sebagai string (hasil di stack)
+                    be tp1 = "string"
+                if tp1 == "double"
+                    panggilNama("dblStr", 1)      # double -> teks (prelude)
+                    be tp1 = "string"
+                if tipeList(tp1) or tipeMap(tp1) or cariStruct(tp1) >= 0
+                    jadiTeks(tp1)
+                    be tp1 = "string"
+                hex("58")                 # pop rax
+                hex("E8")
+                if tp1 == "int"
+                    relatif(offCetak)
+                else if tp1 == "string"
+                    relatif(offStr)
+                else
+                    galat("print hanya untuk int, string, dan bool, bukan " tp1)
+            if gabung
+                hex("58 E8")              # pop rax; call cetakStr (teks gabungan)
+                relatif(offStr)
+            hex("E8")                     # call cetakNL
+            relatif(offCetakNL)
+            be si += 1
+        else if j == "D"
+            # delete a, b : bebaskan memori variabel (string, list, type)
+            for dn in split(arg[si], ",")
+                be tdel = muatVar(trim(dn))
+                if tipeList(tdel)
+                    panggilNama("listHapus", 1)
+                    hex("58")             # buang hasilnya
+                else if tdel == "string" or cariStruct(tdel) >= 0
+                    hex("59 E8")          # pop rcx; call free
+                    relatif(offFree)
+                else
+                    hex("58")             # int/bool: tidak ada memori yang dibebaskan
+            be si += 1
+        else if j == "k"
+            # lock NAMA = nilai   (konstanta global)
+            if dalamFungsi
+                galat("lock hanya boleh di luar fungsi")
+            if indexOf(gNama, arg[si]) >= 0
+                galatK(97, "variable " + arg[si] + " already exists; lock is only for creating new variables")
+            be tp1 = ekspresiDari(isiB[si])
+            hex("58")                     # pop rax
+            simpanVar(arg[si], tp1)
+            be gKunci[len(gKunci) - 1] = 1
+            be si += 1
+        else if j == "x" and substr(arg[si], 0, 10) == "newWindow("
+            kompilasiWindow(arg[si])
+            be si += 1
+        else if j == "x"
+            ekspresiDari(arg[si])
+            hex("58")                     # pop rax (hasil dibuang)
+            be si += 1
+        else if j == "b"
+            be ebx = isiB[si]
+            if normTipe(isiC[si]) == "int" and substr(ebx, 0, 4) == "ask "
+                be ebx = "ask.int " + slice(ebx, 4)       # be x int = ask "..." sama dengan ask.int
+            be tp1 = ekspresiDari(ebx)
+            be tw = normTipe(isiC[si])
+            if tw == "" and tp1 != "json" and tipeVar(arg[si]) == "json"
+                be tw = "json"                # variabel json diisi nilai biasa
+            if tw != "" and tw != tp1 and bisaJson(tp1, tw)
+                koersiJson(0, tp1, tw)
+                be tp1 = tw
+            if tw != "" and tw != tp1 and not (tw == "double" and tp1 == "int")
+                galatTipeVar(arg[si], tw, tp1)
+            hex("58")                     # pop rax
+            if tp1 == "int" and (tw == "double" or (tw == "" and tipeVar(arg[si]) == "double"))
+                raxKeDouble()             # int dimasukkan ke variabel double
+                be tp1 = "double"
+            simpanVar(arg[si], tp1)
+            be si += 1
+        else if j == "d"
+            # deklarasi tanpa nilai: be x int / be ok bool / be s string / be xs list T  (nilai kosong)
+            be td = isiB[si]
+            if td == "int" or td == "bool" or td == "double"
+                hex("31 C0")              # xor eax, eax   (0 / false / 0.0)
+            else if td == "string"
+                add(litTeks, "")
+                hex("48 8D 05")           # lea rax, ["" ]
+                add(litPos, kur)
+                add(litIdx, len(litTeks) - 1)
+                d32(0)
+            else if tipeList(td)
+                panggilNama("listBaru", 0)
+                hex("58")                 # pop rax
+            else if tipeMap(td)
+                panggilNama("mapBaru", 0)
+                hex("58")                 # pop rax
+            else if td == "json"
+                panggilNama("jObjBaru", 0)    # be p json : objek kosong (key diisi lewat p["k"] = ...)
+                hex("58")                 # pop rax
+            else
+                if cariStruct(td) < 0
+                    galatK(84, "unknown type " + td + ", use: int, float, double, bool, string, list, map, json")
+                galat("tipe " + td + " tidak bisa dibuat tanpa nilai; pakai: be nama = " + td + "(nilai, ...)")
+            simpanVar(arg[si], td)
+            be si += 1
+        else if j == "s"
+            # be a.b[i].c = nilai
+            simpanLval(arg[si], isiC[si], isiB[si] == "aug")
+            be si += 1
+        else if j == "r"
+            if not dalamFungsi
+                galatK(108, "return is only allowed inside a function")
+            if arg[si] == "" and (curRet == "?" or curRet == "string")
+                # return tanpa nilai = teks kosong
+                if curRet == "?" and retInferensi == ""
+                    be retInferensi = "string"
+                dorongTeks("")
+                hex("58")
+            else if arg[si] == ""
+                hex("31 C0")              # return tanpa nilai: rax = 0
+            else
+                be tr1 = ekspresiDari(arg[si])
+                if curRet == "?"
+                    if retInferensi == "" or (retInferensi == "int" and tr1 == "double")
+                        be retInferensi = tr1
+                    be tr1 = curRet
+                if tr1 != curRet and bisaJson(tr1, curRet)
+                    koersiJson(0, tr1, curRet)
+                    be tr1 = curRet
+                if tr1 != curRet and not (curRet == "double" and tr1 == "int")
+                    galatK(243, "function " + namaTampil(curFnNama) + " must return " + curRet + ", not " + tr1)
+                hex("58")                 # pop rax
+                if tr1 != curRet
+                    raxKeDouble()
+            if len(tryAktif) > 0
+                lepasHandler(tryAktif[0])     # keluar dari try lewat return
+            hex("48 89 EC 5D C3")         # mov rsp, rbp; pop rbp; ret
+            be si += 1
+        else if j == "T"
+            # try ... catch [nama]
+            be s1 = slotBaru()
+            be s2 = slotBaru()
+            be s3 = slotBaru()
+            be dT = slotBaru()            # catat: +0 try sebelumnya, +8 rsp, +16 rbp, +24 alamat catch
+            hex("48 8D 8D")               # lea rcx, [rbp + dT]
+            d32(dT)
+            ripGlobal("48 8B 05", 0)      # mov rax, [$H]
+            hex("48 89 01")               # mov [rcx], rax
+            hex("48 89 61 08")            # mov [rcx+8], rsp
+            hex("48 89 69 10")            # mov [rcx+16], rbp
+            hex("48 8D 05")               # lea rax, [catch]
+            be pCatch = kur
+            d32(0)
+            hex("48 89 41 18")            # mov [rcx+24], rax
+            ripGlobal("48 89 0D", 0)      # mov [$H], rcx
+            add(tryAktif, dT)
+            be siTry = si
+            be si += 1
+            blok(anak(ind))
+            takeLast(tryAktif)
+            lepasHandler(dT)
+            hex("E9")                     # jmp akhir
+            be pAkhir = kur
+            d32(0)
+            if not (si < nStmt and inden[si] == ind and jenis[si] == "C")
+                be noBaris = nomor[siTry]
+                galatK(100, "try must be followed by catch at the same indent")
+            tambal(pCatch, kur)
+            be noBaris = nomor[si]
+            be namaC = arg[si]
+            be si += 1
+            if namaC != ""
+                ripGlobal("48 8B 05", 1)  # mov rax, [$E]
+                simpanVar(namaC, "string")
+            blok(anak(ind))
+            tambal(pAkhir, kur)
+        else if j == "O"
+            # options nilai / option a, b / else : jalankan option pertama yang cocok (==)
+            be tOp = ekspresiDari(arg[si])
+            be nmOp = "_opt" + str(optN)
+            be optN += 1
+            hex("58")                     # pop rax
+            simpanVar(nmOp, tOp)
+            be si += 1
+            be ind2 = anak(ind)
+            be ind2 = inden[si]
+            be akO list int
+            loop si < nStmt and inden[si] == ind2 and jenis[si] == "op"
+                be noBaris = nomor[si]
+                be cond = ""
+                for v in pecahArg(arg[si])
+                    if cond != ""
+                        be cond = cond + " or "
+                    be vt = trim(v)
+                    be vStr = substr(vt, 0, 1) == "\""
+                    be vNum = contains("0123456789", substr(vt, 0, 1)) or (substr(vt, 0, 1) == "-" and contains("0123456789", substr(vt, 1, 1)))
+                    if (tOp == "string" and vNum) or ((tOp == "int" or tOp == "double") and vStr)
+                        be cond = cond + "false"      # teks dan angka tidak pernah sama
+                    else
+                        be cond = cond + "(" + nmOp + " == (" + vt + "))"
+                be pjO = kondisi(cond)
+                be si += 1
+                blok(anak(ind2))
+                hex("E9")
+                add(akO, kur)
+                d32(0)
+                tambal(pjO, kur)
+            if si < nStmt and inden[si] == ind2 and jenis[si] == "e"
+                be si += 1
+                blok(anak(ind2))
+            for q in akO
+                tambal(q, kur)
+        else if j == "op"
+            galatK(110, "option must be inside an options block")
+        else if j == "C"
+            galatK(109, "catch must come right after a try block")
+        else if j == "th"
+            # throw nilai nilai ...  (digabung seperti print)
+            be tok list string = pecah(arg[si])
+            be tp = 0
+            be pertama = true
+            loop tp < len(tok)
+                jadiTeks(logika())
+                if not pertama
+                    panggilNama("strGabung", 2)
+                be pertama = false
+            hex("58")                     # pop rax
+            hex("E8")                     # call lempar
+            relatif(offLempar)
+            be si += 1
+        else if j == "f"
+            # definisi fungsi dikompilasi terpisah: lewati seluruh badannya
+            be si += 1
+            loop si < nStmt and inden[si] > ind
+                be si += 1
+        else if j == "l"
+            be top = kur
+            be barrierKur = kur
+            mulaiLoop()
+            be pj = kondisi(arg[si])
+            be si += 1
+            blok(anak(ind))
+            hex("E9")                     # jmp top
+            tambal(kur, top)
+            be kur += 4
+            tambal(pj, kur)
+            akhiriLoop(kur, top)
+        else if j == "F"
+            kompilasiFor(arg[si], isiB[si], ind)
+        else if j == "br"
+            if len(brkBase) == 0
+                galatK(71, "break is only allowed inside a loop")
+            if len(tryAktif) > tryBase[len(tryBase) - 1]
+                lepasHandler(tryAktif[tryBase[len(tryBase) - 1]])
+            hex("E9")
+            add(brkPos, kur)
+            d32(0)
+            be si += 1
+        else if j == "ct"
+            if len(cntBase) == 0
+                galatK(71, "continue is only allowed inside a loop")
+            if len(tryAktif) > tryBase[len(tryBase) - 1]
+                lepasHandler(tryAktif[tryBase[len(tryBase) - 1]])
+            hex("E9")
+            add(cntPos, kur)
+            d32(0)
+            be si += 1
+        else if j == "i"
+            be ak list int                # lompatan ke akhir rantai if
+            be pj = kondisi(arg[si])
+            be si += 1
+            blok(anak(ind))
+            be fin = false
+            loop not fin
+                if si < nStmt and inden[si] == ind and jenis[si] == "e"
+                    hex("E9")
+                    add(ak, kur)
+                    d32(0)
+                    tambal(pj, kur)
+                    be si += 1
+                    blok(anak(ind))
+                    be fin = true
+                else if si < nStmt and inden[si] == ind and jenis[si] == "ei"
+                    hex("E9")
+                    add(ak, kur)
+                    d32(0)
+                    tambal(pj, kur)
+                    be noBaris = nomor[si]
+                    be pj = kondisi(arg[si])
+                    be si += 1
+                    blok(anak(ind))
+                else
+                    tambal(pj, kur)
+                    be fin = true
+            for q in ak
+                tambal(q, kur)
+        else
+            galatK(113, "unknown command: else")
+
+# buang komentar "# ..." di ujung baris (tanda # di dalam string tidak dihitung)
+func buangKomentar(s string) string
+    be dlmStr = false
+    be i = 0
+    be n = len(s)
+    loop i < n
+        be ch = substr(s, i, 1)
+        if dlmStr
+            if ch == "\\"
+                be i += 1
+            else if ch == "\""
+                be dlmStr = false
+        else if ch == "\""
+            be dlmStr = true
+        else if ch == "#"
+            return substr(s, 0, i)
+        be i += 1
+    return s
+
+# ---------------------------------------------------------------- baca sumber (lewatan 1)
+# semua baris "lib nrx_xxx.h" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrxl sebelum kode program
+# jalur file runtime (prelude, pustaka, lib\...) relatif terhadap folder nrxc.exe; file lain apa adanya
+func jalurRt(nama string) string
+    if rtDir != "" and (nama == "prelude.nrxl" or nama == "pustaka.nrxl" or substr(nama, 0, 4) == "lib\\")
+        return rtDir + nama
+    return nama
+
+# pecah baris perintah Windows menjadi argumen (tanda kutip ganda membungkus spasi)
+func pecahCmd(s string) list string
+    be hasil list string
+    be i = 0
+    be n = len(s)
+    loop i < n
+        loop i < n and substr(s, i, 1) == " "
+            be i += 1
+        if i >= n
+            break
+        be a = ""
+        be kutip = false
+        loop i < n and (kutip or substr(s, i, 1) != " ")
+            if substr(s, i, 1) == "\""
+                be kutip = not kutip
+            else
+                be a = a + substr(s, i, 1)
+            be i += 1
+        add(hasil, a)
+    return hasil
+
+func muatLibDari(nama string)
+    be nbL = 0
+    for baris in split(replace(readFile(jalurRt(nama)), "\r", ""), "\n")
+        be nbL += 1
+        be b = trim(baris)
+        if substr(b, 0, 4) == "lib "
+            be nmLib = replace(trim(slice(b, 4)), ".h", ".nrxl")
+            if not fileExists(jalurRt("lib\\" + nmLib))
+                be berkNama = nama
+                be noBaris = nbL
+                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)")
+            if indexOf(libMuat, nmLib) < 0 and fileExists(jalurRt("lib\\" + nmLib))
+                add(libMuat, nmLib)
+                bacaSumber("lib\\" + nmLib)
+
+# indeks ")" yang menutup "(" di posisi p0 (lewati teks di dalam tanda kutip); -1 kalau tidak ada
+func cocokKurung(s string, p0 int) int
+    be dlm = 0
+    be str1 = false
+    for i in range(p0, len(s))
+        be ch = substr(s, i, 1)
+        if str1
+            if ch == "\\"
+                continue
+            if ch == "\""
+                be str1 = false
+        else if ch == "\""
+            be str1 = true
+        else if ch == "("
+            be dlm += 1
+        else if ch == ")"
+            be dlm -= 1
+            if dlm == 0
+                return i
+    return 0 - 1
+
+# func f(a, b = 2) tipe  ->  func f(a, b) tipe  +  pembungkus f_a1(a) yang memanggil f(a, 2)
+func tulisDefault(b string, tambahan list string) string
+    be p0 = indexOf(b, "(")
+    if p0 < 0
+        return b
+    be p1 = cocokKurung(b, p0)
+    if p1 < 0
+        return b
+    be par = trim(slice(b, p0 + 1, p1))
+    if par == ""
+        return b
+    be fnm = trim(slice(b, 5, p0))
+    be sisa = slice(b, p1 + 1)
+    be decls list string
+    be nama2 list string
+    be defs list string
+    for pp in pecahArg(par)
+        be eq = indexOf(pp, "=")
+        be qt = indexOf(pp, "\"")
+        if eq >= 0 and (qt < 0 or eq < qt)
+            add(decls, trim(slice(pp, 0, eq)))
+            add(defs, trim(slice(pp, eq + 1)))
+        else
+            add(decls, trim(pp))
+            add(defs, "")
+        be kiri = trim(slice(pp, 0, indexOf(pp + "=", "=")))
+        be kataK = split(kiri)
+        add(nama2, kataK[0])
+    be pertama = 0 - 1
+    for k in range(len(defs))
+        if defs[k] != "" and pertama < 0
+            be pertama = k
+    if pertama < 0
+        return b
+    for k in range(pertama, len(defs))
+        if defs[k] == ""
+            be noBaris = barisDef
+            galatK(121, "parameter " + nama2[k] + " must come before parameters that have default values")
+    be tanda = "  #" + "@@" + str(barisDef)
+    for n in range(pertama, len(defs))
+        add(tambahan, "func " + fnm + "_a" + str(n) + "(" + join(slice(decls, 0, n), ", ") + ")" + sisa + tanda)
+        be panggil = join(slice(nama2, 0, n), ", ")
+        for k in range(n, len(defs))
+            if panggil != ""
+                be panggil = panggil + ", "
+            be panggil = panggil + defs[k]
+        add(tambahan, "    return " + fnm + "(" + panggil + ")" + tanda)
+    return "func " + fnm + "(" + join(decls, ", ") + ")" + sisa
+
+# im hitung / im "alat/hitung" / im luas, Titik from "alat": muat file .nrxl lain (relatif terhadap file yang menulis im) sebelum program
+func muatImDari(nama string)
+    be dirN = ""
+    be ks = len(nama) - 1 - indexOf(reverse(replace(nama, "\\", "/")), "/")
+    if indexOf(replace(nama, "\\", "/"), "/") >= 0
+        be dirN = slice(nama, 0, ks + 1)
+    be nbI = 0
+    for baris in split(replace(readFile(jalurRt(nama)), "\r", ""), "\n")
+        be nbI += 1
+        if substr(baris, 0, 3) == "im " and substr(baris, 0, 1) != " "
+            be b = trim(buangKomentar(baris))
+            be sisa = trim(slice(b, 3))
+            be fp = indexOf(sisa, " from ")
+            if fp >= 0
+                be sisa = trim(slice(sisa, fp + 6))
+            be sisa = replace(sisa, "\"", "")
+            be sisa = replace(sisa, "/", "\\")
+            if slice(sisa, -5) != ".nrxl"
+                be sisa = sisa + ".nrxl"
+            be jalur = dirN + sisa
+            if indexOf(imMuat, jalur) < 0
+                add(imMuat, jalur)
+                if not fileExists(jalur)
+                    be berkNama = nama
+                    be noBaris = nbI
+                    galatK(220, "file not found: " + replace(jalur, "\\", "/"))
+                muatLibDari(jalur)
+                muatImDari(jalur)
+                be isoAwalan = "nrxm" + str(len(imMuat)) + "_"
+                bacaSumber(jalur)
+# blok ffi "dll" ( func nama(param) tipe as aliasC ) diganti baris kosong; pembungkusnya (callp + dllFn) ditambahkan di akhir teks
+func ubahFfi(teks string) string
+    be outT list string
+    be tambahan list string
+    be tipeNow = ""
+    be dll = ""
+    be dlm = false
+    be nbF = 0
+    for ln in split(teks, "\n")
+        be nbF += 1
+        be b = trim(buangKomentar(ln))
+        if not dlm and substr(b, 0, 4) == "ffi " and substr(ln, 0, 1) != " "
+            be q1 = indexOf(b, "\"")
+            be q2 = indexOf(slice(b, q1 + 1), "\"")
+            if q1 < 0 or q2 < 0
+                galat("ffi harus berbentuk: ffi \"dll\" ( ... )")
+            be dll = slice(b, q1 + 1, q1 + 1 + q2)
+            if LoadLibraryA(dll) == 0
+                be noBaris = nbF
+                galatK(10, "ffi: file " + dll + " not found")
+            be dlm = true
+            add(outT, "")
+        else if dlm
+            if b == ")"
+                be dlm = false
+            else if substr(b, 0, 5) == "func "
+                be p0 = indexOf(b, "(")
+                be p1 = len(b) - 1 - indexOf(reverse(b), ")")
+                if p0 < 0 or p1 < p0
+                    galat("ffi: func nama(parameter) tipe [as nama_c]")
+                be fnm = trim(slice(b, 5, p0))
+                be par = trim(slice(b, p0 + 1, p1))
+                be sisa = trim(slice(b, p1 + 1))
+                be alias = fnm
+                be ret = sisa
+                if substr(sisa, 0, 3) == "as "
+                    be alias = trim(slice(sisa, 3))
+                    be ret = ""
+                else if indexOf(sisa, " as ") >= 0
+                    be ak = indexOf(sisa, " as ")
+                    be alias = trim(slice(sisa, ak + 4))
+                    be ret = trim(slice(sisa, 0, ak))
+                if GetProcAddress(LoadLibraryA(dll), alias) == 0
+                    be noBaris = nbF
+                    galatK(20, "ffi: function " + alias + " is not in " + dll)
+                if indexOf(funcNama, fnm) < 0
+                    be pakai = ""
+                    be parBaru list string
+                    if par != ""
+                        for pp in split(par, ",")
+                            be kp = split(trim(pp))
+                            if len(kp) == 1
+                                be kp = split("p" + str(len(parBaru)) + " " + kp[0])
+                            if len(kp) != 2
+                                galat("ffi: parameter harus berbentuk nama tipe")
+                            be tipeHdr = kp[1]
+                            if tipeHdr == "pointer" or tipeHdr == "int64"
+                                be tipeHdr = "int"
+                            add(parBaru, kp[0] + " " + tipeHdr)
+                            if kp[1] == "string"
+                                be pakai = pakai + ", cstr(" + kp[0] + ")"
+                            else if kp[1] == "int" or kp[1] == "int64" or kp[1] == "pointer"
+                                be pakai = pakai + ", " + kp[0]
+                            else
+                                galat("ffi: tipe parameter yang didukung hanya int, int64, pointer, dan string, bukan " kp[1])
+                    be par = join(parBaru, ", ")
+                    be kepalaIsi = par
+                    if ret == "int64" or ret == "pointer"
+                        be ret = "int"
+                    be kepala = "func " + fnm + "(" + par + ")"
+                    if ret != ""
+                        be kepala = kepala + " " + ret
+                    add(tambahan, kepala)
+                    add(tambahan, "    be rr = callp(dllFn(\"" + dll + "\", \"" + alias + "\")" + pakai + ")")
+                    if ret == "string"
+                        add(tambahan, "    return fromC(rr)")
+                    else if ret == "bool"
+                        add(tambahan, "    return rr % 256 != 0")
+                    else
+                        add(tambahan, "    return rr")
+            add(outT, "")
+        else
+            if b != "" and substr(ln, 0, 1) != " " and substr(ln, 0, 1) != "\t"
+                be tipeNow = ""
+                if substr(b, 0, 5) == "type "
+                    be tipeNow = trim(slice(b, 5))
+            if tipeNow != "" and (substr(b, 0, 5) == "init " or b == "init") and (substr(ln, 0, 1) == " " or substr(ln, 0, 1) == "\t")
+                # init a, b  ->  metode init + pembuat Tipe__new(a, b)
+                be parI = trim(slice(b, 4))
+                be depan = slice(ln, 0, len(ln) - len(trim(ln)) - 0)
+                be sp0 = 0
+                loop sp0 < len(ln) and substr(ln, sp0, 1) == " "
+                    be sp0 += 1
+                add(outT, slice(ln, 0, sp0) + "func init(" + parI + ")")
+                be namaI = ""
+                if parI != ""
+                    for pp in pecahArg(parI)
+                        if namaI != ""
+                            be namaI = namaI + ", "
+                        be kataI = split(trim(pp))
+                        be namaI = namaI + kataI[0]
+                add(tambahan, "func " + tipeNow + "__new(" + parI + ") " + tipeNow)
+                add(tambahan, "    be own = " + tipeNow + "__alloc()")
+                if namaI == ""
+                    add(tambahan, "    " + tipeNow + "__init(own)")
+                else
+                    add(tambahan, "    " + tipeNow + "__init(own, " + namaI + ")")
+                add(tambahan, "    return own")
+            else if substr(b, 0, 5) == "func " and substr(ln, 0, 1) != " " and substr(ln, 0, 1) != "\t" and indexOf(b, "=") > 0
+                be barisDef = nbF
+                add(outT, tulisDefault(b, tambahan))
+            else if tipeNow != "" and substr(b, 0, 5) == "func " and (substr(ln, 0, 1) == " " or substr(ln, 0, 1) == "\t") and indexOf(b, "=") > 0
+                # metode dengan nilai bawaan: pembungkus Tipe__nama_aN(own Tipe, ...) di luar type
+                be mp0 = indexOf(b, "(")
+                be mp1 = cocokKurung(b, mp0)
+                if mp0 < 0 or mp1 < 0
+                    add(outT, ln)
+                else
+                    be mNama = trim(slice(b, 5, mp0))
+                    be mPar = trim(slice(b, mp0 + 1, mp1))
+                    be mSisa = slice(b, mp1 + 1)
+                    be mFull = "func " + tipeNow + "__" + mNama + "(own " + tipeNow + ", " + mPar + ")" + mSisa
+                    be barisDef = nbF
+                    be mHasil = tulisDefault(mFull, tambahan)
+                    be mDeklar = slice(mHasil, indexOf(mHasil, "(") + 1)
+                    be mDeklar = slice(mDeklar, len("own " + tipeNow + ", "))
+                    be mSp0 = 0
+                    loop mSp0 < len(ln) and (substr(ln, mSp0, 1) == " " or substr(ln, mSp0, 1) == "\t")
+                        be mSp0 += 1
+                    add(outT, slice(ln, 0, mSp0) + "func " + mNama + "(" + mDeklar)
+            else
+                add(outT, ln)
+    for t in tambahan
+        add(outT, t)
+    return join(outT, "\n")
+
+be exlStmt list int                   # indeks pernyataan func yang menulis tipe hasil
+be barisDef = 0                      # nomor baris func yang sedang diberi pembungkus nilai bawaan
+be isoAwalan = ""                   # awalan nama privat untuk file hasil im (kosong = file utama)
+be hurufId = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+
+# nama di awal teks (huruf, angka, _)
+func namaAwal(s string) string
+    be k = 0
+    loop k < len(s) and indexOf(hurufId, substr(s, k, 1)) >= 0
+        be k += 1
+    return slice(s, 0, k)
+
+# ganti nama (token utuh) di satu baris; teks dalam "..." dan komentar # tidak disentuh; ".nama" (field/metode) tidak disentuh
+func gantiNamaBaris(ln string, nama list string, baru list string) string
+    be o = ""
+    be i = 0
+    be n = len(ln)
+    loop i < n
+        be c = substr(ln, i, 1)
+        if c == "\""
+            be j = i + 1
+            loop j < n and substr(ln, j, 1) != "\""
+                if substr(ln, j, 1) == "\\"
+                    be j += 1
+                be j += 1
+            be o = o + slice(ln, i, min(j + 1, n))
+            be i = j + 1
+        else if c == "#"
+            be o = o + slice(ln, i)
+            be i = n
+        else if indexOf(hurufId, c) >= 0
+            be tk = namaAwal(slice(ln, i))
+            be k = indexOf(nama, tk)
+            if k >= 0 and not (i > 0 and substr(ln, i - 1, 1) == ".")
+                be o = o + baru[k]
+            else
+                be o = o + tk
+            be i += len(tk)
+        else
+            be o = o + c
+            be i += 1
+    return o
+
+# file hasil im: fungsi dan variabel yang tidak di-ex diberi awalan, supaya tidak bentrok dengan file lain
+func isolasiNama(teks string, awalan string) string
+    be nama list string
+    be baris list string = split(teks, "\n")
+    for ln in baris
+        if ln == "" or substr(ln, 0, 1) == " " or substr(ln, 0, 1) == "\t" or substr(ln, 0, 1) == "#"
+            continue
+        be b = trim(buangKomentar(ln))
+        be nm = ""
+        if substr(b, 0, 5) == "func "
+            be pk = indexOf(b, "(")
+            if pk > 5
+                be nm = trim(slice(b, 5, pk))
+        else if substr(b, 0, 3) == "be "
+            be rs = trim(slice(b, 3))
+            be nm = namaAwal(rs)
+            if slice(rs, len(nm), len(nm) + 1) == "[" or slice(rs, len(nm), len(nm) + 1) == "."
+                be nm = ""
+        else if substr(b, 0, 5) == "lock "
+            be nm = namaAwal(trim(slice(b, 5)))
+        if nm != "" and indexOf(nama, nm) < 0 and indexOf(hurufId, substr(nm, 0, 1)) >= 0 and nm != "init"
+            add(nama, nm)
+    if len(nama) == 0
+        return teks
+    be baru list string
+    for nm in nama
+        add(baru, awalan + nm)
+    be hasil list string
+    be dlmType = false
+    for ln in baris
+        be b2 = trim(buangKomentar(ln))
+        if ln != "" and substr(ln, 0, 1) != " " and substr(ln, 0, 1) != "\t"
+            be dlmType = substr(b2, 0, 5) == "type "
+            if substr(b2, 0, 3) == "im " or substr(b2, 0, 4) == "lib " or substr(b2, 0, 4) == "ffi "
+                add(hasil, ln)
+                continue
+        if dlmType and (substr(ln, 0, 4) == "    " or substr(ln, 0, 1) == "\t") and substr(ln, 4, 1) != " " and substr(b2, 0, 5) != "func " and substr(b2, 0, 5) != "init "
+            add(hasil, ln)                # baris field type: nama field tidak diganti
+        else
+            add(hasil, gantiNamaBaris(ln, nama, baru))
+    return join(hasil, "\n")
+
+func bacaSumber(nama string)
+    be berkNama = nama
+    be nb = 0
+    be dlmMetode = false
+    be metodSp = 0
+    be teksSumber = ""
+    if teksOverride == ""
+        be teksSumber = replace(readFile(jalurRt(nama)), "\r", "")
+    if teksOverride != ""
+        be teksSumber = teksOverride
+        be teksOverride = ""
+    if nama != "prelude.nrxl" and nama != "pustaka.nrxl" and nama != "sintesis"
+        be teksSumber = ubahFfi(teksSumber)
+        if isoAwalan != ""
+            be teksSumber = isolasiNama(teksSumber, isoAwalan)
+            be isoAwalan = ""
+    for baris in split(teksSumber, "\n")
+        be nb += 1
+        be nbT = nb
+        be ipM = indexOf(baris, "  #" + "@@")
+        if ipM >= 0
+            be nbT = int(trim(slice(baris, ipM + 5)))
+        be b = trim(buangKomentar(baris))
+        if b == ""
+            continue
+        if substr(b, 0, 3) == "ex " and substr(baris, 0, 1) != " "
+            be b = trim(slice(b, 3))
+        if substr(b, 0, 3) == "im " and substr(baris, 0, 1) != " "
+            continue                      # sudah dimuat lebih dulu oleh muatImDari
+        be noBaris = nb
+        if metaAktif
+            # isi templateStyle / windowTemplate: dikumpulkan sampai baris ")"
+            if b == ")"
+                be metaAktif = false
+            else if metaBody[len(metaBody) - 1] == ""
+                be metaBody[len(metaBody) - 1] = b
+            else
+                be metaBody[len(metaBody) - 1] = metaBody[len(metaBody) - 1] + "\n" + b
+            continue
+        if (substr(b, 0, 14) == "templateStyle " or substr(b, 0, 15) == "windowTemplate ") and substr(baris, 0, 1) != " " and substr(b, len(b) - 1, 1) == "("
+            be jn = "s"
+            be nm0 = trim(slice(b, 14, len(b) - 1))
+            if substr(b, 0, 15) == "windowTemplate "
+                be jn = "t"
+                be nm0 = trim(slice(b, 15, len(b) - 1))
+            add(metaJenis, jn)
+            add(metaNama, nm0)
+            add(metaBody, "")
+            be metaAktif = true
+            continue
+        be sp = 0
+        loop sp < len(baris) and substr(baris, sp, 1) == " "
+            be sp += 1
+        if substr(baris, sp, 1) == "\t"
+            galat("pakai spasi untuk indentasi, bukan tab")
+        if sp == 0
+            be typeAktif = ""
+        be adaMetode = false
+        if typeAktif != "" and sp > 0
+            if substr(b, 0, 5) == "func "
+                # metode: func hit(n int)  ->  func Player__hit(own Player, n int); isinya diturunkan indentasinya
+                be dlmMetode = true
+                be metodSp = sp
+                be pk0 = indexOf(b, "(")
+                be pk1 = len(b) - 1 - indexOf(reverse(b), ")")
+                if pk0 < 0 or pk1 < pk0
+                    galat("metode harus berbentuk: func nama(parameter) tipe")
+                be mNama = trim(slice(b, 5, pk0))
+                be mPar = trim(slice(b, pk0 + 1, pk1))
+                be mSisa = slice(b, pk1 + 1)
+                be mAwal = "own " + typeAktif
+                if mPar != ""
+                    be mAwal = mAwal + ", " + mPar
+                be b = "func " + typeAktif + "__" + mNama + "(" + mAwal + ")" + mSisa
+                be sp = 0
+                be adaMetode = true
+            else if dlmMetode and sp > metodSp
+                be sp = sp - metodSp
+                be adaMetode = true
+            else
+                be dlmMetode = false
+        if typeAktif != "" and sp > 0 and not adaMetode
+            # baris field di dalam "type": nama tipe, boleh dengan nilai bawaan: hp int = 100
+            be fDef = ""
+            be fTeks = b
+            be fEq = indexOf(b, "=")
+            if fEq > 0
+                be fDef = trim(slice(b, fEq + 1))
+                be fTeks = trim(slice(b, 0, fEq))
+            be kf = split(fTeks)
+            if len(kf) < 2
+                galat("field harus berbentuk: nama tipe")
+            be sk = indexOf(structNama, typeAktif)
+            if indexOf(split(structFN[sk], ","), kf[0]) >= 0
+                galatK(270, "field " + kf[0] + " already exists")
+            be tf2 = normTipe(join(slice(kf, 1), " "))
+            if structFN[sk] == ""
+                be structFN[sk] = kf[0]
+                be structFT[sk] = tf2
+                be structDef[sk] = fDef
+            else
+                be structFN[sk] = structFN[sk] + "," + kf[0]
+                be structFT[sk] = structFT[sk] + ";" + tf2
+                be structDef[sk] = structDef[sk] + "\n" + fDef
+            continue
+        if substr(b, 0, 4) == "lib "
+            continue                      # sudah dimuat lebih dulu oleh muatLibDari
+        if substr(b, 0, 7) == "errlang"
+            continue                      # bahasa pesan galat: tidak dipakai
+        if substr(b, 0, 4) == "ffi "
+            be dlmFfi = true              # blok ffi kernel32 diabaikan: pembungkusnya ada di prelude
+            continue
+        if dlmFfi
+            if b == ")"
+                be dlmFfi = false
+            continue
+        if substr(b, 0, 5) == "type " and sp == 0
+            be nt = trim(slice(b, 5))
+            if indexOf(structNama, nt) >= 0
+                galatK(262, "type " + nt + " already exists")
+            if indexOf(funcNama, nt) >= 0
+                galatK(126, "name " + nt + " is already used by a function")
+            if nt == "" or not contains(HURUF, substr(nt, 0, 1))
+                galat("nama type tidak valid: " + nt)
+            add(structNama, nt)
+            add(structFN, "")
+            add(structFT, "")
+            add(structDef, "")
+            be typeAktif = nt
+            be dlmMetode = false
+            continue
+        add(nomor, nbT)
+        add(berk, nama)
+        add(inden, sp)
+        add(isiB, "")
+        add(isiC, "")
+        if substr(b, 0, 6) == "print "
+            add(jenis, "p")
+            add(arg, trim(slice(b, 6)))
+        else if substr(b, 0, 3) == "be "
+            be sisa = trim(slice(b, 3))
+            be eq = indexOf(sisa, "=")
+            be kata = split(sisa)
+            if eq < 0 and len(kata) >= 2
+                if len(kata) == 3 and (kata[1] == "list" or kata[1] == "map")
+                    be tdecl = normTipe(kata[1] + " " + kata[2])
+                else if len(kata) == 2
+                    be tdecl = normTipe(kata[1])
+                else
+                    galat("bentuk yang benar: be nama tipe   atau   be nama list tipe")
+                if len(kata) == 3 and kata[1] == "list" and not contains("int float double bool string list map json", kata[2])
+                    galatK(234, "unknown item type " + kata[2] + ", use: int, float, double, bool, string, list, map, json")
+                add(jenis, "d")
+                add(arg, kata[0])
+                be isiB[len(isiB) - 1] = tdecl
+            else
+                if eq < 1
+                    galat("bentuk yang benar: be nama = ekspresi")
+                be lhs = trim(slice(sisa, 0, eq))
+                be nilai = trim(slice(sisa, eq + 1))
+                be opAs = substr(lhs, len(lhs) - 1, 1)
+                if contains("+-*/%", opAs)
+                    # be x += 1  ==  be x = x + (1)
+                    be lhs = trim(slice(lhs, 0, len(lhs) - 1))
+                    be nilai = lhs + " " + opAs + " (" + nilai + ")"
+                be pn = split(lhs)
+                be tdecl2 = ""
+                if len(pn) >= 2 and not contains(lhs, "[") and not contains(lhs, ".")
+                    # be x int = 5
+                    be lhs = pn[0]
+                    be tdecl2 = normTipe(join(slice(pn, 1), " "))
+                if contains(lhs, "[") or contains(lhs, ".")
+                    add(jenis, "s")
+                    add(arg, lhs)
+                    be isiC[len(isiC) - 1] = nilai
+                    if contains("+-*/%", opAs)
+                        be isiB[len(isiB) - 1] = "aug"
+                else
+                    if lhs == "" or not contains(HURUF, substr(lhs, 0, 1))
+                        galat("nama variabel tidak valid: " lhs)
+                    add(jenis, "b")
+                    add(arg, lhs)
+                    be isiB[len(isiB) - 1] = nilai
+                    be isiC[len(isiC) - 1] = tdecl2
+        else if substr(b, 0, 8) == "else if "
+            add(jenis, "ei")
+            add(arg, trim(slice(b, 8)))
+        else if b == "else"
+            add(jenis, "e")
+            add(arg, "")
+        else if substr(b, 0, 3) == "if "
+            add(jenis, "i")
+            add(arg, trim(slice(b, 3)))
+        else if substr(b, 0, 5) == "loop "
+            add(jenis, "l")
+            add(arg, trim(slice(b, 5)))
+        else if substr(b, 0, 7) == "return "
+            add(jenis, "r")
+            add(arg, trim(slice(b, 7)))
+        else if b == "return"
+            add(jenis, "r")
+            add(arg, "")
+        else if substr(b, 0, 5) == "func "
+            be ps = indexOf(b, "(")
+            be rp = len(b) - 1 - indexOf(reverse(b), ")")
+            if ps < 0 or rp < ps
+                galat("bentuk yang benar: func nama(param tipe, ...) tipe")
+            be fn = trim(slice(b, 5, ps))
+            if berkasPengguna(nama) and trim(slice(b, ps + 1, rp)) != "" and len(split(slice(b, ps + 1, rp), ",")) > 8
+                galatK(119, "a function can have at most 8 parameters")
+            if fn == "" or not contains(HURUF, substr(fn, 0, 1))
+                galat("nama fungsi tidak valid: " fn)
+            be fnReg = fn
+            if indexOf(funcNama, fn) >= 0
+                # fungsi pustaka bernama sama boleh ditimpa oleh fungsi program: disimpan sebagai u$nama
+                be fiAda = indexOf(funcNama, fn)
+                be berkAda = berk[funcStmt[fiAda]]
+                be adaRuntime = berkAda == "prelude.nrxl" or berkAda == "pustaka.nrxl" or substr(berkAda, 0, 4) == "lib\\"
+                be iniUser = nama != "prelude.nrxl" and nama != "pustaka.nrxl" and substr(nama, 0, 4) != "lib\\"
+                if adaRuntime and iniUser and indexOf(funcNama, "u$" + fn) < 0
+                    be fnReg = "u$" + fn
+                else
+                    galatK(118, "function " + fn + " already exists (at " + berk[funcStmt[indexOf(funcNama, fn)]] + ":" + str(nomor[funcStmt[indexOf(funcNama, fn)]]) + ")")
+            be tipeKembali = normTipe(trim(slice(b, rp + 1)))
+            if tipeKembali != "" and berkasPengguna(nama)
+                add(exlStmt, len(jenis))      # tipe hasil ditulis: wajib return (E0241)
+            if tipeKembali == ""
+                be tipeKembali = "int"
+                if nama != "prelude.nrxl" and nama != "pustaka.nrxl" and substr(nama, 0, 4) != "lib\\"
+                    be tipeKembali = "?"          # tipe hasil ditebak dari isi fungsi (inferRet)
+            be dalam = trim(slice(b, ps + 1, rp))
+            be namaP list string
+            be tipeP list string
+            if dalam != ""
+                for prm in split(dalam, ",")
+                    be kt = split(trim(prm))
+                    add(namaP, kt[0])
+                    if len(kt) == 1
+                        if nama == "prelude.nrxl" or nama == "pustaka.nrxl" or substr(nama, 0, 4) == "lib\\"
+                            add(tipeP, "int")
+                        else
+                            add(tipeP, "?")           # parameter tanpa tipe: tipenya mengikuti pemanggil (satu salinan per kombinasi tipe)
+                    else
+                        add(tipeP, normTipe(join(slice(kt, 1), " ")))
+            add(funcNama, fnReg)
+            add(funcArity, len(namaP))
+            add(funcStmt, len(jenis))
+            add(funcPT, join(tipeP, ","))
+            add(funcRet, tipeKembali)
+            add(jenis, "f")
+            add(arg, fn)
+            be isiB[len(isiB) - 1] = join(namaP, ",")
+        else if b == "break"
+            add(jenis, "br")
+            add(arg, "")
+        else if b == "continue"
+            add(jenis, "ct")
+            add(arg, "")
+        else if substr(b, 0, 4) == "for "
+            be sisaF = trim(slice(b, 4))
+            be inPos = indexOf(sisaF, " in ")
+            if inPos < 1
+                galat("bentuk yang benar: for nama in range(...) / list / string")
+            add(jenis, "F")
+            add(arg, trim(slice(sisaF, 0, inPos)))
+            be isiB[len(isiB) - 1] = trim(slice(sisaF, inPos + 4))
+        else if b == "print"
+            add(jenis, "p")
+            add(arg, "")
+        else if substr(b, 0, 8) == "options "
+            add(jenis, "O")
+            add(arg, trim(slice(b, 8)))
+        else if substr(b, 0, 7) == "option "
+            add(jenis, "op")
+            add(arg, trim(slice(b, 7)))
+        else if b == "try"
+            add(jenis, "T")
+            add(arg, "")
+        else if b == "catch" or substr(b, 0, 6) == "catch "
+            add(jenis, "C")
+            add(arg, trim(slice(b, 5)))
+        else if substr(b, 0, 6) == "throw "
+            add(jenis, "th")
+            add(arg, trim(slice(b, 6)))
+        else if substr(b, 0, 7) == "delete "
+            add(jenis, "D")
+            add(arg, trim(slice(b, 7)))
+        else if substr(b, 0, 5) == "lock "
+            be sisaL = trim(slice(b, 5))
+            be eqL = indexOf(sisaL, "=")
+            if eqL < 1
+                galatK(96, "lock needs a value: lock " + sisaL + " = value")
+            be namaL = trim(slice(sisaL, 0, eqL))
+            if namaL == "" or not contains(HURUF, substr(namaL, 0, 1)) or contains(namaL, " ")
+                galat("nama lock tidak valid: " namaL)
+            add(jenis, "k")
+            add(arg, namaL)
+            be isiB[len(isiB) - 1] = trim(slice(sisaL, eqL + 1))
+        else if contains(HURUF, substr(b, 0, 1)) and (contains(b, "(") or substr(b, 0, 4) == "ask ")
+            add(jenis, "x")
+            add(arg, b)
+        else
+            be pj = len(jenis) - 1
+            if pj >= 0 and ((jenis[pj] == "O" and sp > inden[pj]) or (jenis[pj] == "op" and sp == inden[pj]))
+                galatK(104, "only option or else is allowed inside options")
+            galatK(113, "unknown command: " + b)
+    be nStmt = len(jenis)
+
+# ---------------------------------------------------------------- compiler
+func kompilasi(sumber string, keluar string)
+    bacaSumber("prelude.nrxl")
+    if fileExists(jalurRt("pustaka.nrxl"))
+        bacaSumber("pustaka.nrxl")
+    muatLibDari(sumber)
+    muatImDari(sumber)
+    bacaSumber(sumber)
+    for nm in split("listBaru listTambah listHapus strGabung strSama boolStr")
+        if indexOf(funcNama, nm) < 0
+            print "prelude.nrxl tidak lengkap: fungsi " nm " tidak ada"
+            exit(1)
+
+    # --- denah isi section: tabel impor, nama impor, nama DLL, byte baris baru, lalu kode
+    be impNama list string
+    for nmI in split("GetStdHandle WriteFile ExitProcess GetProcessHeap HeapAlloc HeapFree CreateFileA ReadFile GetFileSize CloseHandle GetCommandLineA LoadLibraryA GetProcAddress")
+        add(impNama, nmI)
+    be offN list int
+    be c = OFF_IAT + 8 * (NIMPOR + 1)
+    for nmi in impNama
+        add(offN, c)
+        be c += ratakan(2 + len(nmi) + 1, 2)
+    be offDll = c
+    be c += 13
+    be offNL = c
+    be c += 1
+    be offKode = ratakan(c, 16)
+
+    # --- buffer: batas atas ukuran (kasar tapi aman)
+    be batas = 40000
+    for i in range(nStmt)
+        be batas += 300 + 80 * (len(arg[i]) + len(isiB[i]) + len(isiC[i]))
+    be B = newBuffer(RAW + ratakan(offKode + batas, 512) + 8192)
+
+    # --- tabel impor
+    w32(sek(0), BASE_RVA + OFF_ILT)       # OriginalFirstThunk
+    w32(sek(12), BASE_RVA + offDll)       # Name
+    w32(sek(16), BASE_RVA + OFF_IAT)      # FirstThunk
+    for k in range(NIMPOR)
+        w64(sek(OFF_ILT + k * 8), BASE_RVA + offN[k])
+        w64(sek(OFF_IAT + k * 8), BASE_RVA + offN[k])
+        tulisTeks(sek(offN[k] + 2), impNama[k])
+    tulisTeks(sek(offDll), "kernel32.dll")
+    w8(sek(offNL), 10)
+
+    # --- kode mesin
+    be kur = offKode
+    be offCetak = kur
+    rutinCetak()
+    be offTek = kur
+    rutinCetakTeks()
+    be offStr = kur
+    rutinCetakStr()
+    be offCetakNL = kur
+    rutinCetakNL()
+    be offAlloc = kur
+    rutinAlloc()
+    be offFree = kur
+    rutinFree()
+    be offApi = kur
+    rutinApi()
+    be offCallp = kur
+    rutinCallp()
+    add(gNama, "$H")                      # slot global tersembunyi 0: catat try aktif
+    add(gTipe, "int")
+    add(gKunci, 1)
+    add(gNama, "$E")                      # slot 1: pesan galat terakhir
+    add(gTipe, "string")
+    add(gKunci, 1)
+    for ks in range(16)                   # slot 2..16 (13 = baris, 14 = kode galat, 15 = berkas, 16 = nrx_3d); slot 2..12: status milik library (_gget / _gset); slot 11 = handle stdout, 12 = window
+        add(gNama, "$S" + str(ks))
+        add(gTipe, "int")
+        add(gKunci, 1)
+    be offLempar = kur
+    rutinLempar()
+
+    # program utama
+    be entri = kur
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("48 81 EC")                       # sub rsp, imm32  (diisi nanti: ruang variabel + 0x40)
+    be posRuang = kur
+    d32(0)
+    hex("B9 F5 FF FF FF")                 # mov ecx, -11   (STD_OUTPUT_HANDLE)
+    hex("FF 15")                          # call [GetStdHandle]
+    relatif(OFF_IAT)
+    hex("48 89 C3")                       # mov rbx, rax   (handle disimpan di rbx)
+    ripGlobal("48 89 05", 11)             # mov [$S9], rax (salinan untuk callback dari thread / Windows)
+    if errPilih != 0
+        hex("B8")                         # mov eax, pilihan bahasa
+        d32(errPilih)
+        ripGlobal("48 89 05", 17)         # [$S15]
+    be berkasAwal = ""
+    for bk in berk
+        if berkasPengguna(bk)
+            if berkasAwal == ""
+                be berkasAwal = bk
+            else if bk != berkasAwal
+                be banyakBerkas = true
+    if berkasAwal != ""
+        catatBerkas(berkasAwal)
+    be si = 0
+    be dalamFungsi = false
+    be globalOK = true
+    blok(0)
+    for hk in split("winSelesai nrxAtExit")
+        if indexOf(funcNama, hk) >= 0
+            panggilBuang(hk, 0)
+    hex("31 C9")                          # xor ecx, ecx
+    hex("FF 15")                          # call [ExitProcess]
+    relatif(OFF_IAT + 16)
+    hex("CC")
+    w32(sek(posRuang), ratakan(8 * nLokal, 16) + 64)
+
+    # fungsi-fungsi
+    be dalamFungsi = true
+    # hanya fungsi yang dipakai (dari program utama, lalu dari fungsi yang sudah dikompilasi) yang dikompilasi; salinan generik
+    # ditambahkan selama kompilasi, jadi daftar fungsi bisa bertambah
+    be butuh list int
+    be sudahLihat = 0
+    loop true
+        loop len(funcAddr) < len(funcNama)
+            add(funcAddr, 0 - 1)
+            add(butuh, 0)
+            # fungsi milik pengguna selalu dikompilasi (dicek tipenya seperti nrxlang, walau tidak dipanggil)
+            if berkasPengguna(berk[funcStmt[len(butuh) - 1]])
+                be butuh[len(butuh) - 1] = 1
+        loop sudahLihat < len(callFn)
+            be butuh[callFn[sudahLihat]] = 1
+            be sudahLihat += 1
+        be fk = 0 - 1
+        for kf in range(len(funcNama))
+            if fk < 0 and butuh[kf] == 1 and funcAddr[kf] == 0 - 1 and indexOf(funcPT[kf], "?") < 0
+                be fk = kf
+        if fk < 0
+            break
+        if funcRet[fk] == "?"
+            inferRet(fk)
+        be funcAddr[fk] = kur
+        be scNama list string
+        be scDisp list int
+        be scTipe list string
+        be nLokal = 0
+        be tryAktif list int
+        be curRet = funcRet[fk]
+        be curFnNama = split(funcNama[fk], "#")[0]
+        be globalOK = berk[funcStmt[fk]] != "prelude.nrxl" and berk[funcStmt[fk]] != "pustaka.nrxl" and substr(berk[funcStmt[fk]], 0, 4) != "lib\\"
+        be ps2 = 0
+        if funcArity[fk] > 0
+            be tipeParam2 = split(funcPT[fk], ",")
+            for pn in split(isiB[funcStmt[fk]], ",")
+                add(scNama, trim(pn))
+                add(scDisp, 16 + 8 * (funcArity[fk] - 1 - ps2))
+                add(scTipe, tipeParam2[ps2])
+                be ps2 += 1
+        hex("55")                         # push rbp
+        hex("48 89 E5")                   # mov rbp, rsp
+        hex("48 81 EC")                   # sub rsp, imm32 (ruang variabel lokal)
+        be posR2 = kur
+        d32(0)
+        be wajibRet = indexOf(exlStmt, funcStmt[fk]) >= 0
+        if wajibRet
+            be slBarisP = slotBaru()
+            ripGlobal("48 8B 05", 13)     # mov rax, [baris]  (baris pemanggil)
+            hex("48 89 85")               # mov [rbp + disp], rax
+            d32(slBarisP)
+        be si = funcStmt[fk] + 1
+        be noBaris = nomor[funcStmt[fk]]
+        be berkNama = berk[funcStmt[fk]]
+        blok(anak(inden[funcStmt[fk]]))
+        if wajibRet
+            hex("48 8B 85")               # mov rax, [rbp + disp]
+            d32(slBarisP)
+            ripGlobal("48 89 05", 13)     # mov [baris], rax  (galat dilaporkan di baris pemanggil)
+            lemparTeks("function " + namaTampil(curFnNama) + " must return " + curRet + ", but there is no return", 241)
+        hex("31 C0")                      # xor eax, eax  (return 0 kalau tidak ada return)
+        hex("48 89 EC 5D C3")             # mov rsp, rbp; pop rbp; ret
+        w32(sek(posR2), ratakan(8 * nLokal, 16))
+    # tambal semua pemanggilan fungsi
+    for k in range(len(callPos))
+        tambal(callPos[k], funcAddr[callFn[k]])
+
+    # literal string: [panjang 8 byte][isi][0], diletakkan setelah semua kode
+    be be8 = ratakan(kur, 8)
+    be kur = be8
+    be litAlamat list int
+    for lt in litTeks
+        add(litAlamat, kur)
+        w64(sek(kur), len(lt))
+        tulisTeks(sek(kur + 8), lt)
+        be kur += ratakan(len(lt) + 9, 8)
+    for k in range(len(litPos))
+        tambal(litPos[k], litAlamat[litIdx[k]])
+    # slot variabel global (8 byte masing-masing, awalnya nol): section .data sendiri (kode + literal tidak bisa ditulis)
+    be kurKode = kur
+    be kur = ratakan(kur, 4096)
+    be gBase = kur
+    be kur += 8 * len(gNama)
+    for k in range(len(gloPos))
+        tambal(gloPos[k], gBase + 8 * gloIdx[k])
+
+    # --- header DOS dan PE (setelah ukuran kode diketahui)
+    be ukSection = kur
+    w32(sek(posFreeLim), ukSection)       # batas image untuk free()
+    be rawSection = ratakan(kurKode, 512)
+    be ukData = ukSection - gBase
+    be rawData = ratakan(ukData, 512)
+    be total = RAW + rawSection + rawData
+    w8(0, 77)                             # 'M'
+    w8(1, 90)                             # 'Z'
+    w32(60, 64)                           # e_lfanew -> header PE di 0x40
+    w32(64, 17744)                        # "PE\0\0"
+    w16(68, 34404)                        # Machine = AMD64 (0x8664)
+    w32(72, 1700000000)                   # TimeDateStamp tetap (supaya hasil kompilasi deterministik)
+    w16(70, 2)                            # jumlah section: .text (RX) dan .data (RW)
+    w16(84, 240)                          # SizeOfOptionalHeader = 0xF0
+    w16(86, 34)                           # EXE | LARGE_ADDRESS_AWARE (0x0022)
+    be o = 88                             # Optional header (0x58)
+    w16(o, 523)                           # PE32+ (0x20B)
+    w8(o + 2, 1)
+    w32(o + 4, rawSection)                # SizeOfCode
+    w32(o + 16, BASE_RVA + entri)         # AddressOfEntryPoint
+    w32(o + 20, BASE_RVA)                 # BaseOfCode
+    w64(o + 24, 5368709120)               # ImageBase = 0x140000000
+    w32(o + 32, 4096)                     # SectionAlignment
+    w32(o + 36, 512)                      # FileAlignment
+    w16(o + 40, 6)                        # versi OS minimum
+    w16(o + 48, 6)                        # versi subsystem
+    w32(o + 56, BASE_RVA + ratakan(ukSection, 4096))   # SizeOfImage
+    w32(o + 60, RAW)                      # SizeOfHeaders
+    w16(o + 68, 3)                        # Subsystem = console
+    w16(o + 70, 33024)                    # DllCharacteristics = NX_COMPAT | TERMINAL_SERVER_AWARE (0x8100)
+    w64(o + 72, 1048576)                  # stack reserve (1 MB)
+    w64(o + 80, 4096)                     # stack commit
+    w64(o + 88, 1048576)                  # heap reserve
+    w64(o + 96, 4096)                     # heap commit
+    w32(o + 108, 16)                      # jumlah data directory
+    w32(o + 120, BASE_RVA)                # directory 1: tabel impor
+    w32(o + 124, 40)
+    w32(o + 208, BASE_RVA + OFF_IAT)      # directory 12: IAT
+    w32(o + 212, 8 * (NIMPOR + 1))
+    be s = 328                            # section header (0x148)
+    w8(s, 46)                             # ".text"
+    w8(s + 1, 116)
+    w8(s + 2, 101)
+    w8(s + 3, 120)
+    w8(s + 4, 116)
+    w32(s + 8, gBase)                     # VirtualSize
+    w32(s + 12, BASE_RVA)                 # VirtualAddress
+    w32(s + 16, rawSection)               # SizeOfRawData
+    w32(s + 20, RAW)                      # PointerToRawData
+    w32(s + 36, 1610612768)               # CODE | EXEC | READ (0x60000020)
+    w8(s + 40, 46)                        # ".data"
+    w8(s + 41, 100)
+    w8(s + 42, 97)
+    w8(s + 43, 116)
+    w8(s + 44, 97)
+    w32(s + 48, ukData)                   # VirtualSize
+    w32(s + 52, BASE_RVA + gBase)         # VirtualAddress
+    w32(s + 56, rawData)                  # SizeOfRawData
+    w32(s + 60, RAW + rawSection)         # PointerToRawData
+    w32(s + 76, 3221225536)               # INIT_DATA | READ | WRITE (0xC0000040)
+
+    # --- tulis ke disk (byte mentah)
+    be h = CreateFileA(keluar, 1073741824, 0, 0, 2, 128, 0)
+    be tertulis = newBuffer(8)
+    WriteFile(h, B, total, tertulis, 0)
+    CloseHandle(h)
+    if not diam
+        print "Done: " keluar " (" total " bytes)"
+
+# ---------------------------------------------------------------- program utama
+# argumen: nrxc file.nrxl [hasil.exe]   (tanpa argumen: tanya lewat layar). Dijalankan lewat
+# "nrxlang run nrxc.nrxl" argumen dihitung setelah nama nrxc.nrxl.
+be argv = pecahCmd(peekText(GetCommandLineA()))
+be bufEx = newBuffer(520)
+GetModuleFileNameA(0, bufEx, 520)
+be namaEx = peekText(bufEx)
+be adaNrxlang = indexOf(lower(namaEx), "nrxlang_c.exe") >= 0
+if not adaNrxlang
+    # nrxc.exe terpasang: file runtime ada di sebelah nrxc.exe
+    be ke = len(namaEx) - 1 - indexOf(reverse(namaEx), "\\")
+    if ke >= 0
+        be rtDir = slice(namaEx, 0, ke + 1)
+be sisaArg list string
+be mulaiArg = 1
+if adaNrxlang
+    be mulaiArg = 2
+    for k in range(len(argv))
+        if k >= 1 and slice(argv[k], -9) == "nrxc.nrxl"
+            be mulaiArg = k + 1
+for k in range(mulaiArg, len(argv))
+    add(sisaArg, argv[k])
+# nrxc run file.nrxl [argumen...]   kompilasi ke .exe sementara, jalankan, hapus (pengganti "nrxlang run")
+# nrxc build file.nrxl [-o hasil.exe]   sama dengan nrxc file.nrxl hasil.exe
+if len(sisaArg) >= 2 and sisaArg[0] == "run"
+    be sumber = sisaArg[1]
+    if not fileExists(sumber)
+        print "nrxlang: file " sumber " not found"
+        exit(1)
+    be bufTmp = newBuffer(520)
+    GetTempPathA(500, bufTmp)
+    be exeTmp = peekText(bufTmp) + "nrxrun_" + str(GetCurrentProcessId()) + ".exe"
+    be diam = true
+    tentukanBahasa(sumber)
+    kompilasi(sumber, exeTmp)
+    be cmdRun = "\"\"" + exeTmp + "\""
+    for k in range(2, len(sisaArg))
+        be cmdRun = cmdRun + " \"" + sisaArg[k] + "\""
+    be kode = system(cmdRun + "\"")
+    DeleteFileA(exeTmp)
+    exit(kode)
+if len(sisaArg) >= 2 and sisaArg[0] == "build"
+    be sisaBaru list string
+    add(sisaBaru, sisaArg[1])
+    if len(sisaArg) >= 4 and sisaArg[2] == "-o"
+        add(sisaBaru, sisaArg[3])
+    be sisaArg = sisaBaru
+if len(sisaArg) >= 1
+    be sumber = sisaArg[0]
+    be keluar = slice(sumber, 0, len(sumber) - 5) + ".exe"
+    if slice(sumber, -5) != ".nrxl"
+        be keluar = sumber + ".exe"
+    if len(sisaArg) >= 2
+        be keluar = sisaArg[1]
+    if not fileExists(sumber)
+        print "nrxlang: file " sumber " not found"
+        exit(1)
+    tentukanBahasa(sumber)
+    kompilasi(sumber, keluar)
+else
+    print "=== nrxc: compiler nrxl -> .exe tanpa C ==="
+    be sumber = ask "File sumber [contoh.nrxl]: "
+    be sumber = trim(sumber)
+    if sumber == ""
+        be sumber = "contoh.nrxl"
+    be keluar = ask "Nama .exe [hasil.exe]: "
+    be keluar = trim(keluar)
+    if keluar == ""
+        be keluar = "hasil.exe"
+    tentukanBahasa(sumber)
+    kompilasi(sumber, keluar)

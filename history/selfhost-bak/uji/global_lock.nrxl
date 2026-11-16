@@ -1,0 +1,32 @@
+lock MAKS = 3
+lock SAPA = "halo" + " dunia"
+be hitung = 0
+be pesan = "awal"
+be daftar list int
+
+func tambah(n)
+    be hitung += n
+    add(daftar, n)
+
+func lapor()
+    print pesan " " hitung " " len(daftar)
+
+func ubah()
+    be lokal = 5
+    be pesan = "diubah fungsi"
+    return lokal
+
+tambah(2)
+tambah(MAKS)
+lapor()
+print ubah()
+print pesan
+print SAPA
+if hitung > 4
+    be bendera = true
+print bendera
+loop hitung < 12
+    be hitung += MAKS
+print hitung
+be akhir = hitung * 2
+print akhir

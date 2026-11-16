@@ -1,0 +1,22 @@
+func fakt(n int) int
+    if n <= 1
+        return 1
+    return n * fakt(n - 1)
+func fib(n int) int
+    if n < 2
+        return n
+    return fib(n - 1) + fib(n - 2)
+func gcd(a int, b int) int
+    if b == 0
+        return a
+    return gcd(b, a % b)
+func pangkat(a int, b int) int
+    if b == 0
+        return 1
+    return a * pangkat(a, b - 1)
+for i in range(1, 16)
+    print i "! = " fakt(i)
+for i in range(21)
+    print "fib " i " = " fib(i)
+print gcd(48, 18) " " gcd(17, 5) " " gcd(100, 75)
+print pangkat(2, 30) " " pangkat(3, 0) " " pangkat(7, 5)

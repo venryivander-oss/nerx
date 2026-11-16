@@ -1,0 +1,5 @@
+errlang = id
+try
+    print 1
+catch
+    print 2

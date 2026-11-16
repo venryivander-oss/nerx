@@ -1,0 +1,3 @@
+raylib 6.2 (win64 mingw-w64), dari https://github.com/raysan5/raylib/releases/tag/6.2
+Lisensi zlib/libpng, lihat LICENSE. Dipakai lib/nrx_3d.c; lib/nrx_3d_crt.inc melengkapi
+dua fungsi C runtime yang tidak ada di gcc 8.1.

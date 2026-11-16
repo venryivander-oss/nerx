@@ -1,0 +1,76 @@
+be m map int
+be m["b"] = 2
+be m["a"] = 1
+be m["c"] = 3
+be m["a"] = 10
+print m
+print len(m)
+print keys(m)
+print values(m)
+for k in m
+    print k " -> " m[k]
+print contains(m, "a") " " contains(m, "z") " " ("b" in m) " " ("z" not in m)
+be m["d"] += 5
+print m["d"]
+be m["d"] += 5
+print m["d"]
+print remove(m, "b")
+print keys(m)
+print len(m)
+be w = {"x": 1.5, "y": 2.5}
+print w
+be w["z"] += 1.5
+print w["z"] + w["x"]
+be s map string
+be s["a"] = "satu"
+be s["b"] = "dua"
+print s["a"] + s["b"]
+for k in s
+    print k s[k]
+be t = {"a": "x", "b": "y"}
+print t
+be hitung map int
+for kata in split("a b a c b a")
+    be hitung[kata] += 1
+print hitung
+print keys(hitung)
+be n map int
+print n
+print len(n)
+be z = {"zebra": 1, "apel": 2, "mangga": 3}
+print keys(z)
+be b map bool
+be b["ok"] = true
+be b["no"] = false
+print b
+print b["ok"] and not b["no"]
+be tot = 0
+for k in z
+    be tot += z[k]
+print tot
+be skor = {"budi": 80, "ani": 95}
+be skor["ani"] += 5
+print skor["ani"] " " skor["budi"]
+print "budi" in skor
+print "nina" in skor
+be ls = [3, 1, 2]
+print ls
+print len(ls)
+print 2 in ls
+print 9 in ls
+be ms = ["b", "a"]
+print ms
+print "a" in ms
+be ds = [1.5, 2.5]
+print ds
+func jumlah(m map int) int
+    be jml = 0
+    for k in m
+        be jml += m[k]
+    return jml
+print jumlah(z)
+func tambah(m map int, k string, v int)
+    be m[k] = v
+tambah(z, "kiwi", 40)
+print z
+print jumlah(z)

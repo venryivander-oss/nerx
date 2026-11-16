@@ -1,0 +1,10 @@
+be xs list int
+func berisik(n int) bool
+    print "dipanggil " n
+    return true
+print len(xs) > 0 and xs[5] == 1
+print true or berisik(1)
+print false and berisik(2)
+print false or berisik(3)
+print true and berisik(4)
+print (1 < 2 and 2 < 3) or (5 < 4 and berisik(9))

@@ -1,0 +1,3 @@
+errlang = id
+lock L = [1, 2]
+add(L, 3)

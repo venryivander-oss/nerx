@@ -1,0 +1,21 @@
+type Titik
+    x int
+    y int
+    nama string
+func geser(p Titik, dx int, dy int)
+    be p.x = p.x + dx
+    be p.y = p.y + dy
+func jarak2(p Titik, q Titik) int
+    return (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)
+be a = Titik(1, 2, "A")
+be b = Titik(4, 6, "B")
+print a.nama " " a.x " " a.y
+print jarak2(a, b)
+geser(a, 10, 20)
+print a.x " " a.y
+be c = a
+be c.x = 99
+print a.x
+be d = Titik(0, 0, "O")
+be d.y = 77
+print d.nama ":" d.x "," d.y

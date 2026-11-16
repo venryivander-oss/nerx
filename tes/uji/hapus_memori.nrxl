@@ -1,0 +1,12 @@
+for i in range(300)
+    be besar list string
+    for j in range(50)
+        add(besar, str(i * j) + "xxxxxxxxxxxxxxxx")
+    be s = ""
+    for j in range(20)
+        be s = s + str(j)
+    if i % 100 == 0
+        print i " " len(besar) " " len(s)
+    delete s
+    delete besar
+print "selesai"

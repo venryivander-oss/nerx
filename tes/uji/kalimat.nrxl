@@ -1,0 +1,28 @@
+func hitungKata(s string) int
+    return len(split(s))
+func balikKata(s string) string
+    be w = split(s)
+    be r = ""
+    for i in range(len(w))
+        if i > 0
+            be r = r + " "
+        be r = r + w[len(w) - 1 - i]
+    return r
+func awalBesar(s string) string
+    be w = split(s)
+    be r = ""
+    for i in range(len(w))
+        if i > 0
+            be r = r + " "
+        be r = r + upper(substr(w[i], 0, 1)) + lower(slice(w[i], 1))
+    return r
+func palindrom(s string) bool
+    be t = lower(replace(s, " ", ""))
+    return t == reverse(t)
+be k = "  saya suka belajar nrxl  setiap hari "
+print hitungKata(k)
+print balikKata(k)
+print awalBesar(k)
+print palindrom("Kasur ini rusak")
+print palindrom("halo")
+print palindrom("")

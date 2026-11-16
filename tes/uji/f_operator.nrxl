@@ -1,0 +1,41 @@
+be a = 5
+be b = 3
+print a > b
+print a < b
+print a >= 5
+print a <= 4
+print a == 5
+print a != 5
+print "abc" < "abd"
+print "b" > "a"
+print "abc" == "abc"
+print "abc" != "abd"
+print true and false
+print true or false
+print not true
+print not (a > b)
+print a > 1 and b > 1
+print a > 10 or b > 1
+be buah = ["apel", "jeruk", "mangga"]
+print "jeruk" in buah
+print "pisang" in buah
+print "pisang" not in buah
+print "ang" in "mangga"
+print "xyz" in "mangga"
+be m = {"a": 1, "b": 2}
+print "a" in m
+print "z" in m
+print "z" not in m
+print buah[0]
+print buah[2]
+print "halo"[1]
+be t = "dunia"
+print t[0] t[4]
+print 5 == 5.0
+print 2.5 > 2
+print 7 == 7
+print true == true
+print true != false
+be e = 5
+print e > 3 and e < 10
+print not e > 3

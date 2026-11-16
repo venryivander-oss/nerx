@@ -1,0 +1,38 @@
+be pilihan = "2"
+options pilihan
+    option "1"
+        print "Main"
+    option "2", "3"
+        print "Dua atau tiga"
+    else
+        print "Lain"
+be n = 4
+options n
+    option 4
+        print "empat int"
+    option "5"
+        print "lima"
+options n
+    option "4"
+        print "empat teks"
+be q = "z"
+options q
+    option "a"
+        print "a"
+    else
+        print "else"
+for i in range(4)
+    options i
+        option 1
+            continue
+        option 3
+            break
+        else
+            print "i " i
+be w = 2
+options w
+    option 1, 2
+        print "satu atau dua"
+        options w
+            option 2
+                print "dalam"

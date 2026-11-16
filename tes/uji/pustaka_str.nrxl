@@ -1,0 +1,32 @@
+lib nrx_crudfile.h
+print "[" + trim("  hai dunia \n") + "]"
+print "[" + trim("") + "]"
+print "[" + trim("   ") + "]"
+print slice("abcdef", 2)
+print slice("abcdef", 1, 4)
+print slice("abcdef", -2)
+print slice("abcdef", 0, -1)
+print slice("abc", 5)
+be p = split("a,b,,c", ",")
+print len(p)
+print join(p, "|")
+print join(split("a--b--c", "--"), "+")
+be q = split("  satu dua\ttiga  ")
+print len(q)
+print q[2]
+print replace("aXbXc", "X", "--")
+print replace("abc", "z", "y")
+print upper("Halo Dunia 1") + lower("Halo Dunia 1")
+print reverse("abc")
+be xs list string
+add(xs, "a")
+add(xs, "b")
+add(xs, "c")
+print join(slice(xs, 1), ",")
+print join(slice(xs, 0, 2), ",")
+print contains(xs, "b")
+print contains(xs, "z")
+print contains("halo", "al")
+print indexOf(xs, "c")
+print fileExists("pustaka.nrxl")
+print fileExists("tidak_ada.xyz")

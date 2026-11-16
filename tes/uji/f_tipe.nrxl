@@ -1,0 +1,54 @@
+type Player
+    nama string
+    hp int = 100
+    level int = 1
+
+    init nama, level
+        be own.nama = nama
+        be own.level = level
+
+    func serang(n int)
+        be own.hp -= n
+
+    func info() string
+        return own.nama " hp=" own.hp
+
+be p = Player("Budi", 3)
+p.serang(30)
+print p.info()
+print typeOf(p)
+print p.hp
+be p.hp += 5
+print p.hp
+type Titik
+    x int
+    y int
+be t = Titik(1, 2)
+print t.x " " t.y
+be t.x = 10
+print t.x
+print t
+be tim = [p]
+add(tim, Player("Sari", 2))
+for q in tim
+    print q.nama
+print len(tim)
+be tim[1].hp = 50
+print tim[1].hp
+func sembuh(pl Player, n int) Player
+    be pl.hp += n
+    return pl
+be p2 = sembuh(p, 10)
+print p2.hp
+print p.hp
+be pt = Titik(3, 4)
+be pt2 = pt
+be pt2.x = 99
+print pt.x
+type Kotak
+    w double
+    h double = 2.0
+    func luas() double
+        return own.w * own.h
+be k = Kotak(3.5)
+print k.luas()

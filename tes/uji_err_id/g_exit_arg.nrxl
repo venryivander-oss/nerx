@@ -1,0 +1,2 @@
+errlang = id
+exit(1, 2)

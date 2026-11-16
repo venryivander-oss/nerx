@@ -1,0 +1,69 @@
+try
+    print "a"
+    throw "boom"
+    print "tak sampai"
+catch err
+    print "tangkap: " err
+try
+    be x = int("abc")
+catch e
+    print e
+try
+    be l = [1, 2]
+    print l[5]
+catch e
+    print e
+try
+    print 5 / 0
+catch e
+    print e
+try
+    be m = {"a": 1}
+    print m["z"]
+catch e
+    print e
+try
+    throw "satu"
+catch
+    print "tanpa var"
+try
+    try
+        throw "dalam"
+    catch e
+        print "inner " e
+        throw "lagi " e
+catch e2
+    print "outer " e2
+func gagal(n)
+    if n == 0
+        throw "dasar"
+    gagal(n - 1)
+try
+    gagal(3)
+catch e
+    print "dari fungsi: " e
+for i in range(4)
+    try
+        if i == 1
+            continue
+        if i == 3
+            break
+        print "i" i
+    catch e
+        print e
+print "lewat"
+try
+    be q = float("x1")
+catch e
+    print e
+try
+    throw "a" "b" 3
+catch e
+    print e
+be hasil = 0
+try
+    be hasil = 10
+    throw "x"
+catch e
+    be hasil += 1
+print hasil

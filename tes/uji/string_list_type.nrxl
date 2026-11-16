@@ -1,0 +1,50 @@
+lib nrx_crudfile.h
+
+type Titik
+    x int
+    y int
+    nama string
+
+func jarak2(p Titik) int
+    return p.x * p.x + p.y * p.y
+
+func ulang(s string, n int) string
+    be r = ""
+    be k = 0
+    loop k < n
+        be r = r + s
+        be k += 1
+    return r
+
+be s = "Halo"
+be t = s + ", dunia"
+print t
+print len(t)
+print substr(t, 1, 3)
+print str(12345) + "!"
+print "x" == "x"
+print s != "Halo"
+be xs list int
+be i = 0
+loop i < 5
+    add(xs, i * i)
+    be i += 1
+print len(xs) " " xs[4]
+be xs[2] = 99
+print xs[2]
+be ws list string
+add(ws, "satu")
+add(ws, "dua" + "!")
+print ws[1]
+print ulang("ab", 3)
+print indexOf("kopi susu", "su")
+be p = Titik(3, 4, "titik-P")
+print jarak2(p) " " p.nama
+be q = p
+be q.x = 10
+print p.x
+writeFile("uji.txt", "baris satu")
+print readFile("uji.txt")
+print len(readFile("uji.txt"))
+delete s, xs
+print "selesai"

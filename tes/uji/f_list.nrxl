@@ -1,0 +1,63 @@
+be a = [1, 2, 3]
+print len(a)
+add(a, 4)
+print a
+print takeLast(a)
+print a
+print remove(a, 0)
+print a
+print sort([3, 1, 2])
+print sort([2.5, 1.5, 3.0])
+print sort(["b", "a", "c"])
+print filled(3, 0)
+print filled(2, "x")
+print reverse([1, 2, 3])
+print indexOf(["a", "b"], "b")
+print indexOf(["a", "b"], "z")
+print slice([1, 2, 3, 4], 1, 3)
+print slice([1, 2, 3, 4], 1)
+print slice([1, 2, 3, 4], -2)
+print contains([1, 2, 3], 2)
+print contains([1, 2, 3], 9)
+be b = a
+add(b, 100)
+print a
+print b
+be c = [1, 2.5]
+print c
+be e list int
+print e
+print len(e)
+add(e, 5)
+print e
+be names = ["x", "y"]
+be names[0] = "z"
+print names
+be n2 list string
+add(n2, "p")
+print n2
+be nested = [[1, 2], [3]]
+print nested
+print nested[0][1]
+print len(nested)
+be s = 0
+for v in [10, 20, 30]
+    be s += v
+print s
+be dbl = [1.5, 2.5]
+be dbl[1] += 1
+print dbl
+print [1, 2] == [1, 2]
+be big = range(1000)
+print len(big)
+print big[999]
+be sum = 0
+for q in big
+    be sum += q
+print sum
+be li = ["a", "b", "c"]
+print join(li, "-")
+print join(li)
+print 3 in [1, 2, 3]
+print max([3, 9, 2])
+print min([3, 9, 2])

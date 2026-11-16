@@ -1,0 +1,935 @@
+# nrx_window.nrxl - window GUI lewat user32 / gdi32, ditulis dalam nrxl.
+# Dipakai oleh compiler: newWindow(...) dengan windowTemplate memanggil winBuka, winCanvas, winInput, winText, winTombol,
+# winOnKey, winOnMouse, winOnTimer, winGayaWin, winGayaEl, winMuncul. Fungsi gambar: drawRect, drawCircle, drawLine, drawText, clearCanvas.
+# Slot tersembunyi 10 = alamat blok jendela. Blok: [0] hwnd [8] daftar elemen [16] onKey [24] arity [32] onMouse [40] arity
+#   [48] latar [56] warna teks [64] ukuran [72] tertutup [80] daftar timer [88] antrean [96] MSG [104] PAINTSTRUCT [112] cache font
+#   [120] kotor [128] canvas tertangkap mouse (id+1) [152] kelas terdaftar [176] RECT [184] LOGFONT [192] jendela terbuka
+# Elemen (20 slot): 0 jenis (1 canvas, 2 input, 3 teks, 4 tombol, 5 check, 6 select, 7 list, 8 gambar) 1 x 2 y 3 lebar 4 tinggi 5 hwnd 6 dc 7 bitmap 8 slot variabel
+#   9 handler 10 arity 11 latar(-1) 12 warna(-1) 13 nama/teks 14 isi terakhir input 15 ukuran huruf 16 kuas edit
+
+func winB() int
+    be b = _gget(10)
+    if b == 0
+        be b = alloc(512)
+        _gset(10, b)
+        be e list int
+        poke64(b, 8, asInt(e))
+        be tm list int
+        poke64(b, 80, asInt(tm))
+        be q list int
+        poke64(b, 88, asInt(q))
+        be fc list int
+        poke64(b, 112, asInt(fc))
+        poke64(b, 48, 16777215)
+        poke64(b, 56, 0)
+        poke64(b, 64, 16)
+        poke64(b, 96, alloc(64))
+        poke64(b, 104, alloc(128))
+        poke64(b, 176, alloc(32))
+        poke64(b, 184, alloc(96))
+    return b
+
+func winU(f string) int
+    return dllFn("user32.dll", f)
+
+func winG(f string) int
+    return dllFn("gdi32.dll", f)
+
+func winK(f string) int
+    return dllFn("kernel32.dll", f)
+
+func winP32(buf int, off int, v int) int
+    be u = v
+    if u < 0
+        be u = u + 4294967296
+    poke8(buf, off, u % 256)
+    poke8(buf, off + 1, idiv(u, 256) % 256)
+    poke8(buf, off + 2, idiv(u, 65536) % 256)
+    poke8(buf, off + 3, idiv(u, 16777216) % 256)
+    return 0
+
+# UTF-8 -> UTF-16 berakhir 0 (buffer baru; panjang karakter di winLebarN)
+func winLebar(s string) int
+    be f = winK("MultiByteToWideChar")
+    be n = callp(f, 65001, 0, cstr(s), 4294967295, 0, 0) % 4294967296
+    be buf = alloc(n * 2 + 8)
+    if n > 0
+        callp(f, 65001, 0, cstr(s), 4294967295, buf, n)
+    return buf
+
+func winLebarN(s string) int
+    be n = callp(winK("MultiByteToWideChar"), 65001, 0, cstr(s), 4294967295, 0, 0) % 4294967296
+    if n <= 0
+        return 0
+    return n - 1
+
+func winTeksDari(h int) string
+    be n = callp(winU("GetWindowTextLengthW"), h) % 4294967296
+    be buf = alloc(n * 2 + 8)
+    callp(winU("GetWindowTextW"), h, buf, n + 1)
+    be f = winK("WideCharToMultiByte")
+    be m = callp(f, 65001, 0, buf, 4294967295, 0, 0, 0, 0) % 4294967296
+    be o = alloc(m + 8)
+    callp(f, 65001, 0, buf, 4294967295, o, m, 0, 0)
+    be s = fromC(o)
+    free(buf)
+    free(o)
+    return s
+
+func winHexD(c string) int
+    be p = indexOf("0123456789abcdef", lower(c))
+    if p < 0
+        return 0
+    return p
+
+func winWarna(s string) int
+    be t = lower(trim(s))
+    if len(t) == 7 and substr(t, 0, 1) == "#"
+        be r = winHexD(substr(t, 1, 1)) * 16 + winHexD(substr(t, 2, 1))
+        be g = winHexD(substr(t, 3, 1)) * 16 + winHexD(substr(t, 4, 1))
+        be bl = winHexD(substr(t, 5, 1)) * 16 + winHexD(substr(t, 6, 1))
+        return r + g * 256 + bl * 65536
+    if t == "hitam" or t == "black"
+        return 0
+    if t == "putih" or t == "white"
+        return 16777215
+    if t == "merah" or t == "red"
+        return 255
+    if t == "hijau" or t == "green"
+        return 65280
+    if t == "biru" or t == "blue"
+        return 16711680
+    if t == "kuning" or t == "yellow"
+        return 65535
+    if t == "oranye" or t == "orange"
+        return 42495
+    if t == "ungu" or t == "purple"
+        return 8388736
+    if t == "abu" or t == "gray" or t == "grey"
+        return 8421504
+    _lempar("color: unknown color \"" + s + "\", use black, red, green, yellow, blue, purple, cyan, white, gray, or #RRGGBB")
+    return 0
+
+func winFont(size int) int
+    be b = winB()
+    be fc = asListI(peek64(b, 112))
+    be i = 0
+    loop i < len(fc)
+        if fc[i] == size
+            return fc[i + 1]
+        be i += 2
+    be lf = peek64(b, 184)
+    for k in range(12)
+        poke64(lf, k * 8, 0)
+    winP32(lf, 0, 0 - size)
+    poke64(lf, 16, 400)
+    poke8(lf, 23, 1)
+    poke8(lf, 26, 5)
+    be face = "Segoe UI"
+    for k in range(len(face))
+        poke8(lf, 28 + 2 * k, ord(face, k))
+    be h = callp(winG("CreateFontIndirectW"), lf)
+    add(fc, size)
+    add(fc, h)
+    return h
+
+# ---------------------------------------------------------------- elemen
+func winElemen(kind int, x int, y int, w int, h int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be id = len(e)
+    for k in range(20)
+        add(e, 0)
+    be e[id] = kind
+    be e[id + 1] = x
+    be e[id + 2] = y
+    be e[id + 3] = w
+    be e[id + 4] = h
+    be e[id + 11] = 0 - 1
+    be e[id + 12] = 0 - 1
+    return id
+
+func winUkuran(e list int, id int) int
+    if e[id + 15] > 0
+        return e[id + 15]
+    return peek64(winB(), 64)
+
+func winLatar(e list int, id int) int
+    if e[id + 11] >= 0
+        return e[id + 11]
+    return peek64(winB(), 48)
+
+func winWarnaTeks(e list int, id int) int
+    if e[id + 12] >= 0
+        return e[id + 12]
+    return peek64(winB(), 56)
+
+func winIsi(dc int, x int, y int, w int, h int, warna int) int
+    be b = winB()
+    be r = peek64(b, 176)
+    winP32(r, 0, x)
+    winP32(r, 4, y)
+    winP32(r, 8, x + w)
+    winP32(r, 12, y + h)
+    be br = callp(winG("CreateSolidBrush"), warna)
+    callp(winU("FillRect"), dc, r, br)
+    callp(winG("DeleteObject"), br)
+    return 0
+
+func winBuka(judul string, w int, h int) int
+    be b = winB()
+    if peek64(b, 192) != 0
+        _lempar("newWindow: only one window can be open at a time")
+    be hinst = callp(winK("GetModuleHandleW"), 0)
+    if peek64(b, 152) == 0
+        be cls = winLebar("NrxlWindow")
+        be wc = alloc(96)
+        poke64(wc, 0, 80)
+        poke64(wc, 8, _callback("winProc"))
+        poke64(wc, 24, hinst)
+        poke64(wc, 40, callp(winU("LoadCursorW"), 0, 32512))
+        poke64(wc, 48, 0)
+        poke64(wc, 64, cls)
+        if callp(winU("RegisterClassExW"), wc) % 65536 == 0
+            _lempar("newWindow: cannot register the window class")
+        poke64(b, 152, cls)
+    be r = peek64(b, 176)
+    winP32(r, 0, 0)
+    winP32(r, 4, 0)
+    winP32(r, 8, w)
+    winP32(r, 12, h)
+    callp(winU("AdjustWindowRect"), r, 46792704, 0)
+    be ow = peek64(r, 8) % 4294967296
+    be oh = idiv(peek64(r, 8), 4294967296) % 4294967296
+    be ol = peek64(r, 0) % 4294967296
+    be ot = idiv(peek64(r, 0), 4294967296) % 4294967296
+    if ow >= 2147483648
+        be ow = ow - 4294967296
+    if oh >= 2147483648
+        be oh = oh - 4294967296
+    if ol >= 2147483648
+        be ol = ol - 4294967296
+    if ot >= 2147483648
+        be ot = ot - 4294967296
+    be wt = winLebar(judul)
+    be hw = callp(winU("CreateWindowExW"), 0, peek64(b, 152), wt, 46792704, 2147483648, 2147483648, ow - ol, oh - ot, 0, 0, hinst, 0)
+    free(wt)
+    if hw == 0
+        _lempar("newWindow: cannot create the window")
+    poke64(b, 0, hw)
+    poke64(b, 168, hinst)
+    poke64(b, 192, 1)
+    poke64(b, 72, 0)
+    return 1
+
+func winGayaWin(win int, k string, v string) int
+    be b = winB()
+    if k == "background"
+        poke64(b, 48, winWarna(v))
+    else if k == "color"
+        poke64(b, 56, winWarna(v))
+    else if k == "size"
+        poke64(b, 64, int(v))
+    return 0
+
+func winTerapEl(id int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be hw = e[id + 5]
+    if hw != 0
+        callp(winU("SendMessageW"), hw, 48, winFont(winUkuran(e, id)), 1)
+        callp(winU("MoveWindow"), hw, e[id + 1], e[id + 2], e[id + 3], e[id + 4], 1)
+        if e[id] == 2 or e[id] == 5
+            if e[id + 16] != 0
+                callp(winG("DeleteObject"), e[id + 16])
+            be e[id + 16] = callp(winG("CreateSolidBrush"), winLatar(e, id))
+    return 0
+
+func winGayaEl(id int, k string, v string) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    if k == "background"
+        be e[id + 11] = winWarna(v)
+    else if k == "color"
+        be e[id + 12] = winWarna(v)
+    else if k == "size"
+        be e[id + 15] = int(v)
+    else if k == "height"
+        be e[id + 4] = int(v)
+    winTerapEl(id)
+    return 0
+
+func winCanvas(win int, nama string, x int, y int, w int, h int) int
+    be b = winB()
+    be id = winElemen(1, x, y, w, h)
+    be e = asListI(peek64(b, 8))
+    be sdc = callp(winU("GetDC"), 0)
+    be dc = callp(winG("CreateCompatibleDC"), sdc)
+    be bmp = callp(winG("CreateCompatibleBitmap"), sdc, w, h)
+    callp(winG("SelectObject"), dc, bmp)
+    callp(winU("ReleaseDC"), 0, sdc)
+    be e[id + 6] = dc
+    be e[id + 7] = bmp
+    be e[id + 13] = asInt(nama)
+    winIsi(dc, 0, 0, w, h, peek64(b, 48))
+    poke64(b, 120, 1)
+    return id
+
+func winInput(win int, slot int, x int, y int, w int, size int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be id = winElemen(2, x, y, w, hs + 14)
+    be e = asListI(peek64(b, 8))
+    be cls = winLebar("EDIT")
+    be hw = callp(winU("CreateWindowExW"), 0, cls, 0, 1350631552, x, y, w, hs + 14, peek64(b, 0), 0, peek64(b, 168), 0)
+    free(cls)
+    be e[id + 5] = hw
+    be e[id + 8] = slot
+    be e[id + 15] = size
+    be cur = asString(peek64(slot, 0))
+    be e[id + 14] = asInt(cur)
+    be wt = winLebar(cur)
+    callp(winU("SetWindowTextW"), hw, wt)
+    free(wt)
+    winTerapEl(id)
+    return id
+
+func winText(win int, teks string, x int, y int, size int, warna string, fn int) int
+    be b = winB()
+    be id = winElemen(3, x, y, 0, 0)
+    be e = asListI(peek64(b, 8))
+    be e[id + 13] = asInt(teks)
+    be e[id + 14] = fn
+    be e[id + 15] = size
+    if warna != ""
+        be e[id + 12] = winWarna(warna)
+    return id
+
+func winTombol(win int, teks string, x int, y int, size int, fn int, ar int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be bw = idiv(len(teks) * hs * 6, 10) + 28
+    be id = winElemen(4, x, y, bw, hs + 14)
+    be e = asListI(peek64(b, 8))
+    be cls = winLebar("BUTTON")
+    be wt = winLebar(teks)
+    be hw = callp(winU("CreateWindowExW"), 0, cls, wt, 1342242816, x, y, bw, hs + 14, peek64(b, 0), 0, peek64(b, 168), 0)
+    free(cls)
+    free(wt)
+    be e[id + 5] = hw
+    be e[id + 9] = fn
+    be e[id + 10] = ar
+    be e[id + 15] = size
+    winTerapEl(id)
+    return id
+
+func winPilih(kind int, slot int, lst list string, x int, y int, w int, h int, size int) int
+    be b = winB()
+    be id = winElemen(kind, x, y, w, h)
+    be e = asListI(peek64(b, 8))
+    be kelas = "COMBOBOX"
+    be gaya = 1344339971
+    be mAdd = 323
+    if kind == 7
+        be kelas = "LISTBOX"
+        be gaya = 1352728577
+        be mAdd = 384
+    be cls = winLebar(kelas)
+    be hw = callp(winU("CreateWindowExW"), 0, cls, 0, gaya, x, y, w, h, peek64(b, 0), 0, peek64(b, 168), 0)
+    free(cls)
+    be e[id + 5] = hw
+    be e[id + 8] = slot
+    be e[id + 13] = asInt(lst)
+    be e[id + 15] = size
+    for s in lst
+        be wt = winLebar(s)
+        callp(winU("SendMessageW"), hw, mAdd, 0, wt)
+        free(wt)
+    if asString(peek64(slot, 0)) == "" and len(lst) > 0
+        poke64(slot, 0, asInt(lst[0]))
+    be e[id + 14] = 0 - 1
+    winTerapEl(id)
+    return id
+
+func winSelect(win int, slot int, lst list string, x int, y int, w int, size int) int
+    be hs = size
+    if hs <= 0
+        be hs = peek64(winB(), 64)
+    return winPilih(6, slot, lst, x, y, w, 240, size)
+
+func winList(win int, slot int, lst list string, x int, y int, w int, h int, size int) int
+    be hh = h
+    if hh <= 0
+        be hh = 120
+    return winPilih(7, slot, lst, x, y, w, hh, size)
+
+func winCheck(win int, slot int, teks string, x int, y int, size int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be bw = idiv(len(teks) * hs * 6, 10) + 36
+    be id = winElemen(5, x, y, bw, hs + 10)
+    be e = asListI(peek64(b, 8))
+    be cls = winLebar("BUTTON")
+    be wt = winLebar(teks)
+    be hw = callp(winU("CreateWindowExW"), 0, cls, wt, 1342242819, x, y, bw, hs + 10, peek64(b, 0), 0, peek64(b, 168), 0)
+    free(cls)
+    free(wt)
+    be e[id + 5] = hw
+    be e[id + 8] = slot
+    be e[id + 15] = size
+    be e[id + 14] = 0 - 1
+    winTerapEl(id)
+    return id
+
+func winOnKey(win int, fn int, ar int) int
+    be b = winB()
+    poke64(b, 16, fn)
+    poke64(b, 24, ar)
+    return 0
+
+func winOnMouse(win int, fn int, ar int) int
+    be b = winB()
+    poke64(b, 32, fn)
+    poke64(b, 40, ar)
+    return 0
+
+func winOnTimer(win int, fn int, ar int, detik double) int
+    be b = winB()
+    be tm = asListI(peek64(b, 80))
+    if len(tm) >= 12
+        _lempar("onTimer: at most 4 timers per window")
+    add(tm, fn)
+    add(tm, int(detik * 1000))
+    add(tm, callp(winK("GetTickCount64")))
+    return 0
+
+func winMuncul(win int) int
+    be b = winB()
+    be hw = peek64(b, 0)
+    callp(winU("ShowWindow"), hw, 5)
+    callp(winU("UpdateWindow"), hw)
+    callp(winU("SetForegroundWindow"), hw)
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 2
+            callp(winU("SetFocus"), e[i + 5])
+            break
+        be i += 20
+    return 0
+
+# ---------------------------------------------------------------- menggambar
+func winCvDc(fn string, cv int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    if cv < 0 or cv + 20 > len(e) or e[cv] != 1
+        _lempar(fn + ": the first argument must be a canvas")
+    poke64(b, 120, 1)
+    return e[cv + 6]
+
+func winCvE(cv int) int
+    return cv
+
+func drawRect(cv int, x double, y double, w double, h double, warna string) int
+    be dc = winCvDc("drawRect", cv)
+    winIsi(dc, int(x), int(y), int(w), int(h), winWarna(warna))
+    return 0
+
+func drawCircle(cv int, x double, y double, r double, warna string) int
+    be dc = winCvDc("drawCircle", cv)
+    be br = callp(winG("CreateSolidBrush"), winWarna(warna))
+    be ob = callp(winG("SelectObject"), dc, br)
+    be op = callp(winG("SelectObject"), dc, callp(winG("GetStockObject"), 8))
+    be rr = int(r)
+    callp(winG("Ellipse"), dc, int(x) - rr, int(y) - rr, int(x) + rr + 1, int(y) + rr + 1)
+    callp(winG("SelectObject"), dc, ob)
+    callp(winG("SelectObject"), dc, op)
+    callp(winG("DeleteObject"), br)
+    return 0
+
+func winGaris(dc int, x1 int, y1 int, x2 int, y2 int, warna string, tebal int) int
+    be pen = callp(winG("CreatePen"), 0, tebal, winWarna(warna))
+    be op = callp(winG("SelectObject"), dc, pen)
+    callp(winG("MoveToEx"), dc, x1, y1, 0)
+    callp(winG("LineTo"), dc, x2, y2)
+    callp(winG("SelectObject"), dc, op)
+    callp(winG("DeleteObject"), pen)
+    return 0
+
+func drawLine_a6(cv int, x1 double, y1 double, x2 double, y2 double, warna string) int
+    be dc = winCvDc("drawLine", cv)
+    return winGaris(dc, int(x1), int(y1), int(x2), int(y2), warna, 1)
+
+func drawLine_a7(cv int, x1 double, y1 double, x2 double, y2 double, warna string, tebal double) int
+    be dc = winCvDc("drawLine", cv)
+    return winGaris(dc, int(x1), int(y1), int(x2), int(y2), warna, int(tebal))
+
+func winTulis(dc int, teks string, x int, y int, warna string, ukuran int) int
+    be f = winFont(ukuran)
+    be of = callp(winG("SelectObject"), dc, f)
+    callp(winG("SetBkMode"), dc, 1)
+    callp(winG("SetTextColor"), dc, winWarna(warna))
+    be wt = winLebar(teks)
+    callp(winG("TextOutW"), dc, x, y, wt, winLebarN(teks))
+    free(wt)
+    callp(winG("SelectObject"), dc, of)
+    return 0
+
+func drawText_a5(cv int, teks string, x double, y double, warna string) int
+    be dc = winCvDc("drawText", cv)
+    return winTulis(dc, teks, int(x), int(y), warna, 16)
+
+func drawText_a6(cv int, teks string, x double, y double, warna string, ukuran double) int
+    be dc = winCvDc("drawText", cv)
+    return winTulis(dc, teks, int(x), int(y), warna, int(ukuran))
+
+func clearCanvas_a1(cv int) int
+    be dc = winCvDc("clearCanvas", cv)
+    be e = asListI(peek64(winB(), 8))
+    return winIsi(dc, 0, 0, e[cv + 3], e[cv + 4], winLatar(e, cv))
+
+func clearCanvas_a2(cv int, warna string) int
+    be dc = winCvDc("clearCanvas", cv)
+    be e = asListI(peek64(winB(), 8))
+    return winIsi(dc, 0, 0, e[cv + 3], e[cv + 4], winWarna(warna))
+
+# ---------------------------------------------------------------- gambar (GDI+)
+# cache gambar: daftar di blok [208], per gambar 4 slot: nama, HBITMAP, lebar, tinggi. Hasil = indeks awal.
+func winGambar(path string) int
+    be b = winB()
+    if peek64(b, 200) == 0
+        be inp = alloc(32)
+        winP32(inp, 0, 1)
+        be tk = alloc(16)
+        callp(dllFn("gdiplus.dll", "GdiplusStartup"), tk, inp, 0)
+        poke64(b, 200, 1)
+        be cl list int
+        poke64(b, 208, asInt(cl))
+    be c = asListI(peek64(b, 208))
+    be k = 0
+    loop k < len(c)
+        if asString(c[k]) == path
+            return k
+        be k += 4
+    be wp = winLebar(path)
+    be pb = alloc(16)
+    be st = callp(dllFn("gdiplus.dll", "GdipCreateBitmapFromFile"), wp, pb) % 4294967296
+    free(wp)
+    if st != 0
+        _lemparK(199, "image " + path + " not found or its format is not supported (use PNG, JPG, or BMP)")
+    be bmp = peek64(pb, 0)
+    be wh = alloc(16)
+    callp(dllFn("gdiplus.dll", "GdipGetImageWidth"), bmp, wh)
+    callp(dllFn("gdiplus.dll", "GdipGetImageHeight"), bmp, wh + 8)
+    be sw = peek64(wh, 0) % 4294967296
+    be sh = peek64(wh, 8) % 4294967296
+    be bg = peek64(b, 48)
+    be argb = 4278190080 + (bg % 256) * 65536 + (idiv(bg, 256) % 256) * 256 + idiv(bg, 65536) % 256
+    be ph = alloc(16)
+    callp(dllFn("gdiplus.dll", "GdipCreateHBITMAPFromBitmap"), bmp, ph, argb)
+    be hbm = peek64(ph, 0)
+    callp(dllFn("gdiplus.dll", "GdipDisposeImage"), bmp)
+    free(pb)
+    free(wh)
+    free(ph)
+    add(c, asInt(path))
+    add(c, hbm)
+    add(c, sw)
+    add(c, sh)
+    return len(c) - 4
+
+func winBlit(dc int, g int, x int, y int, w int, h int) int
+    be c = asListI(peek64(winB(), 208))
+    be tw = w
+    be th = h
+    if tw <= 0
+        be tw = c[g + 2]
+    if th <= 0
+        be th = c[g + 3]
+    be mdc = callp(winG("CreateCompatibleDC"), dc)
+    be old = callp(winG("SelectObject"), mdc, c[g + 1])
+    callp(winG("SetStretchBltMode"), dc, 4)
+    callp(winG("StretchBlt"), dc, x, y, tw, th, mdc, 0, 0, c[g + 2], c[g + 3], 13369376)
+    callp(winG("SelectObject"), mdc, old)
+    callp(winG("DeleteDC"), mdc)
+    return 0
+
+func winGambarEl(win int, path string, x int, y int, w int, h int) int
+    be g = winGambar(path)
+    be id = winElemen(8, x, y, w, h)
+    be e = asListI(peek64(winB(), 8))
+    be e[id + 13] = g
+    return id
+
+func drawImage_a4(cv int, path string, x double, y double) int
+    be dc = winCvDc("drawImage", cv)
+    return winBlit(dc, winGambar(path), int(x), int(y), 0, 0)
+
+func drawImage_a6(cv int, path string, x double, y double, w double, h double) int
+    be dc = winCvDc("drawImage", cv)
+    return winBlit(dc, winGambar(path), int(x), int(y), int(w), int(h))
+# ---------------------------------------------------------------- tampil
+func winLukisCanvas(hdc int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 1
+            callp(winG("BitBlt"), hdc, e[i + 1], e[i + 2], e[i + 3], e[i + 4], e[i + 6], 0, 0, 13369376)
+        be i += 20
+    return 0
+
+# teks yang berisi variabel: hitung ulang, gambar ulang window kalau berubah
+func winTeksHidup(hw int) int
+    be e = asListI(peek64(winB(), 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 3 and e[i + 14] != 0
+            be baru = asString(_callfn(e[i + 14]))
+            if baru != asString(e[i + 13])
+                be e[i + 13] = asInt(baru)
+                callp(winU("InvalidateRect"), hw, 0, 1)
+        be i += 20
+    return 0
+
+func winTampil() int
+    be b = winB()
+    be hw = peek64(b, 0)
+    if hw == 0 or peek64(b, 72) != 0
+        return 0
+    poke64(b, 120, 0)
+    winTeksHidup(hw)
+    be hdc = callp(winU("GetDC"), hw)
+    winLukisCanvas(hdc)
+    callp(winU("ReleaseDC"), hw, hdc)
+    return 0
+
+func winLukisPenuh(h int) int
+    be b = winB()
+    be ps = peek64(b, 104)
+    be hdc = callp(winU("BeginPaint"), h, ps)
+    be r = peek64(b, 176)
+    callp(winU("GetClientRect"), h, r)
+    be br = callp(winG("CreateSolidBrush"), peek64(b, 48))
+    callp(winU("FillRect"), hdc, r, br)
+    callp(winG("DeleteObject"), br)
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 3
+            winTulis2(hdc, asString(e[i + 13]), e[i + 1], e[i + 2], winWarnaTeks(e, i), winUkuran(e, i))
+        if e[i] == 8
+            winBlit(hdc, e[i + 13], e[i + 1], e[i + 2], e[i + 3], e[i + 4])
+        be i += 20
+    winLukisCanvas(hdc)
+    callp(winU("EndPaint"), h, ps)
+    return 0
+
+func winTulis2(dc int, teks string, x int, y int, warna int, ukuran int) int
+    be f = winFont(ukuran)
+    be of = callp(winG("SelectObject"), dc, f)
+    callp(winG("SetBkMode"), dc, 1)
+    callp(winG("SetTextColor"), dc, warna)
+    be wt = winLebar(teks)
+    callp(winG("TextOutW"), dc, x, y, wt, winLebarN(teks))
+    free(wt)
+    callp(winG("SelectObject"), dc, of)
+    return 0
+
+# ---------------------------------------------------------------- pesan
+func winCari(x int, y int) int
+    be e = asListI(peek64(winB(), 8))
+    be hasil = 0 - 1
+    be i = 0
+    loop i < len(e)
+        if e[i] == 1 and x >= e[i + 1] and y >= e[i + 2] and x < e[i + 1] + e[i + 3] and y < e[i + 2] + e[i + 4]
+            be hasil = i
+        be i += 20
+    return hasil
+
+func winAntre(a int, b1 int, c int, d int, e5 int) int
+    be q = asListI(peek64(winB(), 88))
+    add(q, a)
+    add(q, b1)
+    add(q, c)
+    add(q, d)
+    add(q, e5)
+    return 0
+
+func winProc(h int, m int, w int, l int) int
+    be b = winB()
+    if m == 2
+        poke64(b, 72, 1)
+        return 0
+    if m == 20
+        return 1
+    if m == 15
+        winLukisPenuh(h)
+        return 0
+    if m == 273
+        if idiv(w, 65536) % 65536 == 0 and l != 0
+            be e = asListI(peek64(b, 8))
+            be i = 0
+            loop i < len(e)
+                if e[i] == 4 and e[i + 5] == l
+                    winAntre(3, i, 0, 0, 0)
+                be i += 20
+        return 0
+    if m == 307 or m == 309 or m == 312
+        be e2 = asListI(peek64(b, 8))
+        be j = 0
+        loop j < len(e2)
+            if (e2[j] == 2 or e2[j] == 5) and e2[j + 5] == l
+                callp(winG("SetBkMode"), w, 1)
+                callp(winG("SetTextColor"), w, winWarnaTeks(e2, j))
+                callp(winG("SetBkColor"), w, winLatar(e2, j))
+                return e2[j + 16]
+            be j += 20
+    if m == 512 or m == 513 or m == 514 or m == 516 or m == 517
+        be mx = l % 65536
+        if mx >= 32768
+            be mx = mx - 65536
+        be my = idiv(l, 65536) % 65536
+        if my >= 32768
+            be my = my - 65536
+        be cap = peek64(b, 128)
+        be id = 0 - 1
+        if cap > 0
+            be id = cap - 1
+        else
+            be id = winCari(mx, my)
+        if (m == 513 or m == 516) and id >= 0
+            callp(winU("SetCapture"), h)
+            poke64(b, 128, id + 1)
+        if m == 514 or m == 517
+            callp(winU("ReleaseCapture"))
+            poke64(b, 128, 0)
+        if id >= 0
+            be e3 = asListI(peek64(b, 8))
+            be ak = 0
+            if m == 513
+                be ak = 1
+            else if m == 516
+                be ak = 2
+            else if m == 514 or m == 517
+                be ak = 3
+            winAntre(1, id, mx - e3[id + 1], my - e3[id + 2], ak)
+        return 0
+    return callp(winU("DefWindowProcW"), h, m, w, l)
+
+func winNamaTombol(vk int) string
+    if vk >= 65 and vk <= 90
+        return lower(chr(vk))
+    if vk >= 48 and vk <= 57
+        return chr(vk)
+    if vk >= 112 and vk <= 123
+        return "f" + str(vk - 111)
+    be nm = split("left right up down space enter escape tab backspace delete home end pageup pagedown")
+    be kd = split("37 39 38 40 32 13 27 9 8 46 36 35 33 34")
+    for i in range(len(nm))
+        if int(kd[i]) == vk
+            return nm[i]
+    return ""
+
+func winKbBlok() int
+    be b = _gget(7)
+    if b == 0
+        be b = alloc(800)
+        _gset(7, b)
+    return b
+
+func winTombolBawah(vk int) int
+    be kb = winKbBlok()
+    poke8(kb, vk, 1)
+    poke8(kb, 256 + vk, 1)
+    be b = winB()
+    if peek64(b, 16) == 0
+        return 0
+    be nm = winNamaTombol(vk)
+    if nm == "" or nm == "tab"
+        return 0
+    be fokus = callp(winU("GetFocus"))
+    be diEdit = false
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 2 and e[i + 5] == fokus
+            be diEdit = true
+        be i += 20
+    if diEdit and not (vk == 13 or vk == 27 or (vk >= 33 and vk <= 40))
+        return 0
+    winAntre(2, vk, 0, 0, 0)
+    return 0
+
+func winTombolNaik(vk int) int
+    be kb = winKbBlok()
+    poke8(kb, 256 + vk, 0)
+    poke8(kb, 512 + vk, 1)
+    return 0
+
+func winPanggil(fn int, ar int, a1 int, a2 int, a3 int, a4 int) int
+    if ar == 0
+        return _callfn(fn)
+    if ar == 1
+        return _callfn(fn, a1)
+    if ar == 2
+        return _callfn(fn, a1, a2)
+    if ar == 3
+        return _callfn(fn, a1, a2, a3)
+    return _callfn(fn, a1, a2, a3, a4)
+
+func winSedot() int
+    be b = winB()
+    be msg = peek64(b, 96)
+    loop callp(winU("PeekMessageW"), msg, 0, 0, 0, 1) % 4294967296 != 0
+        be mm = peek64(msg, 8) % 4294967296
+        be wp = peek64(msg, 16) % 256
+        be lewat = false
+        if mm == 256 or mm == 260
+            winTombolBawah(wp)
+            if wp == 13
+                be lewat = true
+        else if mm == 257 or mm == 261
+            winTombolNaik(wp)
+        if not lewat
+            callp(winU("TranslateMessage"), msg)
+        callp(winU("DispatchMessageW"), msg)
+    return 0
+
+func winSinkron() int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 2
+            be slot = e[i + 8]
+            be cur = asString(peek64(slot, 0))
+            be last = asString(e[i + 14])
+            if cur != last
+                be wt = winLebar(cur)
+                callp(winU("SetWindowTextW"), e[i + 5], wt)
+                free(wt)
+                be e[i + 14] = asInt(cur)
+            else
+                be tx = winTeksDari(e[i + 5])
+                if tx != last
+                    poke64(slot, 0, asInt(tx))
+                    be e[i + 14] = asInt(tx)
+        else if e[i] == 5
+            be slot = e[i + 8]
+            be cc = peek64(slot, 0) % 256
+            if cc != e[i + 14]
+                if e[i + 14] < 0 or cc != winCekOk(e[i + 5])
+                    callp(winU("SendMessageW"), e[i + 5], 241, cc, 0)
+                be e[i + 14] = cc
+            else
+                be st = winCekOk(e[i + 5])
+                if st != cc
+                    poke64(slot, 0, st)
+                    be e[i + 14] = st
+        else if e[i] == 6 or e[i] == 7
+            be slot = e[i + 8]
+            be lst2 = asListS(e[i + 13])
+            be cur = asString(peek64(slot, 0))
+            be pil = callp(winU("SendMessageW"), e[i + 5], 327 + (e[i] - 6) * 65, 0, 0) % 4294967296
+            if pil >= 2147483648
+                be pil = 0 - 1
+            be idx = indexOf(lst2, cur)
+            if e[i + 14] != idx and idx >= 0 and idx != pil
+                callp(winU("SendMessageW"), e[i + 5], 334 + (e[i] - 6) * 56, idx, 0)
+                be e[i + 14] = idx
+            else if pil >= 0 and pil < len(lst2) and lst2[pil] != cur
+                poke64(slot, 0, asInt(lst2[pil]))
+                be e[i + 14] = pil
+        be i += 20
+    return 0
+
+func winCekOk(hw int) int
+    if callp(winU("SendMessageW"), hw, 240, 0, 0) % 4294967296 == 1
+        return 1
+    return 0
+
+func winKerja() int
+    be b = winB()
+    be q = asListI(peek64(b, 88))
+    loop len(q) > 0 and peek64(b, 72) == 0
+        be jenis = remove(q, 0)
+        be p1 = remove(q, 0)
+        be p2 = remove(q, 0)
+        be p3 = remove(q, 0)
+        be p4 = remove(q, 0)
+        if jenis == 1 and peek64(b, 32) != 0
+            be e = asListI(peek64(b, 8))
+            be aks = "move"
+            if p4 == 1
+                be aks = "left"
+            else if p4 == 2
+                be aks = "right"
+            else if p4 == 3
+                be aks = "release"
+            winPanggil(peek64(b, 32), peek64(b, 40), p2, p3, asInt(aks), e[p1 + 13])
+        else if jenis == 2 and peek64(b, 16) != 0
+            winPanggil(peek64(b, 16), peek64(b, 24), asInt(winNamaTombol(p1)), 0, 0, 0)
+        else if jenis == 3
+            be e4 = asListI(peek64(b, 8))
+            if e4[p1 + 9] != 0
+                winPanggil(e4[p1 + 9], e4[p1 + 10], 0, 0, 0, 0)
+    be tm = asListI(peek64(b, 80))
+    be now = callp(winK("GetTickCount64"))
+    be t = 0
+    loop t < len(tm) and peek64(b, 72) == 0
+        if now - tm[t + 2] >= tm[t + 1]
+            be tm[t + 2] = now
+            winPanggil(tm[t], 0, 0, 0, 0, 0)
+        be t += 3
+    if peek64(b, 72) == 0
+        winSinkron()
+        winTeksHidup(peek64(b, 0))
+        if peek64(b, 120) != 0
+            winTampil()
+    return 0
+
+func winPump(ms int) int
+    be b = winB()
+    if peek64(b, 192) == 0
+        if ms > 0
+            callp(winK("Sleep"), ms)
+        return 0
+    be akhir = callp(winK("GetTickCount64")) + ms
+    loop true
+        winSedot()
+        winKerja()
+        if peek64(b, 72) != 0
+            break
+        if ms >= 0 and callp(winK("GetTickCount64")) >= akhir
+            break
+        callp(winU("MsgWaitForMultipleObjects"), 0, 0, 0, 5, 1279)
+    return 0
+
+func winTunggu__int(n int) int
+    return winPump(n * 1000)
+
+func winTunggu__double(n double) int
+    return winPump(int(n * 1000))
+
+func winSelesai() int
+    be b = winB()
+    if peek64(b, 192) != 0 and peek64(b, 72) == 0
+        winPump(0 - 1)
+    return 0
+
+func closeWindow_a0() int
+    be b = winB()
+    if peek64(b, 192) != 0 and peek64(b, 72) == 0
+        callp(winU("DestroyWindow"), peek64(b, 0))
+        poke64(b, 72, 1)
+    return 0
+
+func closeWindow_a1(judul string) int
+    return closeWindow_a0()

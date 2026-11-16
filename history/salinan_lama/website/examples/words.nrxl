@@ -1,0 +1,7 @@
+be text = "the quick fox and the lazy dog and the cat"
+be count map int
+for w in split(text)
+    be count[w] += 1
+for w in sort(keys(count))
+    if count[w] > 1
+        print w ": " count[w]

@@ -1,0 +1,10 @@
+ex lock PI = 3
+ex func luasLingkaran(r)
+    return bulatkan(PI * r * r)
+ex type Titik
+    x int
+    y int
+ex be NAMA = "hitung"
+func bulatkan(x)
+    return x
+print "memuat hitung"

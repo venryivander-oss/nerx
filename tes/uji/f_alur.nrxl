@@ -1,0 +1,55 @@
+be x = 7
+if x > 10
+    print "besar"
+else if x > 5
+    print "sedang"
+else
+    print "kecil"
+if x == 1
+    print "satu"
+else if x == 7
+    print "tujuh"
+be i = 0
+loop i < 3
+    print "i=" i
+    be i += 1
+for b in ["apel", "jeruk"]
+    print b
+for h in "abc"
+    print h
+be orang = {"x": 1, "y": 2, "z": 3}
+for k in orang
+    print k " " orang[k]
+for i in range(3)
+    write(i, " ")
+print
+for i in range(2, 5)
+    write(i, ",")
+print
+for i in range(10, 0, -3)
+    write(i, ";")
+print
+for i in range(0, 10, 4)
+    write(i, ";")
+print
+for i in range(10)
+    if i == 2
+        continue
+    if i == 5
+        break
+    print "n" i
+be j = 0
+loop true
+    be j += 1
+    if j == 3
+        continue
+    if j > 5
+        break
+    print "j" j
+for aa in range(3)
+    for bb in range(3)
+        if bb == 1
+            continue
+        if aa == 2
+            break
+        print aa " " bb

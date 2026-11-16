@@ -1,0 +1,28 @@
+func kuadrat(xs list int) list int
+    be r list int
+    for x in xs
+        add(r, x * x)
+    return r
+func jumlah(xs list int) int
+    be s = 0
+    for x in xs
+        be s += x
+    return s
+be kosong list int
+print len(kosong)
+print jumlah(kosong)
+be a list int
+for i in range(1, 11)
+    add(a, i)
+print jumlah(a) " " jumlah(kuadrat(a))
+be a[0] = 100
+print a[0] " " a[9]
+be nama list string
+add(nama, "budi")
+add(nama, "ani")
+add(nama, "cici")
+print join(nama, "-")
+for i in range(len(nama))
+    print i ":" nama[i] ":" len(nama[i])
+print indexOf(nama, "ani") " " indexOf(nama, "zzz")
+print len(slice(nama, 1))

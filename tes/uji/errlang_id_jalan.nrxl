@@ -1,0 +1,16 @@
+errlang = id
+try
+    print 1 / 0
+catch e
+    print e
+try
+    be xs = [1]
+    print xs[5]
+catch e
+    print e
+be m map int
+try
+    print m["a"]
+catch e
+    print e
+throw "boom"

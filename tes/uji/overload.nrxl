@@ -1,0 +1,4 @@
+print contains("halo dunia", "dun")
+print contains("halo", "xyz")
+exit(0)
+print "tidak sampai sini"

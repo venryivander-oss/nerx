@@ -1,0 +1,68 @@
+# contoh_3d.nrxl: gerakkan kotak oranye, kumpulkan bola ungu
+# W A S D = jalan, space = lompat, escape atau tombol X = keluar
+lib nrx_3d.h
+lib nrx_rand.h
+
+open3d("nrxl 3D - kumpulkan bola", 960, 600)
+
+be x = 0.0
+be z = 0.0
+be y = 0.5
+be naik = 0.0
+be skor = 0
+be bolaX = 3.0
+be bolaZ = -3.0
+be waktu = 0.0
+
+loop running3d()
+    be dt = frameTime()
+    be waktu += dt
+
+    # jalan
+    be cepat = 5.0
+    if key3d("w")
+        be z -= cepat * dt
+    if key3d("s")
+        be z += cepat * dt
+    if key3d("a")
+        be x -= cepat * dt
+    if key3d("d")
+        be x += cepat * dt
+    be x = max(-9.5, min(9.5, x))
+    be z = max(-9.5, min(9.5, z))
+
+    # lompat dan jatuh
+    if key3d("space") and y <= 0.5
+        be naik = 6.0
+    be naik -= 15 * dt
+    be y += naik * dt
+    if y < 0.5
+        be y = 0.5
+        be naik = 0.0
+
+    # kena bola: skor naik, bola pindah
+    be dx = x - bolaX
+    be dz = z - bolaZ
+    if dx * dx + dz * dz < 1.2
+        be skor += 1
+        be bolaX = random(-8, 8) * 1.0
+        be bolaZ = random(-8, 8) * 1.0
+
+    # kamera mengikuti dari belakang atas
+    camera3d(x, 7, z + 9, x, 0, z)
+
+    begin3d("skyblue")
+    plane(0, 0, 0, 20, 20, "#6b8e23")
+    grid(20, 1)
+    cube(x, y, z, 1, 1, 1, "orange")
+    cubeWire(x, y, z, 1, 1, 1, "black")
+    sphere(bolaX, 0.6 + 0.3 * abs(waktu % 2 - 1), bolaZ, 0.5, "purple")
+    cube(-5, 1, -5, 1, 2, 1, "gray")
+    cube(5, 1.5, 4, 1, 3, 1, "gray")
+    cube(0, 0.5, -8, 6, 1, 1, "brown")
+    text2d("Skor: " + str(skor), 15, 15, 30, "black")
+    text2d("WASD jalan, space lompat", 15, 55, 20, "darkgray")
+    end3d()
+
+close3d()
+print "Skor akhir: " skor

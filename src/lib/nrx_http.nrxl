@@ -1,0 +1,299 @@
+# nrx_http.nrxl - HTTP/HTTPS lewat winhttp.dll (dimuat saat jalan), ditulis dalam nrxl.
+# Slot tersembunyi: 1 = status permintaan terakhir, 2 = blok permintaan httpStart (0 = tidak ada).
+# Blok httpStart: [0]url [8]isi [16]jenis [24]header [32]hasil [40]status [48]errKind [56]errCode [64]selesai
+#   [72]thread [80]potongan(alamat byte) [88]panjang [96]kapasitas [104]critical section [112]ada isi
+
+# UTF-8 -> UTF-16 berakhir 0 (alamat buffer baru)
+func httpLebar(s string) int
+    be k32 = "kernel32.dll"
+    be f = dllFn(k32, "MultiByteToWideChar")
+    be n = callp(f, 65001, 0, cstr(s), 4294967295, 0, 0)
+    if n <= 0
+        be b0 = alloc(8)
+        return b0
+    be b = alloc(n * 2 + 8)
+    callp(f, 65001, 0, cstr(s), 4294967295, b, n)
+    return b
+
+# teks header "Kunci: nilai\r\n" dari map (nilai teks)
+func httpHeaderMap(m map) string
+    be hasil = ""
+    be ks = keys__map(m)
+    be vs = asListS(peek64(asInt(m), 8))
+    for i in range(len(ks))
+        be hasil = hasil + ks[i] + ": " + vs[i] + "\r\n"
+    return hasil
+
+# satu permintaan. o = blok hasil: [0] status, [8] errKind (1 alamat salah, 2 tidak terhubung), [16] errCode.
+# bg = blok httpStart (0 kalau bukan) untuk potongan httpPartial. Tidak pernah melempar galat (aman di thread).
+func httpMinta(url string, adaIsi bool, isi string, jenis string, extra string, o int, bg int) string
+    be wh = "winhttp.dll"
+    be fCrack = dllFn(wh, "WinHttpCrackUrl")
+    be fOpen = dllFn(wh, "WinHttpOpen")
+    be fTime = dllFn(wh, "WinHttpSetTimeouts")
+    be fConn = dllFn(wh, "WinHttpConnect")
+    be fReq = dllFn(wh, "WinHttpOpenRequest")
+    be fSend = dllFn(wh, "WinHttpSendRequest")
+    be fRecv = dllFn(wh, "WinHttpReceiveResponse")
+    be fQuery = dllFn(wh, "WinHttpQueryHeaders")
+    be fAvail = dllFn(wh, "WinHttpQueryDataAvailable")
+    be fRead = dllFn(wh, "WinHttpReadData")
+    be fClose = dllFn(wh, "WinHttpCloseHandle")
+    be fErr = dllFn("kernel32.dll", "GetLastError")
+    poke64(o, 0, 0)
+    poke64(o, 8, 0)
+    poke64(o, 16, 0)
+    if fOpen == 0 or fCrack == 0
+        poke64(o, 8, 2)
+        return ""
+    be wurl = httpLebar(url)
+    be uc = alloc(128)
+    be host = alloc(600)
+    be path = alloc(4200)
+    be ext = alloc(4200)
+    poke64(uc, 0, 104)
+    poke64(uc, 24, host)
+    poke64(uc, 32, 256)
+    poke64(uc, 72, path)
+    poke64(uc, 80, 2048)
+    poke64(uc, 88, ext)
+    poke64(uc, 96, 2048)
+    be hasil = ""
+    if callp(fCrack, wurl, 0, 0, uc) == 0
+        poke64(o, 8, 1)
+    else
+        be port = peek64(uc, 36) % 65536
+        be skema = peek64(uc, 20) % 4294967296
+        be pl = peek64(uc, 80) % 4294967296
+        be el = peek64(uc, 96) % 4294967296
+        be full = alloc((pl + el) * 2 + 8)
+        for i in range(pl * 2)
+            poke8(full, i, peek8(path, i))
+        for i in range(el * 2)
+            poke8(full, pl * 2 + i, peek8(ext, i))
+        if pl + el == 0
+            poke8(full, 0, 47)
+        be wnama = httpLebar("nrxl")
+        be s = callp(fOpen, wnama, 0, 0, 0, 0)
+        if s != 0
+            callp(fTime, s, 0, 60000, 60000, 300000)
+        be c = 0
+        if s != 0
+            be c = callp(fConn, s, host, port, 0)
+        be r = 0
+        if c != 0
+            be flag = 0
+            if skema == 2
+                be flag = 8388608
+            be metode = "GET"
+            if adaIsi
+                be metode = "POST"
+            be r = callp(fReq, c, httpLebar(metode), full, 0, 0, 0, flag)
+        be ok = r != 0
+        if ok
+            be h8 = ""
+            if adaIsi
+                if jenis == ""
+                    be h8 = "Content-Type: text/plain; charset=utf-8\r\n"
+                else
+                    be h8 = "Content-Type: " + jenis + "\r\n"
+            be h8 = h8 + extra
+            be hdr = 0
+            if h8 != ""
+                be hdr = httpLebar(h8)
+            be blen = 0
+            be bptr = 0
+            if adaIsi
+                be blen = len(isi)
+                be bptr = cstr(isi)
+            be ok = callp(fSend, r, hdr, 4294967295, bptr, blen, blen, 0) != 0
+            if ok
+                be ok = callp(fRecv, r, 0) != 0
+        if not ok
+            poke64(o, 8, 2)
+            poke64(o, 16, callp(fErr) % 4294967296)
+        else
+            be st = alloc(8)
+            be sz = alloc(8)
+            poke64(st, 0, 0)
+            poke64(sz, 0, 4)
+            callp(fQuery, r, 536870931, 0, st, sz, 0)
+            poke64(o, 0, peek64(st, 0) % 4294967296)
+            be av = alloc(8)
+            be got = alloc(8)
+            be buf = alloc(65600)
+            be lagi = true
+            loop lagi
+                poke64(av, 0, 0)
+                if callp(fAvail, r, av) == 0 or peek64(av, 0) % 4294967296 == 0
+                    be lagi = false
+                else
+                    be n = peek64(av, 0) % 4294967296
+                    if n > 65536
+                        be n = 65536
+                    poke64(got, 0, 0)
+                    if callp(fRead, r, buf, n, got) == 0 or peek64(got, 0) % 4294967296 == 0
+                        be lagi = false
+                    else
+                        be g = peek64(got, 0) % 4294967296
+                        be hasil = hasil + fromCn(buf, g)
+                        if bg != 0
+                            httpPotongTambah(bg, buf, g)
+            free(st)
+            free(sz)
+            free(av)
+            free(got)
+            free(buf)
+        if r != 0
+            callp(fClose, r)
+        if c != 0
+            callp(fClose, c)
+        if s != 0
+            callp(fClose, s)
+    free(wurl)
+    free(uc)
+    free(host)
+    free(path)
+    free(ext)
+    return hasil
+
+func httpGalat(fn string, url string, jenis int, kode int) int
+    if jenis == 1
+        _lempar(fn + ": invalid address: " + url + " (example: https://example.com)")
+    _lempar(fn + ": cannot connect to " + url + " (code " + str(kode) + ")")
+    return 0
+
+func httpSelesai(fn string, url string, adaIsi bool, isi string, jenis string, extra string) string
+    be o = alloc(32)
+    be r = httpMinta(url, adaIsi, isi, jenis, extra, o, 0)
+    be st = peek64(o, 0)
+    be kind = peek64(o, 8)
+    be kode = peek64(o, 16)
+    free(o)
+    if kind != 0
+        httpGalat(fn, url, kind, kode)
+    _gset(1, st)
+    return r
+
+func httpStatus() int
+    return _gget(1)
+
+func httpGet_a1(url string) string
+    return httpSelesai("httpGet", url, false, "", "", "")
+
+func httpGet_a2(url string, header map) string
+    return httpSelesai("httpGet", url, false, "", "", httpHeaderMap(header))
+
+func httpPost_a2(url string, isi string) string
+    return httpSelesai("httpPost", url, true, isi, "", "")
+
+func httpPost_a3(url string, isi string, jenis string) string
+    return httpSelesai("httpPost", url, true, isi, jenis, "")
+
+func httpPost_a4(url string, isi string, jenis string, header map) string
+    return httpSelesai("httpPost", url, true, isi, jenis, httpHeaderMap(header))
+
+# ---------------------------------------------------------------- httpStart / httpDone / httpResult / httpPartial
+func httpPotongTambah(bg int, data int, n int) int
+    be cs = peek64(bg, 104)
+    callp(dllFn("kernel32.dll", "EnterCriticalSection"), cs)
+    be len0 = peek64(bg, 88)
+    be cap = peek64(bg, 96)
+    if len0 + n + 1 > cap
+        be cap2 = cap * 2
+        if cap2 < len0 + n + 1
+            be cap2 = len0 + n + 4096
+        be nb = alloc(cap2)
+        be lama = peek64(bg, 80)
+        for i in range(len0)
+            poke8(nb, i, peek8(lama, i))
+        if lama != 0
+            free(lama)
+        poke64(bg, 80, nb)
+        poke64(bg, 96, cap2)
+    be p = peek64(bg, 80)
+    for i in range(n)
+        poke8(p, len0 + i, peek8(data, i))
+    poke64(bg, 88, len0 + n)
+    callp(dllFn("kernel32.dll", "LeaveCriticalSection"), cs)
+    return 0
+
+func httpLatar(bg int) int
+    be o = alloc(32)
+    be r = httpMinta(asString(peek64(bg, 0)), peek64(bg, 112) != 0, asString(peek64(bg, 8)), asString(peek64(bg, 16)), asString(peek64(bg, 24)), o, bg)
+    poke64(bg, 32, asInt(r))
+    poke64(bg, 40, peek64(o, 0))
+    poke64(bg, 48, peek64(o, 8))
+    poke64(bg, 56, peek64(o, 16))
+    free(o)
+    poke64(bg, 64, 1)
+    return 0
+
+func httpMulai(url string, isi string, jenis string, extra string) int
+    if _gget(2) != 0
+        _lempar("httpStart: the previous request has not been fetched yet; wait for httpDone() then httpResult()")
+    be bg = alloc(128)
+    poke64(bg, 0, asInt(url))
+    poke64(bg, 8, asInt(isi))
+    poke64(bg, 16, asInt(jenis))
+    poke64(bg, 24, asInt(extra))
+    poke64(bg, 112, 1)
+    be cs = alloc(64)
+    callp(dllFn("kernel32.dll", "InitializeCriticalSection"), cs)
+    poke64(bg, 104, cs)
+    _gset(2, bg)
+    be th = callp(dllFn("kernel32.dll", "CreateThread"), 0, 0, _callback("httpLatar"), bg, 0, 0)
+    if th == 0
+        _gset(2, 0)
+        _lempar("httpStart: thread cannot be created")
+    poke64(bg, 72, th)
+    return 0
+
+func httpStart_a2(url string, isi string) int
+    return httpMulai(url, isi, "", "")
+
+func httpStart_a3(url string, isi string, jenis string) int
+    return httpMulai(url, isi, jenis, "")
+
+func httpStart_a4(url string, isi string, jenis string, header map) int
+    return httpMulai(url, isi, jenis, httpHeaderMap(header))
+
+func httpDone() bool
+    be bg = _gget(2)
+    if bg == 0
+        return true
+    return peek64(bg, 64) != 0
+
+func httpPartial() string
+    be bg = _gget(2)
+    if bg == 0
+        return ""
+    be cs = peek64(bg, 104)
+    callp(dllFn("kernel32.dll", "EnterCriticalSection"), cs)
+    be n = peek64(bg, 88)
+    be teks = ""
+    if n > 0
+        be teks = fromCn(peek64(bg, 80), n)
+    poke64(bg, 88, 0)
+    callp(dllFn("kernel32.dll", "LeaveCriticalSection"), cs)
+    return teks
+
+func httpResult() string
+    be bg = _gget(2)
+    if bg == 0
+        _lempar("httpResult: no request yet; call httpStart first")
+    if peek64(bg, 64) == 0
+        _lempar("httpResult: the request is not finished; check httpDone() first")
+    callp(dllFn("kernel32.dll", "WaitForSingleObject"), peek64(bg, 72), 4294967295)
+    be r = asString(peek64(bg, 32))
+    be st = peek64(bg, 40)
+    be kind = peek64(bg, 48)
+    be kode = peek64(bg, 56)
+    be url = asString(peek64(bg, 0))
+    callp(dllFn("kernel32.dll", "CloseHandle"), peek64(bg, 72))
+    callp(dllFn("kernel32.dll", "DeleteCriticalSection"), peek64(bg, 104))
+    _gset(2, 0)
+    if kind != 0
+        httpGalat("httpStart", url, kind, kode)
+    _gset(1, st)
+    return r

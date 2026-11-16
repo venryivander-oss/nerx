@@ -1,0 +1,54 @@
+be xs list int
+add(xs, 5)
+try
+    print xs[3]
+catch e
+    print e
+try
+    print xs[-1]
+catch e
+    print e
+try
+    be xs[2] = 1
+catch e
+    print e
+be ys list int
+try
+    print ys[0]
+catch e
+    print e
+try
+    print int("abc")
+catch e
+    print e
+try
+    print int("")
+catch e
+    print e
+try
+    print int("12x")
+catch e
+    print e
+try
+    print int("-7") + int("+3")
+catch e
+    print e
+try
+    print remove(xs, 4)
+catch e
+    print e
+try
+    print takeLast(ys)
+catch e
+    print e
+for s in split("a| 5|5 |+|-|- 5|+5|007|1.5|", "|")
+    try
+        print "[" s "] -> " int(s)
+    catch e
+        print "[" s "] " e
+be m map int
+be m["a"] = 1
+try
+    print m["zz"]
+catch e
+    print e

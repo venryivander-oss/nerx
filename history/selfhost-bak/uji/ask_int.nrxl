@@ -1,0 +1,5 @@
+be a = ask "nama: "
+be b = ask "umur: "
+print a + "!"
+print int(b) + 1
+print int("-42")

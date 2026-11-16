@@ -1,0 +1,13 @@
+lib nrx_window.h
+windowTemplate menu(
+    newCanvas(layar, 10, 10, 200, 100)
+    newImage("uji\kotak.png", 230, 10)
+    newImage("uji\kotak.png", 230, 60, 80, 60)
+)
+newWindow("Gambar", 340, 140, menu)
+clearCanvas(layar, "#ffffff")
+drawImage(layar, "uji\kotak.png", 10, 10)
+drawImage(layar, "uji\kotak.png", 70, 10, 100, 75)
+wait(1.5)
+print "ok"
+closeWindow()

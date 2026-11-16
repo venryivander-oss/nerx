@@ -1,0 +1,26 @@
+lib nrx_json.h
+be j json = fromJson("{\"a\": 5, \"b\": 2.5, \"s\": \"hi\", \"t\": true, \"l\": [1, 2]}")
+print j["a"] + 1
+print j["a"] + j["b"]
+print j["a"] * 2 - 3
+print j["a"] / 2
+print j["a"] % 3
+print j["s"] + " there"
+print "say " + j["s"]
+print j["s"] + j["s"]
+print j["a"] == 5
+print j["a"] != 5
+print j["a"] > 4 j["a"] < 4 j["a"] >= 5 j["a"] <= 4
+print j["b"] > 2
+print j["s"] == "hi"
+print j["s"] < "ho"
+print j["t"] == true
+print 3 + j["a"]
+try
+    print j["s"] - 1
+catch e
+    print e
+try
+    print j["l"] < 1
+catch e
+    print e

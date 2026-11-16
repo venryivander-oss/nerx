@@ -1,0 +1,3 @@
+errlang = id
+be m map int
+print m[1]

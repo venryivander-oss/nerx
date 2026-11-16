@@ -1,0 +1,4 @@
+func f()
+    return 1
+be x = f()
+print x

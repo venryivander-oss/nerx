@@ -1,0 +1,8 @@
+be xs list int
+add(xs, 4)
+add(xs, 5)
+add(xs, 6)
+print takeLast(xs)
+print len(xs)
+print takeLast(xs) + takeLast(xs)
+print len(xs)

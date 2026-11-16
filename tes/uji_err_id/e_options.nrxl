@@ -1,0 +1,4 @@
+errlang = id
+be x = 1
+options x
+    "a" -> print 1

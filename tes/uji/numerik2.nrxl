@@ -1,0 +1,17 @@
+print 7.5 % 2
+print 10 % 4.0
+print -7 % 3
+print round(3.14159, 2)
+print round(-2.675, 1)
+print float("3.5") + 1
+print float("-0.125")
+print float("1e3")
+print float("12")
+try
+    print float("abc")
+catch e
+    print e
+try
+    print 5.0 % 0
+catch e
+    print e

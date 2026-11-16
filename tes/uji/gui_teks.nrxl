@@ -1,0 +1,17 @@
+lib nrx_window.h
+be skor = 0
+be nama = "Ayu"
+templateStyle judul(
+    size: 20
+)
+windowTemplate menu(
+    newText("Skor: " skor, 20, 10, 18)
+    newText("Halo " nama, 20, 50, 18)
+)
+newWindow("Uji", 300, 120, menu)
+wait(0.2)
+be skor = 42
+be nama = "Budi"
+wait(0.3)
+print "selesai " skor
+closeWindow()

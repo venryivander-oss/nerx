@@ -1,0 +1,60 @@
+# hasil build (dibuat ulang dengan gcc, tidak perlu disimpan di git)
+nrxlang.exe
+*.exe
+*.o
+
+# paket extension VS Code (dibuat ulang dengan vscode-nrxl/pack.ps1)
+*.vsix
+
+# file yang dibuat saat contoh dijalankan
+skor.json
+catatan.txt
+budi.json
+
+# file sementara dari editor / Windows
+*.tmp
+*.log
+Thumbs.db
+desktop.ini
+
+CATATAN.md
+TODO.md
+
+# tes otomatis, hanya dipakai saat mengembangkan
+tests/
+run_tests.bat
+build_rc.bat
+
+# hasil build runtime (dibuat ulang oleh build.bat)
+*.a
+dist/include/
+
+# isi dan hasil installer (dibuat ulang oleh installer\buat.bat)
+installer/paket/
+installer/out/
+# gcc ramping untuk installer (WinLibs, sekitar 170 MB; asalnya di installer/gcc/licenses/README.txt)
+installer/gcc/
+
+# raylib resmi untuk lib nrx_3d.h (lihat lib/raylib/ASAL.txt)
+!lib/raylib/libraylib.a
+
+
+.opencodeignore
+# prompt untuk asisten lain (lokal)
+prompt_deepseek.md
+
+# kunci API untuk agen/kantor.nrxl
+agen/
+anti-slop
+.claude
+DESIGN.md
+# file sementara agent.nrxl dan chatbot.nrxl
+.nrx_cmd.sh
+agent_log.json
+chat.json
+
+# berisi API key, jangan dipublikasikan
+opencode.json
+
+# pengaturan chat_gui (bisa berisi API key)
+chat_gui.json

@@ -1,0 +1,46 @@
+{
+  "name": "nrxl",
+  "displayName": "Nerxelity (nrxl)",
+  "description": "Warna sintaks, cuplikan, dan pengaturan editor untuk bahasa Nerxelity (.nrxl)",
+  "version": "0.1.0",
+  "publisher": "nrxl-local",
+  "engines": {
+    "vscode": "^1.64.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nrxl",
+        "aliases": [
+          "Nerxelity",
+          "nrxl"
+        ],
+        "extensions": [
+          ".nrxl"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/nrxl-n-light.svg",
+          "dark": "./icons/nrxl-n-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nrxl",
+        "scopeName": "source.nrxl",
+        "path": "./syntaxes/nrxl.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "nrxl",
+        "path": "./snippets/nrxl.json"
+      }
+    ]
+  }
+}

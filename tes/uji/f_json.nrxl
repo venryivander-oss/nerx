@@ -1,0 +1,34 @@
+lib nrx_json.h
+be txt = "{\"nama\": \"Bu\u00e9\", \"umur\": 30, \"tags\": [\"a\", \"b\"], \"nest\": {\"x\": 1.5, \"y\": null, \"z\": [1, [2, 3]]}, \"ok\": false}"
+be j json = fromJson(txt)
+print j
+print j["nama"]
+print j["nest"]["x"]
+print j["nest"]["z"][1][0]
+print len(j["tags"])
+print typeOf(j)
+print toJson(j)
+print toJson(j, true)
+be j["umur"] = 31
+be j["baru"] = "ya"
+print j["umur"] + 1
+print "baru" in j
+print "tidak" in j
+for t in j["tags"]
+    print t
+be l = [1, 2, 3]
+print toJson(l)
+be m = {"k": 1, "v": 2}
+print toJson(m)
+print toJson("a\"b\\c\n")
+print toJson(2.5)
+print toJson(true)
+try
+    be bad json = fromJson("{oops")
+    print bad
+catch e
+    print e
+try
+    print j["hilang"]
+catch e
+    print e

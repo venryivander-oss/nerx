@@ -1,0 +1,2 @@
+be n int = ask "x"
+be n = "a"

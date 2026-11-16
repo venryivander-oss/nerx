@@ -1,0 +1,7 @@
+lib nrx_json.h
+for s in ["", "[1,", "{\"a\" 1}", "[1 2]", "tru", "\"abc", "{\"a\":}", "[1,]", "12abc", "{\"a\":1} x", "nul", "-", "1e5", "[1.5e-2, -3, 0]", "\"\\u0041\\n\""]
+    try
+        be v json = fromJson(s)
+        print "ok" toJson(v)
+    catch e
+        print e

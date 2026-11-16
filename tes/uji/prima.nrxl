@@ -1,0 +1,19 @@
+be tabel list int
+for i in range(201)
+    add(tabel, 1)
+be tabel[0] = 0
+be tabel[1] = 0
+for i in range(2, 201)
+    if tabel[i] == 1
+        be j = i * i
+        loop j <= 200
+            be tabel[j] = 0
+            be j += i
+be jumlah = 0
+be daftar = ""
+for i in range(201)
+    if tabel[i] == 1
+        be jumlah += 1
+        be daftar = daftar + str(i) + " "
+print daftar
+print "jumlah " jumlah

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16171b">
+<title>Nerxelity AI</title>
+<style>
+:root{
+  --bg:#16171b; --header:#1b1c21; --line:#2a2b33; --user:#2b3558; --teks:#e9eaf0; --redup:#8b8e9b;
+  --aksen:#6b8cff; --aksen2:#9b73ff; --kode-bg:#101114; --kode-head:#1e1f26; --chip:#22232a;
+  --input:#25262d; --mati:#3a3c47; --kw:#c792ea; --komen:#6f7a8c;
+}
+:root[data-tema="terang"]{
+  --bg:#f6f7fa; --header:#ffffff; --line:#e2e4ec; --user:#dfe7ff; --teks:#1d1e24; --redup:#6b6e7b;
+  --aksen:#4f6df5; --aksen2:#8a5cf5; --kode-bg:#eef0f6; --kode-head:#e0e3ee; --chip:#ffffff;
+  --input:#ffffff; --mati:#c9ccd8; --kw:#9333ea; --komen:#7b8394;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--teks);font:16px/1.6 system-ui,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;height:100dvh}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--header);border-bottom:1px solid var(--line);padding-top:max(10px,env(safe-area-inset-top))}
+.logo{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--aksen),var(--aksen2));color:#fff;display:grid;place-items:center;font-weight:600;flex:none}
+.judul{line-height:1.2;min-width:0;flex:1}
+.judul b{font-weight:600;display:block}
+.judul small{color:var(--redup);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;gap:6px;color:var(--redup);font-size:13px}
+.status i{width:9px;height:9px;border-radius:50%;background:#3ecf8e;display:block}
+.status.sibuk i{background:#f5b942;animation:kedip 1s infinite}
+@keyframes kedip{50%{opacity:.35}}
+.tb{border:1px solid var(--line);background:transparent;color:var(--teks);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.tb:hover{background:var(--chip)}
+main{flex:1;overflow-y:auto;scroll-behavior:smooth}
+#isi{max-width:820px;margin:0 auto;padding:18px 16px 24px;display:flex;flex-direction:column;gap:18px}
+.msg{display:flex;gap:12px;max-width:100%}
+.msg.user{justify-content:flex-end}
+.msg.user .teks{background:var(--user);border-radius:18px;padding:10px 16px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.ai .logo{width:28px;height:28px;font-size:14px;margin-top:2px}
+.msg.ai .teks{flex:1;min-width:0;overflow-wrap:anywhere}
+.teks p{margin:0 0 .7em}.teks p:last-child{margin-bottom:0}
+.teks ul{margin:0 0 .7em 1.2em;padding:0}.teks li::marker{color:var(--aksen)}
+.teks h3,.teks h4{margin:.8em 0 .4em;line-height:1.3}
+.teks code.i{background:var(--kode-bg);padding:1px 6px;border-radius:6px;font:.88em ui-monospace,Consolas,monospace}
+.kode{background:var(--kode-bg);border-radius:12px;margin:.6em 0;overflow:hidden}
+.kode .kh{display:flex;justify-content:space-between;align-items:center;background:var(--kode-head);padding:4px 12px;font-size:12px;color:var(--redup)}
+.kode button{border:0;background:none;color:var(--redup);font:inherit;cursor:pointer}
+.kode button:hover{color:var(--teks)}
+.kode pre{padding:12px 14px;overflow-x:auto;font:14px/1.55 ui-monospace,Consolas,monospace;color:var(--teks)}
+.kode .k{color:var(--kw)}.kode .c{color:var(--komen)}
+details.pikir{border-left:3px solid var(--mati);padding-left:12px;margin-bottom:.7em;color:var(--redup);font-size:14.5px}
+details.pikir summary{cursor:pointer;user-select:none}
+details.pikir div{margin-top:.4em;white-space:pre-wrap}
+.titik span{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--redup);margin:10px 4px 0 0;animation:t 1s infinite}
+.titik span:nth-child(2){animation-delay:.15s}.titik span:nth-child(3){animation-delay:.3s}
+@keyframes t{50%{background:var(--aksen);transform:translateY(-3px)}}
+.sambutan{margin:8vh auto 0;text-align:center}
+.sambutan .logo{width:64px;height:64px;font-size:30px;margin:0 auto 16px}
+.sambutan h1{font-size:clamp(22px,5vw,30px);font-weight:600;margin-bottom:6px}
+.sambutan p{color:var(--redup);margin-bottom:22px}
+.chips{display:flex;flex-direction:column;gap:10px;align-items:center}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--teks);border-radius:999px;padding:11px 22px;font:inherit;font-size:15px;cursor:pointer;max-width:100%}
+.chip:hover{border-color:var(--aksen)}
+footer{padding:10px 16px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
+.kotak{max-width:820px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:var(--input);border:1px solid var(--line);border-radius:26px;padding:6px 6px 6px 18px}
+textarea{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(--teks);font:inherit;max-height:30vh;padding:8px 0;line-height:1.45}
+#kirim{width:42px;height:42px;border-radius:50%;border:0;background:var(--mati);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none;transition:background .15s}
+#kirim.aktif{background:var(--aksen)}
+#kirim.stop{background:#e5484d}
+#kirim svg{width:20px;height:20px}
+.cat{max-width:820px;margin:6px auto 0;text-align:center;color:var(--redup);font-size:12px}
+dialog{border:1px solid var(--line);background:var(--header);color:var(--teks);border-radius:16px;padding:20px;width:min(440px,92vw)}
+dialog::backdrop{background:#0008}
+dialog h2{font-size:18px;margin-bottom:12px}
+dialog label{display:block;font-size:13px;color:var(--redup);margin:10px 0 4px}
+dialog input,dialog select{width:100%;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input);color:var(--teks);font:inherit}
+dialog .aksi{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">N</div>
+  <div class="judul"><b>Nerxelity AI</b><small id="modelInfo"></small></div>
+  <div class="status" id="status"><i></i><span>siap</span></div>
+  <button class="tb" id="bPikir" title="Tampilkan pikiran model">Pikiran: tutup</button>
+  <button class="tb" id="bBaru">+ Baru</button>
+  <button class="tb" id="bSet" aria-label="Pengaturan">&#9881;</button>
+</header>
+<main id="main"><div id="isi"></div></main>
+<footer>
+  <div class="kotak">
+    <textarea id="in" rows="1" placeholder="Tulis pesan..." autocomplete="off"></textarea>
+    <button id="kirim" aria-label="Kirim"></button>
+  </div>
+  <div class="cat">Enter = kirim, Shift+Enter = baris baru. AI bisa keliru, periksa kembali jawabannya.</div>
+</footer>
+
+<dialog id="dlg">
+  <h2>Pengaturan</h2>
+  <label>Alamat server (kosong = server yang sama dengan halaman ini)</label>
+  <input id="sAlamat" placeholder="http://localhost:8080">
+  <label>Nama model</label>
+  <input id="sModel">
+  <label>API key (kalau server memakai --api-key)</label>
+  <input id="sKunci" type="password" autocomplete="off">
+  <label>Tema</label>
+  <select id="sTema"><option value="gelap">Gelap</option><option value="terang">Terang</option></select>
+  <div class="aksi"><button class="tb" id="sBatal">Batal</button><button class="tb" id="sSimpan" style="background:var(--aksen);color:#fff;border-color:transparent">Simpan</button></div>
+</dialog>
+
+<script>
+"use strict";
+const SISTEM = "Kamu asisten AI yang ramah, jelas, dan teliti. Jawab dalam bahasa Indonesia kecuali diminta lain. Tulis kode di dalam blok kode (tiga tanda kutip terbalik) dengan nama bahasanya. " +
+  "WAJIB: SEBELUM menjawab, selalu berpikir dulu di dalam tag <pikir> ... </pikir>: pahami permintaan, sebut asumsi, rencanakan langkah-langkahnya, pertimbangkan kasus tepi dan kemungkinan bug, dan untuk kode periksa ulang logikanya (telusuri satu contoh input) sebelum menulisnya. Tutup dengan </pikir>, lalu tulis jawaban final di luar tag. Jangan menulis kode final di dalam <pikir>.";
+const BATAS_API = 24000;
+const CONTOH = ["Jelaskan cara kerja bahasa pemrograman nrxl", "Tulis program untuk menghitung faktorial", "Bantu aku mencari bug di kode C"];
+const KW = new Set("func if else loop for return be print lib type im ex lock try catch throw options option delete int float double bool string def class import while const let var void struct include function".split(" "));
+
+const $ = id => document.getElementById(id);
+const simpan = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const baca = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } };
+
+let cfg = { alamat: baca("alamat", ""), model: baca("model", "qwen3-coder-30b-a3b-instruct"), kunci: baca("kunci", ""), tema: baca("tema", "gelap") };
+let tampilPikir = baca("pikir", "0") === "1";
+let pesan = [];            // {role, teks}
+let riwayat = [{ role: "system", content: SISTEM }];
+let menunggu = false, ctrl = null, tempel = true;
+
+function terapkan() {
+  document.documentElement.dataset.tema = cfg.tema;
+  $("modelInfo").textContent = cfg.model;
+  $("bPikir").textContent = "Pikiran: " + (tampilPikir ? "buka" : "tutup");
+}
+
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function pisah(t) {
+  const a = t.indexOf("<pikir>");
+  if (a < 0) return ["", t];
+  const b = t.indexOf("</pikir>");
+  if (b < 0) return [t.slice(a + 7).trim(), ""];
+  return [t.slice(a + 7, b).trim(), t.slice(b + 8).trim()];
+}
+
+function inline(s) {
+  return esc(s).replace(/`([^`]+)`/g, '<code class="i">$1</code>').replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+}
+
+function warnaiKode(baris) {
+  const m = baris.match(/^(\s*)(.*)$/);
+  const isi = m[2];
+  if (/^(#|\/\/)/.test(isi)) return esc(m[1]) + '<span class="c">' + esc(isi) + "</span>";
+  const k = isi.search(/[\s(]/);
+  const kata = k < 0 ? isi : isi.slice(0, k);
+  if (KW.has(kata)) return esc(m[1]) + '<span class="k">' + esc(kata) + "</span>" + esc(isi.slice(kata.length));
+  return esc(baris);
+}
+
+function markdown(t) {
+  const out = []; let para = [], daftar = [];
+  const tutupPara = () => { if (para.length) { out.push("<p>" + para.join("<br>") + "</p>"); para = []; } };
+  const tutupDaftar = () => { if (daftar.length) { out.push("<ul>" + daftar.map(x => "<li>" + x + "</li>").join("") + "</ul>"); daftar = []; } };
+  const baris = t.replace(/\r/g, "").split("\n");
+  for (let i = 0; i < baris.length; i++) {
+    const b = baris[i];
+    if (b.trim().startsWith("```")) {
+      tutupPara(); tutupDaftar();
+      const bhs = b.trim().slice(3).trim() || "kode";
+      const kode = [];
+      for (i++; i < baris.length && !baris[i].trim().startsWith("```"); i++) kode.push(baris[i]);
+      out.push('<div class="kode"><div class="kh"><span>' + esc(bhs) + '</span><button data-salin>Salin</button></div><pre>' +
+        kode.map(warnaiKode).join("\n") + "</pre></div>");
+      continue;
+    }
+    if (b.trim() === "") { tutupPara(); tutupDaftar(); continue; }
+    let m;
+    if ((m = b.match(/^#{1,3}\s+(.*)$/))) { tutupPara(); tutupDaftar(); out.push("<h3>" + inline(m[1]) + "</h3>"); continue; }
+    if ((m = b.match(/^\s*[-*]\s+(.*)$/))) { tutupPara(); daftar.push(inline(m[1])); continue; }
+    tutupDaftar(); para.push(inline(b));
+  }
+  tutupPara(); tutupDaftar();
+  return out.join("");
+}
+
+function kontenAI(t, sedang) {
+  const [pk, jw] = pisah(t);
+  let h = "";
+  if (tampilPikir && pk) h += '<details class="pikir" open><summary>Pikiran</summary><div>' + esc(pk) + "</div></details>";
+  if (jw) h += markdown(jw);
+  else if (sedang && (!tampilPikir || !pk)) h += '<div class="titik"><span></span><span></span><span></span></div>';
+  return h;
+}
+
+function gambarSemua() {
+  const isi = $("isi");
+  if (!pesan.length) {
+    isi.innerHTML = '<div class="sambutan"><div class="logo">N</div><h1>Apa yang bisa kubantu hari ini?</h1><p>Tulis pesan di bawah, atau pilih salah satu contoh.</p><div class="chips">' +
+      CONTOH.map((c, i) => '<button class="chip" data-chip="' + i + '">' + esc(c) + "</button>").join("") + "</div></div>";
+    return;
+  }
+  isi.innerHTML = pesan.map((p, i) => p.role === "user"
+    ? '<div class="msg user"><div class="teks">' + esc(p.teks) + "</div></div>"
+    : '<div class="msg ai"><div class="logo">N</div><div class="teks" id="m' + i + '">' + kontenAI(p.teks, menunggu && i === pesan.length - 1) + "</div></div>").join("");
+  if (tempel) $("main").scrollTop = $("main").scrollHeight;
+}
+
+function perbaruiTerakhir() {
+  const i = pesan.length - 1, el = $("m" + i);
+  if (!el) return gambarSemua();
+  el.innerHTML = kontenAI(pesan[i].teks, menunggu);
+  if (tempel) $("main").scrollTop = $("main").scrollHeight;
+}
+
+function setSibuk(s) {
+  menunggu = s;
+  const st = $("status"); st.className = "status" + (s ? " sibuk" : "");
+  st.lastChild.textContent = s ? "menjawab" : "siap";
+  ikon();
+}
+
+function ikon() {
+  const b = $("kirim");
+  const ada = $("in").value.trim() !== "";
+  b.className = menunggu ? "stop" : (ada ? "aktif" : "");
+  b.innerHTML = menunggu
+    ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+}
+
+function rapikanAPI() {
+  const ukur = () => riwayat.reduce((a, m) => a + m.content.length, 0);
+  while (ukur() > BATAS_API && riwayat.length > 3) riwayat.splice(1, 1);
+  while (riwayat.length > 2 && riwayat[1].role !== "user") riwayat.splice(1, 1);
+}
+
+async function kirim(teksParam) {
+  if (menunggu) return;
+  const t = (teksParam ?? $("in").value).trim();
+  if (!t) return;
+  $("in").value = ""; ukuranInput();
+  pesan.push({ role: "user", teks: t }, { role: "ai", teks: "" });
+  riwayat.push({ role: "user", content: t });
+  rapikanAPI();
+  tempel = true; setSibuk(true); gambarSemua();
+
+  const base = (cfg.alamat || "").replace(/\/+$/, "");
+  const h = { "Content-Type": "application/json" };
+  if (cfg.kunci) h.Authorization = "Bearer " + cfg.kunci;
+  ctrl = new AbortController();
+  let jawab = "", galat = "";
+  try {
+    const r = await fetch(base + "/v1/chat/completions", {
+      method: "POST", headers: h, signal: ctrl.signal,
+      body: JSON.stringify({ model: cfg.model, messages: riwayat, temperature: 0.4, stream: true })
+    });
+    if (!r.ok) throw new Error("server membalas status " + r.status + ": " + (await r.text()).slice(0, 200));
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const bagian = buf.split("\n"); buf = bagian.pop();
+      for (const raw of bagian) {
+        const b = raw.trim();
+        if (!b.startsWith("data:")) continue;
+        const isi = b.slice(5).trim();
+        if (!isi || isi === "[DONE]") continue;
+        try {
+          const d = JSON.parse(isi).choices?.[0]?.delta;
+          if (d && d.content) jawab += d.content;
+        } catch (e) {}
+      }
+      pesan[pesan.length - 1].teks = jawab; perbaruiTerakhir();
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") galat = String(e.message || e);
+  }
+  const idx = pesan.length - 1;
+  if (galat) {
+    pesan[idx].teks = "[Gagal] " + galat + "\n\nPeriksa alamat server dan API key di pengaturan.";
+    riwayat.pop();
+  } else {
+    let final = pisah(jawab)[1] || jawab.replace(/<\/?pikir>/g, "").trim();
+    if (!final) { pesan[idx].teks = "(jawaban kosong)"; final = "(kosong)"; }
+    riwayat.push({ role: "assistant", content: final });
+  }
+  ctrl = null; setSibuk(false); gambarSemua();
+}
+
+function baru() {
+  if (ctrl) ctrl.abort();
+  pesan = []; riwayat = [{ role: "system", content: SISTEM }];
+  menunggu = false; setSibuk(false); tempel = true; gambarSemua();
+}
+
+function ukuranInput() { const t = $("in"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, window.innerHeight * 0.3) + "px"; }
+
+$("in").addEventListener("input", () => { ukuranInput(); ikon(); });
+$("in").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); kirim(); } });
+$("kirim").addEventListener("click", () => { if (menunggu && ctrl) ctrl.abort(); else kirim(); });
+$("bBaru").addEventListener("click", baru);
+$("bPikir").addEventListener("click", () => { tampilPikir = !tampilPikir; simpan("pikir", tampilPikir ? "1" : "0"); terapkan(); gambarSemua(); });
+$("main").addEventListener("scroll", () => { const m = $("main"); tempel = m.scrollHeight - m.scrollTop - m.clientHeight < 60; });
+$("isi").addEventListener("click", e => {
+  const c = e.target.closest("[data-chip]"); if (c) return kirim(CONTOH[+c.dataset.chip]);
+  const s = e.target.closest("[data-salin]");
+  if (s) { navigator.clipboard?.writeText(s.closest(".kode").querySelector("pre").innerText); s.textContent = "Tersalin"; setTimeout(() => s.textContent = "Salin", 1200); }
+});
+$("bSet").addEventListener("click", () => { $("sAlamat").value = cfg.alamat; $("sModel").value = cfg.model; $("sKunci").value = cfg.kunci; $("sTema").value = cfg.tema; $("dlg").showModal(); });
+$("sBatal").addEventListener("click", () => $("dlg").close());
+$("sSimpan").addEventListener("click", () => {
+  cfg = { alamat: $("sAlamat").value.trim(), model: $("sModel").value.trim() || cfg.model, kunci: $("sKunci").value.trim(), tema: $("sTema").value };
+  for (const k in cfg) simpan(k, cfg[k]);
+  terapkan(); $("dlg").close();
+});
+
+terapkan(); ikon(); gambarSemua();
+</script>
+</body>
+</html>

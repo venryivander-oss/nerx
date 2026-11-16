@@ -1,0 +1,26 @@
+type Player
+    name string
+    hp int = 100
+    skor double = 1.5
+
+    func hit(n int)
+        be own.hp -= n
+
+    func info() string
+        return own.name " hp=" own.hp " skor=" own.skor
+
+    func sehat() bool
+        return own.hp > 0
+
+    func tambah(a int, b int) int
+        return a + b + own.hp
+
+be p = Player("Budi")
+p.hit(30)
+print p.info()
+print p.sehat()
+print p.tambah(1, 2)
+be q = Player("Ani", 5, 2.0)
+q.hit(10)
+print q.info()
+print typeOf(p)

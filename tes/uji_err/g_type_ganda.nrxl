@@ -1,0 +1,4 @@
+type A
+    x int
+type A
+    y int
