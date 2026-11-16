@@ -67,6 +67,13 @@ The full test suite (output comparison against the previous implementation in
 `installer\buat.bat` (requires Inno Setup 6). Earlier versions of the project
 are kept in [history\](history/README.md).
 
+## How it is made
+
+Designed and directed by Nerxelity; implemented with AI assistance (Claude).
+Every change is checked by the test suite in `tes/` (run `tes\semua.ps1`),
+which compares the output of 84 programs and 105 error cases, and checks that
+the compiler reproduces itself byte for byte.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The earlier implementation in `history\` uses
