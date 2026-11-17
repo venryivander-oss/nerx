@@ -46,6 +46,7 @@
 <li class="sub"><a href="#lib-nrx-rand-random-numbers">lib nrx_rand</a></li>
 <li class="sub"><a href="#lib-nrx-crudfile-files">lib nrx_crudfile</a></li>
 <li class="sub"><a href="#sh-run-shell-commands-built-in-no-lib-needed">sh</a></li>
+<li class="sub"><a href="#lib-nrx-db-sqlite-database-uses-winsqlite3-dll-that-comes-with-windows">lib nrx_db</a></li>
 <li class="sub"><a href="#lib-nrx-os-working-folder-folders-and-running-commands">lib nrx_os</a></li>
 <li class="sub"><a href="#lib-nrx-keyboard-keyboard-in-the-console">lib nrx_keyboard</a></li>
 <li class="sub"><a href="#lib-nrx-console-console-display">lib nrx_console</a></li>
@@ -544,6 +545,38 @@ shText(command)           run it and return its output as text (errors included)
         print &quot;not a git repository&quot;
 sh runs anything cmd can run, so never build the command from text you do not
 trust (user input, downloaded files). Inside sh, use .\nerx.exe if nerx is not on PATH.</pre>
+<h3 id="lib-nrx-db-sqlite-database-uses-winsqlite3-dll-that-comes-with-windows">lib nrx_db  -  SQLite database (uses winsqlite3.dll that comes with Windows)</h3>
+<pre class="ref">be db = Db()                      make a database handle (nothing is opened yet)
+db.open(path)                     open or create the .db file
+db.close()                        close it
+db.exec(sql)                      CREATE / INSERT / UPDATE / DELETE; returns how
+                                  many rows changed
+db.execWith(sql, values)          same, the values (a list of text) fill the ?
+db.query(sql)                     SELECT; returns rows to read with next()
+db.queryWith(sql, values)         same, with ? values
+db.value(sql)                     the first value of the first row, as text
+db.lastId()                       row number of the last INSERT
+db.error()                        the last SQL error message</pre>
+<pre class="ref">Reading rows (the result of query):
+r.next()                          go to the next row; false when there are no more
+r.text(i)  r.int(i)  r.float(i)   column i (the first is 0) as text / int / decimal
+r.isNull(i)                       true if the column is NULL
+r.count()  r.name(i)              number of columns, name of column i
+r.close()                         stop reading early (not needed after the last row)</pre>
+<pre class="ref">The SQL text is normal SQL, sent as it is. An SQL error (no such table, wrong
+syntax) is thrown, so you can catch it with try / catch.
+Always put values in ? and use execWith / queryWith. Never paste user text into
+the SQL string, that allows SQL injection.</pre>
+<pre class="ref">Example:
+    lib nrx_db
+    be db = Db()
+    db.open(&quot;data.db&quot;)
+    db.exec(&quot;CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)&quot;)
+    db.execWith(&quot;INSERT INTO orang VALUES (?, ?)&quot;, [&quot;Budi&quot;, &quot;20&quot;])
+    be r = db.query(&quot;SELECT nama, umur FROM orang&quot;)
+    loop r.next()
+        print r.text(0) &quot; is &quot; r.int(1)
+    db.close()</pre>
 <h3 id="lib-nrx-os-working-folder-folders-and-running-commands">lib nrx_os  -  working folder, folders and running commands</h3>
 <pre class="ref">cwd()                     the current working folder
 cd(path)                  change the working folder; false if it does not exist
@@ -702,7 +735,7 @@ nerx game.nrx out\game.exe             # choose the .exe name
 nerx                                 # no arguments: it asks for the file and the .exe
 nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
 nerx run game.nrx                      # compile to a temporary .exe, run it, delete it</pre>
-<ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
+<ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, db, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
 <p>Differences from the old interpreter that are not matched yet:</p>
 <ul><li>Integers that pass the 64-bit limit wrap around (the old interpreter turns them into decimals).</li><li>min(2.5, 1) returns a decimal (old interpreter: the integer 1).</li><li>Type names are not separated per file (ordinary functions and variables already are).</li></ul>
 <h3 id="nrxc-intrinsics-for-writing-libraries-in-nerx">nrxc intrinsics  -  for writing libraries in nerx</h3>

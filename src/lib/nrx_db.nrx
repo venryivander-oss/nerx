@@ -1,0 +1,127 @@
+# nrx_db.nrx - database SQLite lewat winsqlite3.dll (sudah ada di Windows 10/11).
+# Pakai:  lib nrx_db
+#   be db = Db()
+#   db.open("data.db")
+#   db.exec("CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)")
+#   db.execWith("INSERT INTO orang VALUES (?, ?)", ["Budi", "20"])
+#   be r = db.query("SELECT nama, umur FROM orang")
+#   loop r.next()
+#       print r.text(0) " " r.int(1)
+#   db.close()
+# Galat SQL (tabel tidak ada, sintaks salah) dilempar sebagai galat yang bisa di-try/catch.
+
+func db_fn(nama string) int
+    return dllFn("winsqlite3.dll", nama)
+
+type Rows
+    stmt int
+    kolom int
+
+    # maju ke baris berikutnya; false kalau sudah habis (hasil otomatis ditutup)
+    func next() bool
+        if own.stmt == 0
+            return false
+        if callp(db_fn("sqlite3_step"), own.stmt) == 100
+            return true
+        callp(db_fn("sqlite3_finalize"), own.stmt)
+        be own.stmt = 0
+        return false
+
+    func text(i int) string
+        if own.stmt == 0
+            return ""
+        return fromC(callp(db_fn("sqlite3_column_text"), own.stmt, i))
+
+    func int(i int) int
+        return int(own.text(i))
+
+    func float(i int) double
+        return float(own.text(i))
+
+    func isNull(i int) bool
+        return callp(db_fn("sqlite3_column_type"), own.stmt, i) == 5
+
+    func count() int
+        return own.kolom
+
+    func name(i int) string
+        return fromC(callp(db_fn("sqlite3_column_name"), own.stmt, i))
+
+    func close()
+        if own.stmt != 0
+            callp(db_fn("sqlite3_finalize"), own.stmt)
+            be own.stmt = 0
+
+type Db
+    h int
+
+    init
+        be own.h = 0
+
+    func open(path string)
+        be p = alloc(8)
+        poke64(p, 0, 0)
+        be rc = callp(db_fn("sqlite3_open"), cstr(path), p)
+        be own.h = peek64(p, 0)
+        free(p)
+        if rc != 0
+            throw "db.open: cannot open " + path
+
+    func close()
+        if own.h != 0
+            callp(db_fn("sqlite3_close"), own.h)
+            be own.h = 0
+
+    func error() string
+        return fromC(callp(db_fn("sqlite3_errmsg"), own.h))
+
+    # siapkan satu perintah dan isi parameter ? dari list teks; stmt 0 kalau gagal
+    func siap(sql string, vals list string) int
+        if own.h == 0
+            throw "db: open the database first (db.open)"
+        be p = alloc(8)
+        poke64(p, 0, 0)
+        be rc = callp(db_fn("sqlite3_prepare_v2"), own.h, cstr(sql), 0 - 1, p, 0)
+        be st = peek64(p, 0)
+        free(p)
+        if rc != 0
+            throw "db: " + own.error()
+        for k in range(len(vals))
+            callp(db_fn("sqlite3_bind_text"), st, k + 1, cstr(vals[k]), 0 - 1, 0 - 1)
+        return st
+
+    # perintah yang mengubah data (CREATE, INSERT, UPDATE, DELETE); hasilnya jumlah baris yang berubah
+    func exec(sql string) int
+        be kosong list string
+        return own.execWith(sql, kosong)
+
+    # sama, dengan nilai untuk tanda ? (daftar teks; SQLite mengubahnya sesuai tipe kolom)
+    func execWith(sql string, vals list string) int
+        be st = own.siap(sql, vals)
+        be rc = callp(db_fn("sqlite3_step"), st)
+        callp(db_fn("sqlite3_finalize"), st)
+        if rc != 100 and rc != 101
+            throw "db: " + own.error()
+        return callp(db_fn("sqlite3_changes"), own.h)
+
+    # membaca data (SELECT); hasilnya Rows yang dibaca dengan r.next()
+    func query(sql string) Rows
+        be kosong list string
+        return own.queryWith(sql, kosong)
+
+    func queryWith(sql string, vals list string) Rows
+        be st = own.siap(sql, vals)
+        return Rows(st, callp(db_fn("sqlite3_column_count"), st))
+
+    # nilai pertama dari baris pertama, sebagai teks ("" kalau tidak ada): db.value("SELECT COUNT(*) FROM orang")
+    func value(sql string) string
+        be r = own.query(sql)
+        be hasil = ""
+        if r.next()
+            be hasil = r.text(0)
+        r.close()
+        return hasil
+
+    # nomor baris terakhir yang di-INSERT
+    func lastId() int
+        return callp(db_fn("sqlite3_last_insert_rowid"), own.h)

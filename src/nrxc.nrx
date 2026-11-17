@@ -473,7 +473,7 @@ func tabelPesanId() list string
     add(r, "110|option harus berada di dalam blok options|option must be inside an options block")
     add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window|this command needs the window library, add at the top: lib nrx_window")
     add(r, "113|perintah tidak dikenal: %s|unknown command: %s")
-    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)")
+    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)")
     add(r, "118|fungsi %s sudah ada (di %s:%d)|function %s already exists (at %s:%d)")
     add(r, "119|fungsi maksimal punya 8 parameter|a function can have at most 8 parameters")
     add(r, "126|nama %s sudah dipakai fungsi|name %s is already used by a function")
@@ -3504,7 +3504,7 @@ func muatLibDari(nama string)
             if not fileExists(jalurRt("lib\\" + nmLib))
                 be berkNama = nama
                 be noBaris = nbL
-                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)")
+                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)")
             if indexOf(libMuat, nmLib) < 0 and fileExists(jalurRt("lib\\" + nmLib))
                 add(libMuat, nmLib)
                 bacaSumber("lib\\" + nmLib)

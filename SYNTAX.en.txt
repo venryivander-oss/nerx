@@ -822,6 +822,44 @@ sh  -  run shell commands (built in, no lib needed)
   sh runs anything cmd can run, so never build the command from text you do not
   trust (user input, downloaded files). Inside sh, use .\nerx.exe if nerx is not on PATH.
 ------------------------------------------------------------------------------
+lib nrx_db  -  SQLite database (uses winsqlite3.dll that comes with Windows)
+------------------------------------------------------------------------------
+
+  be db = Db()                      make a database handle (nothing is opened yet)
+  db.open(path)                     open or create the .db file
+  db.close()                        close it
+  db.exec(sql)                      CREATE / INSERT / UPDATE / DELETE; returns how
+                                    many rows changed
+  db.execWith(sql, values)          same, the values (a list of text) fill the ?
+  db.query(sql)                     SELECT; returns rows to read with next()
+  db.queryWith(sql, values)         same, with ? values
+  db.value(sql)                     the first value of the first row, as text
+  db.lastId()                       row number of the last INSERT
+  db.error()                        the last SQL error message
+
+  Reading rows (the result of query):
+  r.next()                          go to the next row; false when there are no more
+  r.text(i)  r.int(i)  r.float(i)   column i (the first is 0) as text / int / decimal
+  r.isNull(i)                       true if the column is NULL
+  r.count()  r.name(i)              number of columns, name of column i
+  r.close()                         stop reading early (not needed after the last row)
+
+  The SQL text is normal SQL, sent as it is. An SQL error (no such table, wrong
+  syntax) is thrown, so you can catch it with try / catch.
+  Always put values in ? and use execWith / queryWith. Never paste user text into
+  the SQL string, that allows SQL injection.
+
+  Example:
+      lib nrx_db
+      be db = Db()
+      db.open("data.db")
+      db.exec("CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)")
+      db.execWith("INSERT INTO orang VALUES (?, ?)", ["Budi", "20"])
+      be r = db.query("SELECT nama, umur FROM orang")
+      loop r.next()
+          print r.text(0) " is " r.int(1)
+      db.close()
+------------------------------------------------------------------------------
 lib nrx_os  -  working folder, folders and running commands
 ------------------------------------------------------------------------------
 
@@ -1069,7 +1107,7 @@ Using it:
 - Only functions that are actually called go into the .exe, so it stays small.
 - The .exe has two sections: .text (code, read/execute only) and .data
   (variables).
-- Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os,
+- Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, db,
   window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used
   the same way: lib nrx_window.
 - nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and

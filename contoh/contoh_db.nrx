@@ -1,0 +1,22 @@
+# contoh_db.nrx: database SQLite. Jalankan: nerx run contoh\contoh_db.nrx
+lib nrx_db
+
+be db = Db()
+db.open("contoh.db")
+db.exec("CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)")
+db.exec("DELETE FROM orang")
+
+db.execWith("INSERT INTO orang VALUES (?, ?)", ["Budi", "20"])
+db.execWith("INSERT INTO orang VALUES (?, ?)", ["Sari", "25"])
+db.execWith("INSERT INTO orang VALUES (?, ?)", ["Joko", "31"])
+
+print "jumlah orang: " db.value("SELECT COUNT(*) FROM orang")
+
+be r = db.queryWith("SELECT nama, umur FROM orang WHERE umur > ? ORDER BY umur", ["21"])
+loop r.next()
+    print r.text(0) " umur " r.int(1)
+
+db.exec("UPDATE orang SET umur = umur + 1")
+print "umur tertinggi sekarang: " db.value("SELECT MAX(umur) FROM orang")
+
+db.close()

@@ -812,6 +812,44 @@ sh  -  menjalankan perintah shell (bawaan, tanpa lib)
   teks yang tidak dipercaya (input pengguna, file unduhan). Di dalam sh, pakai
   .\nerx.exe kalau nerx tidak ada di PATH.
 ------------------------------------------------------------------------------
+lib nrx_db  -  database SQLite (memakai winsqlite3.dll bawaan Windows)
+------------------------------------------------------------------------------
+
+  be db = Db()                      buat pegangan database (belum membuka apa pun)
+  db.open(path)                     buka atau buat file .db
+  db.close()                        tutup
+  db.exec(sql)                      CREATE / INSERT / UPDATE / DELETE; mengembalikan
+                                    jumlah baris yang berubah
+  db.execWith(sql, nilai)           sama, nilai (list teks) mengisi tanda ?
+  db.query(sql)                     SELECT; mengembalikan baris yang dibaca dengan next()
+  db.queryWith(sql, nilai)          sama, dengan nilai untuk ?
+  db.value(sql)                     nilai pertama dari baris pertama, sebagai teks
+  db.lastId()                       nomor baris dari INSERT terakhir
+  db.error()                        pesan galat SQL terakhir
+
+  Membaca baris (hasil query):
+  r.next()                          pindah ke baris berikutnya; false kalau sudah habis
+  r.text(i)  r.int(i)  r.float(i)   kolom ke-i (yang pertama 0) sebagai teks / int / desimal
+  r.isNull(i)                       true kalau kolomnya NULL
+  r.count()  r.name(i)              jumlah kolom, nama kolom ke-i
+  r.close()                         berhenti membaca lebih awal (tidak perlu setelah baris terakhir)
+
+  Teks SQL-nya SQL biasa, dikirim apa adanya. Galat SQL (tabel tidak ada, sintaks
+  salah) dilempar, jadi bisa ditangkap dengan try / catch.
+  Selalu taruh nilai di ? dan pakai execWith / queryWith. Jangan menempel teks dari
+  pengguna ke dalam teks SQL, itu membuka SQL injection.
+
+  Contoh:
+      lib nrx_db
+      be db = Db()
+      db.open("data.db")
+      db.exec("CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)")
+      db.execWith("INSERT INTO orang VALUES (?, ?)", ["Budi", "20"])
+      be r = db.query("SELECT nama, umur FROM orang")
+      loop r.next()
+          print r.text(0) " umur " r.int(1)
+      db.close()
+------------------------------------------------------------------------------
 lib nrx_os  -  folder kerja, folder, dan menjalankan perintah
 ------------------------------------------------------------------------------
 
@@ -1057,7 +1095,7 @@ Memakai:
   persis (byte demi byte).
 - Hanya fungsi yang benar-benar dipanggil yang masuk ke .exe, jadi hasilnya kecil.
 - .exe punya dua section: .text (kode, hanya baca/eksekusi) dan .data (variabel).
-- Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound, os,
+- Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, db,
   window, 3d) ditulis ulang dalam nerx di src\lib\nrx_*.nrx. Cara
   memakainya sama: lib nrx_window.
 - nrx_3d di nrxc adalah renderer perangkat lunak (GDI), bukan raylib: bentuk
