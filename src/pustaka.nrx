@@ -161,6 +161,72 @@ func lower(s string) string
         be r = r + chr(c)
     return r
 
+# assert(kondisi) / assert(kondisi, "pesan"): hentikan program kalau kondisi salah (dipakai nerx test)
+func assert_a1(c bool)
+    if not c
+        _lemparK(371, "assertion failed")
+
+func assert_a2(c bool, pesan string)
+    if not c
+        _lemparK(370, "assertion failed: " + pesan)
+
+func startsWith(s string, t string) bool
+    return len(t) <= len(s) and substr(s, 0, len(t)) == t
+
+func endsWith(s string, t string) bool
+    return len(t) <= len(s) and substr(s, len(s) - len(t), len(t)) == t
+
+# repeat(s, n): s diulang n kali ("" kalau n <= 0)
+func repeat(s string, n int) string
+    be r = ""
+    be i = 0
+    loop i < n
+        be r = r + s
+        be i += 1
+    return r
+
+# padLeft(s, lebar) / padLeft(s, lebar, isi): rata kanan; padRight: rata kiri
+func padLeft_a2(s string, w int) string
+    return padLeft_a3(s, w, " ")
+
+func padLeft_a3(s string, w int, isi string) string
+    if len(isi) == 0 or len(s) >= w
+        return s
+    be r = s
+    loop len(r) < w
+        be r = isi + r
+    return r
+
+func padRight_a2(s string, w int) string
+    return padRight_a3(s, w, " ")
+
+func padRight_a3(s string, w int, isi string) string
+    if len(isi) == 0 or len(s) >= w
+        return s
+    be r = s
+    loop len(r) < w
+        be r = r + isi
+    return r
+
+# count(s, t): berapa kali t muncul di s (tidak tumpang tindih)
+func count__string(s string, t string) int
+    if len(t) == 0
+        return 0
+    be n = 0
+    be i = 0
+    loop i + len(t) <= len(s)
+        if substr(s, i, len(t)) == t
+            be n += 1
+            be i += len(t)
+        else
+            be i += 1
+    return n
+
+func capitalize(s string) string
+    if len(s) == 0
+        return s
+    return upper(substr(s, 0, 1)) + lower(substr(s, 1, len(s) - 1))
+
 func fileExists(nama string) bool
     be h = api(6, asInt(nama) + 8, 2147483648, 1, 0, 3, 128, 0)
     if h == 0 - 1
@@ -1052,6 +1118,8 @@ func nrxTabelId() list string
     add(r, "360|pow: bilangan bulat dengan pangkat negatif menghasilkan pecahan, pakai basis desimal, misalnya pow(2.0, -1)|pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
     add(r, "361|pow: hasilnya terlalu besar untuk bilangan bulat, pakai basis desimal, misalnya pow(2.0, 70)|pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
     add(r, "362|%s(): \"%s\" terlalu besar untuk bilangan bulat|%s(): \"%s\" is too large for a whole number")
+    add(r, "370|asersi gagal: %s|assertion failed: %s")
+    add(r, "371|asersi gagal|assertion failed")
     add(r, "28|key \"%s\" tidak ada di map (cek dulu dengan contains(map, \"%s\"))|key \"%s\" is not in the map (check first with contains(map, \"%s\"))")
     add(r, "42|%s(): \"%s\" bukan angka|%s(): \"%s\" is not a number")
     add(r, "44|%s: isinya di-lock, tidak bisa diubah|%s: its contents are locked and cannot be changed")
@@ -1081,6 +1149,9 @@ func nrxTerjemah(pesan string, kode int) string
     if kode <= 0 or not nrxBahasaId()
         return pesan
     return nrxTerjemahTabel(nrxTabelId(), kode, pesan)
+
+func nrxTrace(pesan string)
+    print pesan
 
 func nrxGalat(pesan string, kode int, baris int, berkas string)
     be s = "error"

@@ -59,6 +59,7 @@
 <li><a href="#vs-code-extension">VS Code extension</a></li>
 <li><a href="#nrxc-the-compiler-written-in-nerx-no-vm">nrxc: the compiler written in nerx (no VM)</a></li>
 <li class="sub"><a href="#nrxc-intrinsics-for-writing-libraries-in-nerx">nrxc intrinsics</a></li>
+<li class="sub"><a href="#more-text-functions-assert-test-check-trace-and-sockets">More text functions, assert, test, check, trace and sockets</a></li>
     </ol>
   </nav>
   <main class="doc" id="doc">
@@ -814,6 +815,22 @@ _gget(k)  _gset(k, v)     hidden global slot k (0..14) owned by a library:
     return callp(dllFn(&quot;user32.dll&quot;, &quot;MessageBoxA&quot;), 0, cstr(text), cstr(title), 0)</pre>
 <pre class="prog">func tickMs() int
     return callp(dllFn(&quot;kernel32.dll&quot;, &quot;GetTickCount&quot;))</pre>
+<h3 id="more-text-functions-assert-test-check-trace-and-sockets">More text functions, assert, test, check, trace and sockets</h3>
+<pre class="ref">startsWith(s, t)  endsWith(s, t)       true / false
+repeat(s, n)                           repeat(&quot;ab&quot;, 3) = &quot;ababab&quot;
+padLeft(s, width [, fill])             padLeft(&quot;7&quot;, 3, &quot;0&quot;) = &quot;007&quot;   (padRight the same, on the right)
+count(s, t)                            how many times t appears in s (&quot;banana&quot;, &quot;an&quot; -&gt; 2)
+capitalize(s)                          &quot;nERX&quot; -&gt; &quot;Nerx&quot;</pre>
+<pre class="ref">assert(condition [, &quot;message&quot;])        stops the program with &quot;assertion failed: message&quot; when false
+nerx test [file|folder ...]            runs test_*.nrx and *_test.nrx files; a file passes when it exits with 0
+                                       (no argument = current folder). Prints PASS/FAIL and a summary,
+                                       exit code 1 when anything failed.
+nerx check file.nrx                    compile only, to look for errors; no .exe is left
+nerx run --trace file.nrx              prints &quot;[trace] name()  file:line&quot; at every call of your functions</pre>
+<pre class="ref">lib nrx_net     TCP sockets (-1 means failure)
+    tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
+    tcpSend(sock, text)      tcpRecv(sock, max)  (&quot;&quot; when the connection is closed)
+    tcpClose(sock)           tcpRequest(host, port, text)  send, then read until closed</pre>
 </section>
   </main>
 </div>

@@ -1214,3 +1214,25 @@ Contoh library kecil (user32 + kernel32):
 
     func waktuMs() int
         return callp(dllFn("kernel32.dll", "GetTickCount"))
+
+------------------------------------------------------------------------------
+Fungsi teks tambahan, assert, test, check, trace, dan socket
+------------------------------------------------------------------------------
+
+  startsWith(s, t)  endsWith(s, t)       true / false
+  repeat(s, n)                           repeat("ab", 3) = "ababab"
+  padLeft(s, lebar [, isi])              padLeft("7", 3, "0") = "007"   (padRight sama, di sisi kanan)
+  count(s, t)                            berapa kali t muncul di s ("banana", "an" -> 2)
+  capitalize(s)                          "nERX" -> "Nerx"
+
+  assert(kondisi [, "pesan"])            hentikan program dengan "assertion failed: pesan" kalau salah
+  nerx test [file|folder ...]            jalankan file test_*.nrx dan *_test.nrx; lulus kalau keluar dengan 0
+                                         (tanpa argumen = folder sekarang). Cetak PASS/FAIL dan ringkasan,
+                                         kode keluar 1 kalau ada yang gagal.
+  nerx check file.nrx                    hanya kompilasi untuk mencari galat; tidak ada .exe tersisa
+  nerx run --trace file.nrx              cetak "[trace] nama()  file:baris" tiap fungsi buatanmu dipanggil
+
+  lib nrx_net     soket TCP (-1 = gagal)
+      tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
+      tcpSend(sock, teks)      tcpRecv(sock, maks)  ("" kalau koneksi ditutup)
+      tcpClose(sock)           tcpRequest(host, port, teks)  kirim, lalu baca sampai ditutup

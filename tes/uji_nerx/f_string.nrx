@@ -1,0 +1,10 @@
+print startsWith("hello", "he")
+print startsWith("hello", "lo")
+print endsWith("hello", "lo")
+print endsWith("a", "abc")
+print repeat("ab", 3)
+print "[" + padLeft("7", 3) + "]"
+print "[" + padLeft("7", 3, "0") + "]"
+print "[" + padRight("ab", 5, ".") + "]"
+print count("banana", "an")
+print capitalize("nERX")

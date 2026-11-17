@@ -30,6 +30,9 @@ nerx build program.nrx                   build program.exe
 nerx build program.nrx -o game.exe
 nerx program.nrx                         same as build
 nerx repl                                 type code and see the result (also just "nerx")
+nerx test [file|folder]                   run test_*.nrx / *_test.nrx files (use assert)
+nerx check file.nrx                       look for errors without building
+nerx run --trace file.nrx                 print every call of your functions
 ```
 
 - The resulting `.exe` is standalone: the `.nrx` file does not need to be shipped with it.

@@ -1,0 +1,92 @@
+# nrx_net.nrx - soket TCP (lewat ws2_32.dll). Pakai: lib nrx_net
+# Soket adalah bilangan bulat; -1 berarti gagal. tcpRecv mengembalikan "" kalau koneksi ditutup.
+
+func netStart()
+    be d = alloc(512)
+    callp(dllFn("ws2_32.dll", "WSAStartup"), 514, d)
+    free(d)
+
+# alamat soket IPv4 (16 byte); host "" = semua alamat. 0 kalau nama host tidak ditemukan
+func netAlamat(host string, port int) int
+    be sa = alloc(16)
+    poke64(sa, 0, 0)
+    poke64(sa, 8, 0)
+    poke8(sa, 0, 2)
+    poke8(sa, 2, idiv(port, 256) % 256)
+    poke8(sa, 3, port % 256)
+    if host != ""
+        be he = callp(dllFn("ws2_32.dll", "gethostbyname"), cstr(host))
+        if he == 0
+            free(sa)
+            return 0
+        be ap = peek64(peek64(he, 24), 0)
+        for i in range(4)
+            poke8(sa, 4 + i, peek8(ap, i))
+    return sa
+
+# sambung ke host:port; kembalikan soket, atau -1
+func tcpConnect(host string, port int) int
+    netStart()
+    be sa = netAlamat(host, port)
+    if sa == 0
+        return 0 - 1
+    be s = callp(dllFn("ws2_32.dll", "socket"), 2, 1, 6)
+    if s == 0 - 1
+        free(sa)
+        return 0 - 1
+    be r = callp(dllFn("ws2_32.dll", "connect"), s, sa, 16)
+    free(sa)
+    if r != 0
+        callp(dllFn("ws2_32.dll", "closesocket"), s)
+        return 0 - 1
+    return s
+
+# buka server di port; kembalikan soket server, atau -1
+func tcpListen(port int) int
+    netStart()
+    be sa = netAlamat("", port)
+    be s = callp(dllFn("ws2_32.dll", "socket"), 2, 1, 6)
+    if s == 0 - 1
+        free(sa)
+        return 0 - 1
+    be ok = callp(dllFn("ws2_32.dll", "bind"), s, sa, 16)
+    free(sa)
+    if ok != 0 or callp(dllFn("ws2_32.dll", "listen"), s, 16) != 0
+        callp(dllFn("ws2_32.dll", "closesocket"), s)
+        return 0 - 1
+    return s
+
+# tunggu satu klien; kembalikan soket klien, atau -1
+func tcpAccept(server int) int
+    return callp(dllFn("ws2_32.dll", "accept"), server, 0, 0)
+
+# kirim teks; kembalikan jumlah byte terkirim (-1 kalau gagal)
+func tcpSend(sock int, teks string) int
+    return callp(dllFn("ws2_32.dll", "send"), sock, cstr(teks), len(teks), 0)
+
+# terima maksimal n byte; "" kalau koneksi ditutup atau galat
+func tcpRecv(sock int, n int) string
+    be buf = alloc(n + 8)
+    be got = callp(dllFn("ws2_32.dll", "recv"), sock, buf, n, 0)
+    be hasil = ""
+    if got > 0 and got <= n
+        be hasil = fromCn(buf, got)
+    free(buf)
+    return hasil
+
+func tcpClose(sock int)
+    callp(dllFn("ws2_32.dll", "closesocket"), sock)
+
+# kirim teks lalu baca balasan sampai koneksi ditutup (cocok untuk HTTP sederhana)
+func tcpRequest(host string, port int, teks string) string
+    be s = tcpConnect(host, port)
+    if s == 0 - 1
+        return ""
+    tcpSend(s, teks)
+    be hasil = ""
+    be bagian = tcpRecv(s, 4096)
+    loop bagian != ""
+        be hasil = hasil + bagian
+        be bagian = tcpRecv(s, 4096)
+    tcpClose(s)
+    return hasil

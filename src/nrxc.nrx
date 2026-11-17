@@ -100,6 +100,7 @@ be callFn list int
 be dalamFungsi = false
 be curRet = "int"
 be curFnNama = ""
+be jejak = false          # nerx run --trace: cetak tiap pemanggilan fungsi program
 be imMuat list string                # file yang sudah dimuat lewat im
 be teksOverride = ""                  # kalau tidak kosong: bacaSumber membaca teks ini, bukan file (fungsi buatan compiler)
 be retInferensi = ""                  # tipe return yang ditemukan saat menebak tipe hasil fungsi tanpa tipe
@@ -473,7 +474,7 @@ func tabelPesanId() list string
     add(r, "110|option harus berada di dalam blok options|option must be inside an options block")
     add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window|this command needs the window library, add at the top: lib nrx_window")
     add(r, "113|perintah tidak dikenal: %s|unknown command: %s")
-    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)")
+    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)")
     add(r, "118|fungsi %s sudah ada (di %s:%d)|function %s already exists (at %s:%d)")
     add(r, "119|fungsi maksimal punya 8 parameter|a function can have at most 8 parameters")
     add(r, "126|nama %s sudah dipakai fungsi|name %s is already used by a function")
@@ -572,7 +573,7 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
         galatK(6, nama + " needs 1 arguments, but got " + str(n))
     if n >= 1 and contains("int float abs max min round sqrt pow", nama) and len(nama) > 2
         galatK(350, nama + "() cannot be used on " + kataJenisPendek(tipeArg[0]))
-    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299 nrx_os 351 nrx_db 351")
+    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299 nrx_os 351 nrx_db 351 nrx_net 351")
     for q in range(0, len(kdLib), 2)
         be bt = "lib\\" + kdLib[q] + ".nrx"
         if fileExists(jalurRt(bt))
@@ -3566,7 +3567,7 @@ func muatLibDari(nama string)
             if not fileExists(jalurRt("lib\\" + nmLib))
                 be berkNama = nama
                 be noBaris = nbL
-                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db)")
+                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)")
             if indexOf(libMuat, nmLib) < 0 and fileExists(jalurRt("lib\\" + nmLib))
                 add(libMuat, nmLib)
                 bacaSumber("lib\\" + nmLib)
@@ -4371,6 +4372,15 @@ func kompilasi(sumber string, keluar string)
         be posR2 = kur
         d32(0)
         be wajibRet = indexOf(exlStmt, funcStmt[fk]) >= 0
+        if jejak and globalOK
+            add(litTeks, "[trace] " + curFnNama + "()  " + berk[funcStmt[fk]] + ":" + str(nomor[funcStmt[fk]]))
+            hex("48 8D 05")               # lea rax, [teks jejak]
+            add(litPos, kur)
+            add(litIdx, len(litTeks) - 1)
+            d32(0)
+            hex("50")
+            panggilNama("nrxTrace", 1)
+            hex("58")                     # buang hasil
         if wajibRet
             be slBarisP = slotBaru()
             ripGlobal("48 8B 05", 13)     # mov rax, [baris]  (baris pemanggil)
@@ -4606,6 +4616,13 @@ if adaNerx
             be mulaiArg = k + 1
 for k in range(mulaiArg, len(argv))
     add(sisaArg, argv[k])
+if len(sisaArg) >= 3 and sisaArg[1] == "--trace" and contains("run build check", sisaArg[0])
+    be jejak = true
+    be sisaTanpa list string
+    for k in range(len(sisaArg))
+        if k != 1
+            add(sisaTanpa, sisaArg[k])
+    be sisaArg = sisaTanpa
 # nrxc run file.nrx [argumen...]   kompilasi ke .exe sementara, jalankan, hapus (pengganti "nerx run")
 # nrxc build file.nrx [-o hasil.exe]   sama dengan nrxc file.nrx hasil.exe
 if len(sisaArg) >= 2 and sisaArg[0] == "run"
@@ -4627,6 +4644,53 @@ if len(sisaArg) >= 2 and sisaArg[0] == "run"
     exit(kode)
 if len(sisaArg) == 1 and sisaArg[0] == "repl"
     replMain(namaEx)
+    exit(0)
+# nerx check file.nrx   periksa galat tanpa membuat hasil
+if len(sisaArg) == 2 and sisaArg[0] == "check"
+    if not fileExists(sisaArg[1])
+        print "nerx: file " sisaArg[1] " not found"
+        exit(1)
+    be bufCk = newBuffer(520)
+    GetTempPathA(500, bufCk)
+    be exeCk = peekText(bufCk) + "nrxchk_" + str(GetCurrentProcessId()) + ".exe"
+    be diam = true
+    tentukanBahasa(sisaArg[1])
+    kompilasi(sisaArg[1], exeCk)
+    DeleteFileA(exeCk)
+    print "OK: " sisaArg[1] " has no errors"
+    exit(0)
+# nerx test [file|folder ...]   jalankan tiap file; lulus kalau keluar dengan kode 0
+if len(sisaArg) >= 1 and sisaArg[0] == "test"
+    be daftarTes list string
+    be sasaran list string
+    for k in range(1, len(sisaArg))
+        add(sasaran, sisaArg[k])
+    if len(sasaran) == 0
+        add(sasaran, ".")
+    for sas in sasaran
+        if fileExists(sas)
+            add(daftarTes, sas)
+        else
+            be isiDir = listFiles(sas)
+            sort(isiDir)
+            for nmT in isiDir
+                if slice(nmT, -4) == ".nrx" and (startsWith(nmT, "test_") or slice(nmT, -9) == "_test.nrx")
+                    add(daftarTes, sas + "\\" + nmT)
+    be lulusT = 0
+    be gagalT = 0
+    for fT in daftarTes
+        be kodeT = system("\"\"" + namaEx + "\" run \"" + fT + "\"\"")
+        if kodeT == 0
+            print "PASS  " fT
+            be lulusT += 1
+        else
+            print "FAIL  " fT
+            be gagalT += 1
+    print str(lulusT) + " passed, " + str(gagalT) + " failed"
+    if len(daftarTes) == 0
+        print "nerx: no test files found (test_*.nrx or *_test.nrx)"
+    if gagalT > 0 or len(daftarTes) == 0
+        exit(1)
     exit(0)
 if len(sisaArg) >= 2 and sisaArg[0] == "build"
     be sisaBaru list string

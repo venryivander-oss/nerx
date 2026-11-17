@@ -1227,3 +1227,25 @@ A small library example (user32 + kernel32):
 
     func tickMs() int
         return callp(dllFn("kernel32.dll", "GetTickCount"))
+
+------------------------------------------------------------------------------
+More text functions, assert, test, check, trace and sockets
+------------------------------------------------------------------------------
+
+  startsWith(s, t)  endsWith(s, t)       true / false
+  repeat(s, n)                           repeat("ab", 3) = "ababab"
+  padLeft(s, width [, fill])             padLeft("7", 3, "0") = "007"   (padRight the same, on the right)
+  count(s, t)                            how many times t appears in s ("banana", "an" -> 2)
+  capitalize(s)                          "nERX" -> "Nerx"
+
+  assert(condition [, "message"])        stops the program with "assertion failed: message" when false
+  nerx test [file|folder ...]            runs test_*.nrx and *_test.nrx files; a file passes when it exits with 0
+                                         (no argument = current folder). Prints PASS/FAIL and a summary,
+                                         exit code 1 when anything failed.
+  nerx check file.nrx                    compile only, to look for errors; no .exe is left
+  nerx run --trace file.nrx              prints "[trace] name()  file:line" at every call of your functions
+
+  lib nrx_net     TCP sockets (-1 means failure)
+      tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
+      tcpSend(sock, text)      tcpRecv(sock, max)  ("" when the connection is closed)
+      tcpClose(sock)           tcpRequest(host, port, text)  send, then read until closed

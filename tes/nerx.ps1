@@ -17,4 +17,16 @@ $in = "1 + 2`nbe x = 5`nx * 2`nfunc dua(n int) int`n    return n * 2`n`ndua(21)`
 [IO.File]::WriteAllText("$env:TEMP\nerx_repl_uji.txt", $in)
 $r = ((cmd /c "`"$comp`" repl < `"$env:TEMP\nerx_repl_uji.txt`"" | Out-String) -replace "`r", "")
 if ($r -match "> 3\n" -and $r -match "> 10\n" -and $r -match "> 42\n") { "SAMA   repl"; $lulus++ } else { "BEDA   repl: $($r -replace "`n",'|')"; $gagal++ }
+# test / check
+$ut = "$env:TEMP\nerx_ut"; New-Item -ItemType Directory $ut -Force | Out-Null
+[IO.File]::WriteAllText("$ut\test_ok.nrx", "assert(1 + 1 == 2, `"x`")`n"); [IO.File]::WriteAllText("$ut\test_bad.nrx", "assert(false)`n")
+$t = ((& $comp test $ut 2>&1 | Out-String) -replace "`r", "")
+if ($t -match "1 passed, 1 failed" -and $LASTEXITCODE -eq 1) { "SAMA   test"; $lulus++ } else { "BEDA   test: $($t -replace "`n",'|')"; $gagal++ }
+$ck = ((& $comp check "$ut\test_ok.nrx" 2>&1 | Out-String) -replace "`r", "")
+if ($ck -match "has no errors") { "SAMA   check"; $lulus++ } else { "BEDA   check"; $gagal++ }
+Remove-Item $ut -Recurse -Force
+# trace
+[IO.File]::WriteAllText("$env:TEMP\nerx_tr.nrx", "func a() int`n    return 1`nprint a()`n")
+$tr = ((& $comp run --trace "$env:TEMP\nerx_tr.nrx" 2>&1 | Out-String) -replace "`r", "")
+if ($tr -match "\[trace\] a\(\)" -and $tr -match "1\n") { "SAMA   trace"; $lulus++ } else { "BEDA   trace"; $gagal++ }
 "lulus $lulus, gagal $gagal"
