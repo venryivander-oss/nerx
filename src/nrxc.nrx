@@ -36,7 +36,7 @@
 # Pakai:   nerx run src\nrxc.nrx      (lalu isi nama file sumber dan nama .exe)
 #          File prelude.nrx harus ada di folder kerja.
 
-lib nrx_crudfile.h
+lib nrx_crudfile
 
 ffi "kernel32.dll" (
     func CreateFileA(nama string, akses int, bagi int, sa pointer, buat int, atribut int, templ pointer) pointer
@@ -455,7 +455,7 @@ func tabelPesanId() list string
     add(r, "57|substr butuh 2 atau 3 argumen: substr(teks, mulai, panjang)|substr needs 2 or 3 arguments: substr(text, start, length)")
     add(r, "58|slice butuh 2 atau 3 argumen: slice(list, awal, akhir)|slice needs 2 or 3 arguments: slice(list, start, end)")
     add(r, "59|exit butuh 0 atau 1 argumen: exit() atau exit(kode)|exit needs 0 or 1 arguments: exit() or exit(code)")
-    add(r, "66|%s() butuh library file, tambahkan di atas: lib nrx_crudfile.h|%s() needs the file library, add at the top: lib nrx_crudfile.h")
+    add(r, "66|%s() butuh library file, tambahkan di atas: lib nrx_crudfile|%s() needs the file library, add at the top: lib nrx_crudfile")
     add(r, "67|%s butuh %d nilai (%d field), tapi diberi %d|%s needs %d values (%d fields), but got %d")
     add(r, "70|fungsi %s tidak ditemukan|function %s not found")
     add(r, "71|%s hanya boleh di dalam loop|%s is only allowed inside a loop")
@@ -471,9 +471,9 @@ func tabelPesanId() list string
     add(r, "108|return hanya boleh di dalam fungsi|return is only allowed inside a function")
     add(r, "109|catch harus berada tepat setelah blok try|catch must come right after a try block")
     add(r, "110|option harus berada di dalam blok options|option must be inside an options block")
-    add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window.h|this command needs the window library, add at the top: lib nrx_window.h")
+    add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window|this command needs the window library, add at the top: lib nrx_window")
     add(r, "113|perintah tidak dikenal: %s|unknown command: %s")
-    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)|library %s not found (available: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)")
+    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)")
     add(r, "118|fungsi %s sudah ada (di %s:%d)|function %s already exists (at %s:%d)")
     add(r, "119|fungsi maksimal punya 8 parameter|a function can have at most 8 parameters")
     add(r, "126|nama %s sudah dipakai fungsi|name %s is already used by a function")
@@ -502,14 +502,14 @@ func tabelPesanId() list string
     add(r, "350|%s() tidak bisa dipakai pada %s|%s() cannot be used on %s")
     add(r, "319|listFiles: folder %s tidak ditemukan|listFiles: folder %s not found")
     add(r, "321|replaceInFile: teks yang dicari tidak boleh kosong|replaceInFile: the text to find cannot be empty")
-    add(r, "60|%s() butuh library keyboard, tambahkan di atas: lib nrx_keyboard.h|%s() needs the keyboard library, add at the top: lib nrx_keyboard.h")
-    add(r, "61|%s() butuh library window, tambahkan di atas: lib nrx_window.h|%s() needs the window library, add at the top: lib nrx_window.h")
-    add(r, "62|%s() butuh library suara, tambahkan di atas: lib nrx_sound.h|%s() needs the sound library, add at the top: lib nrx_sound.h")
-    add(r, "63|%s() butuh library JSON, tambahkan di atas: lib nrx_json.h|%s() needs the JSON library, add at the top: lib nrx_json.h")
-    add(r, "64|%s() butuh library console, tambahkan di atas: lib nrx_console.h|%s() needs the console library, add at the top: lib nrx_console.h")
-    add(r, "65|%s() butuh library random, tambahkan di atas: lib nrx_rand.h|%s() needs the random library, add at the top: lib nrx_rand.h")
-    add(r, "292|%s() butuh library HTTP, tambahkan di atas: lib nrx_http.h|%s() needs the HTTP library, add at the top: lib nrx_http.h")
-    add(r, "299|%s() butuh library 3D, tambahkan di atas: lib nrx_3d.h|%s() needs the 3D library, add at the top: lib nrx_3d.h")
+    add(r, "60|%s() butuh library keyboard, tambahkan di atas: lib nrx_keyboard|%s() needs the keyboard library, add at the top: lib nrx_keyboard")
+    add(r, "61|%s() butuh library window, tambahkan di atas: lib nrx_window|%s() needs the window library, add at the top: lib nrx_window")
+    add(r, "62|%s() butuh library suara, tambahkan di atas: lib nrx_sound|%s() needs the sound library, add at the top: lib nrx_sound")
+    add(r, "63|%s() butuh library JSON, tambahkan di atas: lib nrx_json|%s() needs the JSON library, add at the top: lib nrx_json")
+    add(r, "64|%s() butuh library console, tambahkan di atas: lib nrx_console|%s() needs the console library, add at the top: lib nrx_console")
+    add(r, "65|%s() butuh library random, tambahkan di atas: lib nrx_rand|%s() needs the random library, add at the top: lib nrx_rand")
+    add(r, "292|%s() butuh library HTTP, tambahkan di atas: lib nrx_http|%s() needs the HTTP library, add at the top: lib nrx_http")
+    add(r, "299|%s() butuh library 3D, tambahkan di atas: lib nrx_3d|%s() needs the 3D library, add at the top: lib nrx_3d")
     add(r, "241|fungsi %s harus mengembalikan %s, tapi tidak ada return|function %s must return %s, but there is no return")
     add(r, "343|%s sudah dipakai sebagai %s di baris %d, tidak bisa diisi %s|%s is already used as %s on line %d, it cannot hold %s")
     return r
@@ -578,8 +578,8 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
             be isiLib = readFile(jalurRt(bt))
             if contains(isiLib, "func " + nama + "(") or contains(isiLib, "func " + nama + "__") or contains(isiLib, "func " + nama + "_a")
                 if kdLib[q] == "nrx_window"
-                    galatK(112, "this command needs the window library, add at the top: lib nrx_window.h")
-                galatK(int(kdLib[q + 1]), nama + "() needs the " + namaLib(kdLib[q]) + " library, add at the top: lib " + kdLib[q] + ".h")
+                    galatK(112, "this command needs the window library, add at the top: lib nrx_window")
+                galatK(int(kdLib[q + 1]), nama + "() needs the " + namaLib(kdLib[q]) + " library, add at the top: lib " + kdLib[q])
     galatK(70, "function " + nama + " not found")
 
 func namaLib(l string) string
@@ -2007,7 +2007,7 @@ func panggilBuatan(nama string, tipeArg list string) string
     if indexOf(funcNama, nm2) < 0
         galatNamaTakAda(nama, n, tipeArg)
     if (nama == "readFile" or nama == "writeFile" or nama == "fileExists") and berkasPengguna(berkNama) and indexOf(libMuat, "nrx_crudfile.nrx") < 0
-        galatK(66, nama + "() needs the file library, add at the top: lib nrx_crudfile.h")
+        galatK(66, nama + "() needs the file library, add at the top: lib nrx_crudfile")
     be fi = cariFungsi(nm2)
     if n != funcArity[fi]
         galatArity(nama, fi, n)
@@ -3463,7 +3463,7 @@ func buangKomentar(s string) string
     return s
 
 # ---------------------------------------------------------------- baca sumber (lewatan 1)
-# semua baris "lib nrx_xxx.h" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrx sebelum kode program
+# semua baris "lib nrx_xxx" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrx sebelum kode program
 # jalur file runtime (prelude, pustaka, lib\...) relatif terhadap folder nrxc.exe; file lain apa adanya
 func jalurRt(nama string) string
     if rtDir != "" and (nama == "prelude.nrx" or nama == "pustaka.nrx" or substr(nama, 0, 4) == "lib\\")
@@ -3497,11 +3497,14 @@ func muatLibDari(nama string)
         be nbL += 1
         be b = trim(baris)
         if substr(b, 0, 4) == "lib "
-            be nmLib = replace(trim(slice(b, 4)), ".h", ".nrx")
+            be nmLib = trim(slice(b, 4))
+            if slice(nmLib, -2) == ".h"
+                be nmLib = slice(nmLib, 0, len(nmLib) - 2)      # ".h" lama masih diterima
+            be nmLib = nmLib + ".nrx"
             if not fileExists(jalurRt("lib\\" + nmLib))
                 be berkNama = nama
                 be noBaris = nbL
-                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window.h, nrx_rand.h, nrx_crudfile.h, nrx_keyboard.h, nrx_console.h, nrx_sound.h, nrx_json.h, nrx_http.h, nrx_3d.h)")
+                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os)")
             if indexOf(libMuat, nmLib) < 0 and fileExists(jalurRt("lib\\" + nmLib))
                 add(libMuat, nmLib)
                 bacaSumber("lib\\" + nmLib)
@@ -4128,6 +4131,13 @@ func bacaSumber(nama string)
             add(jenis, "k")
             add(arg, namaL)
             be isiB[len(isiB) - 1] = trim(slice(sisaL, eqL + 1))
+        else if substr(b, 0, 3) == "sh " and trim(slice(b, 3)) != ""
+            # sh perintah  ->  shCode("perintah");  sh "teks" variabel  ->  shCode("teks" variabel)
+            be rs = trim(slice(b, 3))
+            if substr(rs, 0, 1) != "\""
+                be rs = "\"" + replace(replace(rs, "\\", "\\\\"), "\"", "\\\"") + "\""
+            add(jenis, "x")
+            add(arg, "shCode(" + rs + ")")
         else if contains(HURUF, substr(b, 0, 1)) and (contains(b, "(") or substr(b, 0, 4) == "ask ")
             add(jenis, "x")
             add(arg, b)

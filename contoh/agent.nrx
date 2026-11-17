@@ -5,10 +5,10 @@
 # Aksi: read_file, edit_file, write_file, run_cmd.
 # Setiap aksi yang mengubah sesuatu (edit, write, run) minta izin dulu.
 # Jalankan dari folder project:  nerx run agent.nrx
-lib nrx_http.h
-lib nrx_json.h
-lib nrx_console.h
-lib nrx_crudfile.h
+lib nrx_http
+lib nrx_json
+lib nrx_console
+lib nrx_crudfile
 
 lock MAKS_LANGKAH = 25            # langkah per tugas sebelum ditanya lanjut atau tidak
 lock BATAS_KARAKTER = 20000       # batas isi riwayat; kira-kira 1 token = 3-4 karakter. Untuk -c 8192 pakai 20000,

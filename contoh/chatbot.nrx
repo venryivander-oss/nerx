@@ -1,9 +1,9 @@
 # chatbot.nrx: chatbot di console untuk AI lokal (API kompatibel OpenAI)
 # Cocok untuk llama.cpp (llama-server), LM Studio, Ollama, atau URL cloudflared-nya.
 # Jalankan: nerx run chatbot.nrx
-lib nrx_http.h
-lib nrx_json.h
-lib nrx_console.h
+lib nrx_http
+lib nrx_json
+lib nrx_console
 
 lock SYSTEM = "Kamu asisten yang ramah, jelas, dan menjawab dalam bahasa Indonesia kecuali diminta lain."
 
@@ -80,7 +80,7 @@ loop jalan
             bantuan()
             continue
         option "/simpan"
-            lib nrx_crudfile.h
+            lib nrx_crudfile
             writeFile("chat.json", toJson(riwayat, true))
             print "(tersimpan di chat.json)"
             continue

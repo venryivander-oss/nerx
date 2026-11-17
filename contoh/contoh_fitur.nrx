@@ -1,5 +1,5 @@
-lib nrx_rand.h
-lib nrx_crudfile.h
+lib nrx_rand
+lib nrx_crudfile
 
 # --- lock: nilai yang tidak bisa diubah ---
 lock JUDUL = "Contoh Fitur nerx"
@@ -167,12 +167,12 @@ catch err
 # --- \n baris baru, \t tab, \" tanda kutip ---
 print "baris satu\nbaris dua\t(pakai tab) dan \"kutip\""
 
-# --- random (lib nrx_rand.h) dan waktu ---
+# --- random (lib nrx_rand) dan waktu ---
 print "dadu: " random(1, 6)
 print "hari ini makan: " choice(["nasi goreng", "mie ayam", "bakso"])
 print "sekarang jam " time() ", tanggal " date()
 
-# --- file (lib nrx_crudfile.h) ---
+# --- file (lib nrx_crudfile) ---
 be file = "catatan.txt"
 writeFile(file, "")
 appendLine(file, "belajar nerx")

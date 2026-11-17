@@ -990,7 +990,7 @@ func str__map_bool(m map bool) string
     return koleksiStr__map_bool(m)
 # cetak galat yang tidak tertangkap, format sama dengan Nerx: error E#### in berkas:baris: pesan
 
-# terjemahan pesan error ke Indonesia (errlang = id): tabel "kode|indonesia|inggris" dari src\nrx_msgs.h
+# terjemahan pesan error ke Indonesia (errlang = id): tabel "kode|indonesia|inggris" dari src\nrx_msgs
 func nrxIsiTemplate(idT string, enT string, pesan string) string
     be segs list string
     be cur = ""
@@ -1107,3 +1107,53 @@ func arrayDariD(l list double) list double
     for i in range(len(l))
         be r[i] = l[i]
     return r
+
+# ---- sh: menjalankan perintah shell (dipakai kata kunci "sh" dan fungsi shText / shCode)
+# cd dikerjakan sendiri supaya pindah foldernya menetap; mengembalikan -1 kalau bukan perintah cd
+func shCd(perintah string) int
+    be c = trim(perintah)
+    if c != "cd" and substr(c, 0, 3) != "cd "
+        return -1
+    be p = trim(slice(c, 2))
+    if lower(substr(p, 0, 3)) == "/d "
+        be p = trim(slice(p, 3))
+    if len(p) >= 2 and substr(p, 0, 1) == "\"" and substr(p, len(p) - 1, 1) == "\""
+        be p = substr(p, 1, len(p) - 2)
+    if p == ""
+        be buf = alloc(1100)
+        be n = callp(dllFn("kernel32.dll", "GetCurrentDirectoryA"), 1024, buf)
+        print fromCn(buf, n)
+        free(buf)
+        return 0
+    if callp(dllFn("kernel32.dll", "SetCurrentDirectoryA"), cstr(p)) == 0
+        print "The system cannot find the path specified."
+        return 1
+    return 0
+
+# jalankan perintah; hasilnya tampil di layar; kembalikan kode keluar (0 = berhasil)
+func shCode(perintah string) int
+    be k = shCd(perintah)
+    if k >= 0
+        return k
+    return callp(dllFn("msvcrt.dll", "system"), cstr(perintah))
+
+# jalankan perintah dan kembalikan keluarannya sebagai teks (galat ikut, tanpa \r)
+func shText(perintah string) string
+    be k = shCd(perintah)
+    if k >= 0
+        return ""
+    be f = callp(dllFn("msvcrt.dll", "_popen"), cstr(perintah + " 2>&1"), cstr("r"))
+    if f == 0
+        return ""
+    be buf = alloc(4200)
+    be hasil = ""
+    be lagi = true
+    loop lagi
+        be n = callp(dllFn("msvcrt.dll", "fread"), buf, 1, 4096, f)
+        if n <= 0
+            be lagi = false
+        else
+            be hasil = hasil + fromCn(buf, n)
+    callp(dllFn("msvcrt.dll", "_pclose"), f)
+    free(buf)
+    return replace(hasil, "\r", "")

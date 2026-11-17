@@ -44,7 +44,7 @@ Jadikan .exe (tidak butuh apa-apa lagi; yang membuatnya adalah compiler nerx
 - .exe berisi kode mesin x64 yang dibuat nrxc langsung (tanpa VM dan tanpa
   interpreter), jadi hitungan jauh lebih cepat daripada run. Syntax-nya
   tidak berubah.
-- lib nrx_window.h dan ffi juga bisa di-build.
+- lib nrx_window dan ffi juga bisa di-build.
 - Installer memasang nerx.exe, prelude.nrx, pustaka.nrx, dan folder lib\
   di satu folder; tidak butuh apa-apa lagi.
 - Implementasi yang lama dipindah ke folder history\
@@ -470,15 +470,15 @@ Di file yang dipakai lewat im, hanya yang diberi ex yang bisa dipakai file lain.
 
 lib (library bawaan):
 
-    lib nrx_window.h
-    lib nrx_rand.h
-    lib nrx_crudfile.h
-    lib nrx_keyboard.h
-    lib nrx_console.h
-    lib nrx_sound.h
-    lib nrx_json.h
-    lib nrx_http.h
-    lib nrx_3d.h
+    lib nrx_window
+    lib nrx_rand
+    lib nrx_crudfile
+    lib nrx_keyboard
+    lib nrx_console
+    lib nrx_sound
+    lib nrx_json
+    lib nrx_http
+    lib nrx_3d
 
 Fitur library hanya bisa dipakai setelah lib-nya ditulis.
 
@@ -665,7 +665,7 @@ Nama fungsi peka huruf besar-kecil: getKey() benar, getkey() salah.
 ==============================================================================
 
 ------------------------------------------------------------------------------
-lib nrx_window.h  -  window, tombol, canvas
+lib nrx_window  -  window, tombol, canvas
 ------------------------------------------------------------------------------
 
 templateStyle (gaya tampilan):
@@ -764,7 +764,7 @@ Warna window:
   atau "#RRGGBB".
 
 ------------------------------------------------------------------------------
-lib nrx_rand.h  -  angka acak
+lib nrx_rand  -  angka acak
 ------------------------------------------------------------------------------
 
   random()              desimal acak 0 sampai di bawah 1
@@ -773,7 +773,7 @@ lib nrx_rand.h  -  angka acak
   randomSeed(n)         atur seed supaya urutan acak bisa diulang
 
 ------------------------------------------------------------------------------
-lib nrx_crudfile.h  -  file
+lib nrx_crudfile  -  file
 ------------------------------------------------------------------------------
 
   createFile(path)          buat file kosong; false kalau sudah ada
@@ -792,7 +792,45 @@ lib nrx_crudfile.h  -  file
                             akhir baris file (CRLF/LF) tetap
 
 ------------------------------------------------------------------------------
-lib nrx_keyboard.h  -  keyboard di console
+sh  -  menjalankan perintah shell (bawaan, tanpa lib)
+------------------------------------------------------------------------------
+
+  sh dir /b                 jalankan perintah seperti di cmd; hasilnya tampil di layar
+  sh "echo halo " nama      teks dalam kutip plus variabel, digabung seperti print
+  sh cd src                 cd dikerjakan nerx sendiri, jadi pindah foldernya menetap
+  shCode(perintah)          jalankan dan kembalikan kode keluar (0 berarti berhasil)
+  shText(perintah)          jalankan dan kembalikan keluarannya sebagai teks (galat ikut)
+
+  Contoh:
+      sh cd src
+      sh nerx build game.nrx
+      be isi = shText("dir /b")
+      print len(split(trim(isi), "\n")) " file"
+      if shCode("git status") != 0
+          print "bukan repositori git"
+  sh menjalankan apa pun yang bisa dijalankan cmd, jadi jangan menyusun perintah dari
+  teks yang tidak dipercaya (input pengguna, file unduhan). Di dalam sh, pakai
+  .\nerx.exe kalau nerx tidak ada di PATH.
+------------------------------------------------------------------------------
+lib nrx_os  -  folder kerja, folder, dan menjalankan perintah
+------------------------------------------------------------------------------
+
+  cwd()                     folder kerja sekarang
+  cd(path)                  pindah folder kerja; false kalau folder tidak ada
+  mkdir(path)               buat folder; false kalau gagal
+  rmdir(path)               hapus folder kosong; false kalau gagal
+  copyFile(dari, ke)        salin file (menimpa kalau tujuan sudah ada)
+  renameFile(dari, ke)      ganti nama atau pindahkan file/folder
+  getenv(nama)              isi environment variable ("" kalau tidak ada)
+  run(perintah)             jalankan perintah seperti di cmd, hasilnya tampil di
+                            layar; mengembalikan kode keluar (0 berarti berhasil)
+  Untuk melihat isi folder pakai listFiles dari nrx_crudfile. Contoh, seperti
+  mengetik "cd src" lalu sebuah perintah di terminal (lihat contoh\bangun.nrx):
+      lib nrx_os
+      cd("src")
+      run(".\\nerx.exe nrxc.nrx nerx_baru.exe")
+------------------------------------------------------------------------------
+lib nrx_keyboard  -  keyboard di console
 ------------------------------------------------------------------------------
 
   keyPressed("left")    true/false tanpa menunggu: tombol ditekan sejak
@@ -806,7 +844,7 @@ Nama tombol:
   Nama yang sama dipakai onKey di window.
 
 ------------------------------------------------------------------------------
-lib nrx_console.h  -  tampilan console
+lib nrx_console  -  tampilan console
 ------------------------------------------------------------------------------
 
   clear()                   bersihkan layar
@@ -823,7 +861,7 @@ Warna console:
   (atau versi Inggrisnya), atau "#RRGGBB".
 
 ------------------------------------------------------------------------------
-lib nrx_sound.h  -  suara
+lib nrx_sound  -  suara
 ------------------------------------------------------------------------------
 
   playSound("koin.wav")     putar efek sekali (beberapa bisa bersamaan)
@@ -834,7 +872,7 @@ lib nrx_sound.h  -  suara
   Format: WAV dan MP3.
 
 ------------------------------------------------------------------------------
-lib nrx_json.h  -  JSON
+lib nrx_json  -  JSON
 ------------------------------------------------------------------------------
 
   toJson(data)          data nerx -> teks JSON satu baris
@@ -849,7 +887,7 @@ lib nrx_json.h  -  JSON
     be hasil json = fromJson(readFile("data.json"))   # isinya boleh campur
 
 ------------------------------------------------------------------------------
-lib nrx_http.h  -  internet (HTTP dan HTTPS)
+lib nrx_http  -  internet (HTTP dan HTTPS)
 ------------------------------------------------------------------------------
 
   httpGet(url)                  isi halaman/data sebagai teks
@@ -859,8 +897,8 @@ lib nrx_http.h  -  internet (HTTP dan HTTPS)
   httpGet(url, header)          sama, untuk GET
   httpStatus()                  kode status permintaan terakhir (200, 404, ...)
 
-    lib nrx_http.h
-    lib nrx_json.h
+    lib nrx_http
+    lib nrx_json
     be data json = fromJson(httpGet("https://api.contoh.com/data"))
     if httpStatus() != 200
         print "gagal: " httpStatus()
@@ -890,7 +928,7 @@ Di belakang layar (program tetap jalan selama menunggu, mis. window game):
   httpResult. Error koneksi muncul saat httpResult.
 
 ------------------------------------------------------------------------------
-lib nrx_3d.h  -  game 3D sederhana (raylib)
+lib nrx_3d  -  game 3D sederhana (raylib)
 ------------------------------------------------------------------------------
 
   open3d(judul, lebar, tinggi)          buka window 3D
@@ -938,7 +976,7 @@ lib nrx_3d.h  -  game 3D sederhana (raylib)
          "yellow", "orange", "purple", "pink", "brown", "skyblue", "#rrggbb",
          "#rrggbbaa" (aa = transparansi, 00 tembus sampai ff penuh)
 
-    lib nrx_3d.h
+    lib nrx_3d
     open3d("Game", 800, 600)
     be x = 0.0
     loop running3d()
@@ -1019,9 +1057,9 @@ Memakai:
   persis (byte demi byte).
 - Hanya fungsi yang benar-benar dipanggil yang masuk ke .exe, jadi hasilnya kecil.
 - .exe punya dua section: .text (kode, hanya baca/eksekusi) dan .data (variabel).
-- Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound,
+- Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound, os,
   window, 3d) ditulis ulang dalam nerx di src\lib\nrx_*.nrx. Cara
-  memakainya sama: lib nrx_window.h.
+  memakainya sama: lib nrx_window.
 - nrx_3d di nrxc adalah renderer perangkat lunak (GDI), bukan raylib: bentuk
   dan fungsinya sama, tetapi warna #rrggbbaa hanya dibedakan tembus (alpha 00)
   atau tidak, dan hurufnya memakai Segoe UI.

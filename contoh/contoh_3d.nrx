@@ -1,7 +1,7 @@
 # contoh_3d.nrx: gerakkan kotak oranye, kumpulkan bola ungu
 # W A S D = jalan, space = lompat, escape atau tombol X = keluar
-lib nrx_3d.h
-lib nrx_rand.h
+lib nrx_3d
+lib nrx_rand
 
 open3d("nerx 3D - kumpulkan bola", 960, 600)
 

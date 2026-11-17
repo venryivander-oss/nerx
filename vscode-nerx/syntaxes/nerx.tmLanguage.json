@@ -88,7 +88,7 @@
       "name": "keyword.control.nrx"
     },
     "io": {
-      "match": "\\b(print|ask\\.int|ask|wait\\.float|wait\\.double|wait)\\b",
+      "match": "\\b(print|sh|ask\\.int|ask|wait\\.float|wait\\.double|wait)\\b",
       "name": "support.function.io.nrx"
     },
     "constant": {

@@ -1,6 +1,6 @@
 // nerx website: syntax colors, the typing hero, and the example tabs.
 
-const KEYWORDS = new Set(("be lock print ask if else loop for in not and or func return type own init " +
+const KEYWORDS = new Set(("be lock print sh ask if else loop for in not and or func return type own init " +
   "options option try catch throw break continue exit im ex from lib ffi as delete true false errlang").split(" "));
 
 function esc(s) {

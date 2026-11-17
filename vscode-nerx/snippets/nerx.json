@@ -46,7 +46,7 @@
   },
   "lib": {
     "prefix": "lib",
-    "body": ["lib ${1|nrx_window.h,nrx_rand.h,nrx_crudfile.h,nrx_keyboard.h,nrx_console.h,nrx_sound.h,nrx_json.h|}"],
+    "body": ["lib ${1|nrx_window,nrx_rand,nrx_crudfile,nrx_keyboard,nrx_console,nrx_sound,nrx_json|}"],
     "description": "pakai library"
   },
   "windowTemplate": {
@@ -67,7 +67,7 @@
   "game": {
     "prefix": "game",
     "body": [
-      "lib nrx_window.h",
+      "lib nrx_window",
       "",
       "be x = 50",
       "",

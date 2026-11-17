@@ -4,7 +4,7 @@ Extension ini memberi warna sintaks, cuplikan kode, dan pengaturan editor untuk 
 
 ## Isi
 
-Kata kunci (`be`, `lock`, `func`, `if`, `options`, `im`, `ffi`, ...), teks, angka, komentar `#`, nama fungsi, baris `lib nrx_window.h`, properti `templateStyle`, jenis ffi, dan nama huruf besar seperti `MAX_HP` masing-masing mendapat warna sendiri.
+Kata kunci (`be`, `lock`, `func`, `if`, `options`, `im`, `ffi`, ...), teks, angka, komentar `#`, nama fungsi, baris `lib nrx_window`, properti `templateStyle`, jenis ffi, dan nama huruf besar seperti `MAX_HP` masing-masing mendapat warna sendiri.
 
 Untuk cuplikan, ketik salah satu kata ini lalu tekan Tab: `func`, `if`, `ife`, `loop`, `for`, `forr`, `try`, `options`, `struct`, `lib`, `windowTemplate`, `templateStyle`, `newWindow`, atau `game`.
 

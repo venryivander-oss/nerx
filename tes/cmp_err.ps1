@@ -6,8 +6,8 @@ $nrxlang = "..\history\dist\nrxlang_c.exe"; $nrxc = if (Test-Path ..\src\nrxc3.e
 $names = if ($list) { $list -split "[ ,]+" | ? { $_ } } else { Get-ChildItem "$dir\*.nrx" | % BaseName }
 $sama = 0; $beda = 0
 foreach ($n in $names) {
-    $asli = (cmd /c "`"$nrxlang`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim(); $ka = $LASTEXITCODE
-    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim(); $km = $LASTEXITCODE
+    $asli = (cmd /c "`"$nrxlang`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim() -replace '(nrx_\w+)\.h\b','$1'; $ka = $LASTEXITCODE
+    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim() -replace ', nrx_os','' -replace '(nrx_\w+)\.h\b','$1'; $km = $LASTEXITCODE
     if ($asli -eq $mini -and $ka -eq $km) { $sama++ }
     else { $beda++; "BEDA $n (exit $ka vs $km)"; "   real: $asli"; "   nrxc: $mini" }
 }

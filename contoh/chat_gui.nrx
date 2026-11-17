@@ -9,11 +9,11 @@
 #
 # Kontrol: Enter atau tombol panah bulat = kirim, "Chat baru" di kanan atas = mulai ulang,
 #          scrollbar di kanan (klik/seret), PageUp/PageDown/Home/End kalau fokus tidak di kolom ketik.
-lib nrx_window.h
-lib nrx_http.h
-lib nrx_json.h
-lib nrx_crudfile.h
-lib nrx_keyboard.h
+lib nrx_window
+lib nrx_http
+lib nrx_json
+lib nrx_crudfile
+lib nrx_keyboard
 
 # ------------------------------------------------------------ pengaturan
 be ALAMAT = "http://localhost:8080"

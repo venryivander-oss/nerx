@@ -45,7 +45,7 @@ built into nerx.exe makes it; see section 14):
 - The .exe holds x64 machine code written by nrxc directly (no VM, no
   interpreter), so calculations are much faster than with run. The syntax
   does not change.
-- lib nrx_window.h and ffi can be built too.
+- lib nrx_window and ffi can be built too.
 - The installer puts nerx.exe, prelude.nrx, pustaka.nrx, and the lib\ folder
   in one folder; nothing else is needed.
 - The earlier implementation was moved to the history\ folder of the repository;
@@ -479,15 +479,15 @@ In a file used through im, only what has ex can be used by other files.
 
 lib (built-in libraries):
 
-    lib nrx_window.h
-    lib nrx_rand.h
-    lib nrx_crudfile.h
-    lib nrx_keyboard.h
-    lib nrx_console.h
-    lib nrx_sound.h
-    lib nrx_json.h
-    lib nrx_http.h
-    lib nrx_3d.h
+    lib nrx_window
+    lib nrx_rand
+    lib nrx_crudfile
+    lib nrx_keyboard
+    lib nrx_console
+    lib nrx_sound
+    lib nrx_json
+    lib nrx_http
+    lib nrx_3d
 
 Library features can only be used after their lib line.
 
@@ -675,7 +675,7 @@ Function names are case-sensitive: getKey() is right, getkey() is wrong.
 ==============================================================================
 
 ------------------------------------------------------------------------------
-lib nrx_window.h  -  windows, buttons, canvas
+lib nrx_window  -  windows, buttons, canvas
 ------------------------------------------------------------------------------
 
 templateStyle (look):
@@ -775,7 +775,7 @@ Window colors:
   ungu, abu), or "#RRGGBB".
 
 ------------------------------------------------------------------------------
-lib nrx_rand.h  -  random numbers
+lib nrx_rand  -  random numbers
 ------------------------------------------------------------------------------
 
   random()              random decimal from 0 up to below 1
@@ -784,7 +784,7 @@ lib nrx_rand.h  -  random numbers
   randomSeed(n)         set the seed so the random sequence can repeat
 
 ------------------------------------------------------------------------------
-lib nrx_crudfile.h  -  files
+lib nrx_crudfile  -  files
 ------------------------------------------------------------------------------
 
   createFile(path)          create an empty file; false if it already exists
@@ -803,7 +803,44 @@ lib nrx_crudfile.h  -  files
                             the file's line endings (CRLF/LF) are kept
 
 ------------------------------------------------------------------------------
-lib nrx_keyboard.h  -  keyboard in the console
+sh  -  run shell commands (built in, no lib needed)
+------------------------------------------------------------------------------
+
+  sh dir /b                 run a command like in cmd; its output shows on screen
+  sh "echo hello " name     text in quotes plus variables, joined like print
+  sh cd src                 cd is handled by nerx itself, so the new folder stays
+  shCode(command)           run it and return the exit code (0 means success)
+  shText(command)           run it and return its output as text (errors included)
+
+  Example:
+      sh cd src
+      sh nerx build game.nrx
+      be files = shText("dir /b")
+      print len(split(trim(files), "\n")) " files"
+      if shCode("git status") != 0
+          print "not a git repository"
+  sh runs anything cmd can run, so never build the command from text you do not
+  trust (user input, downloaded files). Inside sh, use .\nerx.exe if nerx is not on PATH.
+------------------------------------------------------------------------------
+lib nrx_os  -  working folder, folders and running commands
+------------------------------------------------------------------------------
+
+  cwd()                     the current working folder
+  cd(path)                  change the working folder; false if it does not exist
+  mkdir(path)               create a folder; false if it fails
+  rmdir(path)               delete an empty folder; false if it fails
+  copyFile(from, to)        copy a file (overwrites the target)
+  renameFile(from, to)      rename or move a file or folder
+  getenv(name)              value of an environment variable ("" if it is not set)
+  run(command)              run a command like in cmd, its output shows on the
+                            screen; returns the exit code (0 means success)
+  To list a folder use listFiles from nrx_crudfile. Example, like typing
+  "cd src" and then a command in a terminal (see contoh\bangun.nrx):
+      lib nrx_os
+      cd("src")
+      run(".\\nerx.exe nrxc.nrx nerx_baru.exe")
+------------------------------------------------------------------------------
+lib nrx_keyboard  -  keyboard in the console
 ------------------------------------------------------------------------------
 
   keyPressed("left")    true/false without waiting: key pressed since the
@@ -817,7 +854,7 @@ Key names:
   onKey in windows uses the same names.
 
 ------------------------------------------------------------------------------
-lib nrx_console.h  -  console display
+lib nrx_console  -  console display
 ------------------------------------------------------------------------------
 
   clear()                   clear the screen
@@ -834,7 +871,7 @@ Console colors:
   (or the Indonesian names), or "#RRGGBB".
 
 ------------------------------------------------------------------------------
-lib nrx_sound.h  -  sound
+lib nrx_sound  -  sound
 ------------------------------------------------------------------------------
 
   playSound("coin.wav")     play an effect once (several can overlap)
@@ -845,7 +882,7 @@ lib nrx_sound.h  -  sound
   Formats: WAV and MP3.
 
 ------------------------------------------------------------------------------
-lib nrx_json.h  -  JSON
+lib nrx_json  -  JSON
 ------------------------------------------------------------------------------
 
   toJson(data)          nerx data -> one-line JSON text
@@ -860,7 +897,7 @@ lib nrx_json.h  -  JSON
     be result json = fromJson(readFile("data.json"))   # content may be mixed
 
 ------------------------------------------------------------------------------
-lib nrx_http.h  -  internet (HTTP and HTTPS)
+lib nrx_http  -  internet (HTTP and HTTPS)
 ------------------------------------------------------------------------------
 
   httpGet(url)                  page/data content as text
@@ -870,8 +907,8 @@ lib nrx_http.h  -  internet (HTTP and HTTPS)
   httpGet(url, headers)         same, for GET
   httpStatus()                  status code of the last request (200, 404, ...)
 
-    lib nrx_http.h
-    lib nrx_json.h
+    lib nrx_http
+    lib nrx_json
     be data json = fromJson(httpGet("https://api.example.com/data"))
     if httpStatus() != 200
         print "failed: " httpStatus()
@@ -902,7 +939,7 @@ window):
   httpResult. Connection errors appear at httpResult.
 
 ------------------------------------------------------------------------------
-lib nrx_3d.h  -  simple 3D games (raylib)
+lib nrx_3d  -  simple 3D games (raylib)
 ------------------------------------------------------------------------------
 
   open3d(title, width, height)          open a 3D window
@@ -950,7 +987,7 @@ lib nrx_3d.h  -  simple 3D games (raylib)
           "yellow", "orange", "purple", "pink", "brown", "skyblue", "#rrggbb",
           "#rrggbbaa" (aa = transparency, 00 invisible to ff solid)
 
-    lib nrx_3d.h
+    lib nrx_3d
     open3d("Game", 800, 600)
     be x = 0.0
     loop running3d()
@@ -1032,9 +1069,9 @@ Using it:
 - Only functions that are actually called go into the .exe, so it stays small.
 - The .exe has two sections: .text (code, read/execute only) and .data
   (variables).
-- Every library (nrx_crudfile, rand, console, keyboard, json, http, sound,
+- Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os,
   window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used
-  the same way: lib nrx_window.h.
+  the same way: lib nrx_window.
 - nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and
   functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from
   not, and text uses Segoe UI.

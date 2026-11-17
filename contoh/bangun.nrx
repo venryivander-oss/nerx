@@ -1,0 +1,10 @@
+# bangun.nrx: pindah ke folder src lalu bangun compiler (seperti mengetik perintah di terminal).
+# Jalankan dari folder proyek:  nerx run contoh\bangun.nrx
+sh cd src
+sh .\nerx.exe nrxc.nrx nerx_baru.exe
+if shCode("if exist nerx_baru.exe exit 0") == 0
+    print "berhasil: src\\nerx_baru.exe"
+    sh del nerx_baru.exe
+else
+    print "gagal"
+    exit(1)

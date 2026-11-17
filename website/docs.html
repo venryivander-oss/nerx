@@ -42,15 +42,17 @@
 <li><a href="#other-files-export-libraries-and-ffi">Other files, export, libraries, and ffi</a></li>
 <li><a href="#built-in-functions-no-lib">Built-in functions (no lib)</a></li>
 <li><a href="#libraries">Libraries</a></li>
-<li class="sub"><a href="#lib-nrx-window-h-windows-buttons-canvas">lib nrx_window.h</a></li>
-<li class="sub"><a href="#lib-nrx-rand-h-random-numbers">lib nrx_rand.h</a></li>
-<li class="sub"><a href="#lib-nrx-crudfile-h-files">lib nrx_crudfile.h</a></li>
-<li class="sub"><a href="#lib-nrx-keyboard-h-keyboard-in-the-console">lib nrx_keyboard.h</a></li>
-<li class="sub"><a href="#lib-nrx-console-h-console-display">lib nrx_console.h</a></li>
-<li class="sub"><a href="#lib-nrx-sound-h-sound">lib nrx_sound.h</a></li>
-<li class="sub"><a href="#lib-nrx-json-h-json">lib nrx_json.h</a></li>
-<li class="sub"><a href="#lib-nrx-http-h-internet-http-and-https">lib nrx_http.h</a></li>
-<li class="sub"><a href="#lib-nrx-3d-h-simple-3d-games-raylib">lib nrx_3d.h</a></li>
+<li class="sub"><a href="#lib-nrx-window-windows-buttons-canvas">lib nrx_window</a></li>
+<li class="sub"><a href="#lib-nrx-rand-random-numbers">lib nrx_rand</a></li>
+<li class="sub"><a href="#lib-nrx-crudfile-files">lib nrx_crudfile</a></li>
+<li class="sub"><a href="#sh-run-shell-commands-built-in-no-lib-needed">sh</a></li>
+<li class="sub"><a href="#lib-nrx-os-working-folder-folders-and-running-commands">lib nrx_os</a></li>
+<li class="sub"><a href="#lib-nrx-keyboard-keyboard-in-the-console">lib nrx_keyboard</a></li>
+<li class="sub"><a href="#lib-nrx-console-console-display">lib nrx_console</a></li>
+<li class="sub"><a href="#lib-nrx-sound-sound">lib nrx_sound</a></li>
+<li class="sub"><a href="#lib-nrx-json-json">lib nrx_json</a></li>
+<li class="sub"><a href="#lib-nrx-http-internet-http-and-https">lib nrx_http</a></li>
+<li class="sub"><a href="#lib-nrx-3d-simple-3d-games-raylib">lib nrx_3d</a></li>
 <li><a href="#limits">Limits</a></li>
 <li><a href="#vs-code-extension">VS Code extension</a></li>
 <li><a href="#nrxc-the-compiler-written-in-nerx-no-vm">nrxc: the compiler written in nerx (no VM)</a></li>
@@ -69,7 +71,7 @@
 <pre class="prog">nerx build contoh_fitur.nrx       -&gt; contoh_fitur.exe
 nerx build game.nrx -o out\game.exe
 nerx contoh_fitur.nrx             (the same as build)</pre>
-<ul><li>The .exe stands alone: the .nrx file (and every file it pulls in with im) is embedded, so the .nrx files do not need to be shared.</li><li>Type errors are caught at build time, and no .exe is made.</li><li>Output and error messages of the .exe are exactly the same as running the script directly.</li><li>The .exe holds x64 machine code written by nrxc directly (no VM, no interpreter), so calculations are much faster than with run. The syntax does not change.</li><li>lib nrx_window.h and ffi can be built too.</li><li>The installer puts nerx.exe, prelude.nrx, pustaka.nrx, and the lib\ folder in one folder; nothing else is needed.</li><li>The earlier implementation was moved to the history\ folder of the repository; it is not needed to use or build Nerx.</li></ul>
+<ul><li>The .exe stands alone: the .nrx file (and every file it pulls in with im) is embedded, so the .nrx files do not need to be shared.</li><li>Type errors are caught at build time, and no .exe is made.</li><li>Output and error messages of the .exe are exactly the same as running the script directly.</li><li>The .exe holds x64 machine code written by nrxc directly (no VM, no interpreter), so calculations are much faster than with run. The syntax does not change.</li><li>lib nrx_window and ffi can be built too.</li><li>The installer puts nerx.exe, prelude.nrx, pustaka.nrx, and the lib\ folder in one folder; nothing else is needed.</li><li>The earlier implementation was moved to the history\ folder of the repository; it is not needed to use or build Nerx.</li></ul>
 <p>Files a script reads (readFile, playSound, newImage, ...) are looked up from the folder the command runs in, not the script&#x27;s folder. The exception is im: files for im are looked up from the script&#x27;s folder.</p>
 </section>
 <section class="part" data-part>
@@ -306,15 +308,15 @@ ex lock PI = 3.14159</pre>
     return round(x, 2)</pre>
 <ul><li>The main file (the one run directly) does not need ex.</li><li>The same name in different files does not clash as long as it is not exported.</li><li>ex must be written at the far left, outside functions.</li></ul>
 <p>lib (built-in libraries):</p>
-<pre class="prog">lib nrx_window.h
-lib nrx_rand.h
-lib nrx_crudfile.h
-lib nrx_keyboard.h
-lib nrx_console.h
-lib nrx_sound.h
-lib nrx_json.h
-lib nrx_http.h
-lib nrx_3d.h</pre>
+<pre class="prog">lib nrx_window
+lib nrx_rand
+lib nrx_crudfile
+lib nrx_keyboard
+lib nrx_console
+lib nrx_sound
+lib nrx_json
+lib nrx_http
+lib nrx_3d</pre>
 <p>Library features can only be used after their lib line.</p>
 <p>ffi (call DLL functions directly):</p>
 <pre class="prog">ffi &quot;user32.dll&quot; (
@@ -446,7 +448,7 @@ exit()  exit(code)       stop the program</pre>
 <section class="part" data-part>
 <h2 id="libraries">Libraries</h2>
 
-<h3 id="lib-nrx-window-h-windows-buttons-canvas">lib nrx_window.h  -  windows, buttons, canvas</h3>
+<h3 id="lib-nrx-window-windows-buttons-canvas">lib nrx_window  -  windows, buttons, canvas</h3>
 <p>templateStyle (look):</p>
 <pre class="prog">templateStyle title(
     size: 28
@@ -507,12 +509,12 @@ drawImage(screen, &quot;file.png&quot;, x, y)               # or + width, height
 <pre class="ref">drawImage and newImage can open PNG, JPG, and BMP. Drawings appear on
 screen at the end of every event or wait.</pre>
 <p>Window colors: black, white, red, green, blue, yellow, orange, purple, gray (or the Indonesian names hitam, putih, merah, hijau, biru, kuning, oranye, ungu, abu), or &quot;#RRGGBB&quot;.</p>
-<h3 id="lib-nrx-rand-h-random-numbers">lib nrx_rand.h  -  random numbers</h3>
+<h3 id="lib-nrx-rand-random-numbers">lib nrx_rand  -  random numbers</h3>
 <pre class="ref">random()              random decimal from 0 up to below 1
 random(min, max)      random whole number min..max
 choice(list)          one random list item
 randomSeed(n)         set the seed so the random sequence can repeat</pre>
-<h3 id="lib-nrx-crudfile-h-files">lib nrx_crudfile.h  -  files</h3>
+<h3 id="lib-nrx-crudfile-files">lib nrx_crudfile  -  files</h3>
 <pre class="ref">createFile(path)          create an empty file; false if it already exists
 readFile(path)            the whole file as text
 readLines(path)           the file as a list, one line per item
@@ -527,12 +529,42 @@ readRange(path, start, n) list of n lines from line start (first line is 1)
 findInFile(path, text)    list of line numbers that contain text
 replaceInFile(path, old, new)  replace all, returns how many were replaced;
                           the file&#x27;s line endings (CRLF/LF) are kept</pre>
-<h3 id="lib-nrx-keyboard-h-keyboard-in-the-console">lib nrx_keyboard.h  -  keyboard in the console</h3>
+<h3 id="sh-run-shell-commands-built-in-no-lib-needed">sh  -  run shell commands (built in, no lib needed)</h3>
+<pre class="ref">sh dir /b                 run a command like in cmd; its output shows on screen
+sh &quot;echo hello &quot; name     text in quotes plus variables, joined like print
+sh cd src                 cd is handled by nerx itself, so the new folder stays
+shCode(command)           run it and return the exit code (0 means success)
+shText(command)           run it and return its output as text (errors included)</pre>
+<pre class="ref">Example:
+    sh cd src
+    sh nerx build game.nrx
+    be files = shText(&quot;dir /b&quot;)
+    print len(split(trim(files), &quot;\n&quot;)) &quot; files&quot;
+    if shCode(&quot;git status&quot;) != 0
+        print &quot;not a git repository&quot;
+sh runs anything cmd can run, so never build the command from text you do not
+trust (user input, downloaded files). Inside sh, use .\nerx.exe if nerx is not on PATH.</pre>
+<h3 id="lib-nrx-os-working-folder-folders-and-running-commands">lib nrx_os  -  working folder, folders and running commands</h3>
+<pre class="ref">cwd()                     the current working folder
+cd(path)                  change the working folder; false if it does not exist
+mkdir(path)               create a folder; false if it fails
+rmdir(path)               delete an empty folder; false if it fails
+copyFile(from, to)        copy a file (overwrites the target)
+renameFile(from, to)      rename or move a file or folder
+getenv(name)              value of an environment variable (&quot;&quot; if it is not set)
+run(command)              run a command like in cmd, its output shows on the
+                          screen; returns the exit code (0 means success)
+To list a folder use listFiles from nrx_crudfile. Example, like typing
+&quot;cd src&quot; and then a command in a terminal (see contoh\bangun.nrx):
+    lib nrx_os
+    cd(&quot;src&quot;)
+    run(&quot;.\\nerx.exe nrxc.nrx nerx_baru.exe&quot;)</pre>
+<h3 id="lib-nrx-keyboard-keyboard-in-the-console">lib nrx_keyboard  -  keyboard in the console</h3>
 <pre class="ref">keyPressed(&quot;left&quot;)    true/false without waiting: key pressed since the
                       last check
 getKey()              wait for one key, return its name</pre>
 <p>Key names: &quot;a&quot; to &quot;z&quot;, &quot;0&quot; to &quot;9&quot;, &quot;left&quot;, &quot;right&quot;, &quot;up&quot;, &quot;down&quot;, &quot;space&quot;, &quot;enter&quot;, &quot;escape&quot; or &quot;esc&quot;, &quot;tab&quot;, &quot;backspace&quot;, &quot;delete&quot;, &quot;shift&quot;, &quot;ctrl&quot;, &quot;alt&quot;, &quot;home&quot;, &quot;end&quot;, &quot;pageup&quot;, &quot;pagedown&quot;, &quot;f1&quot; to &quot;f12&quot;. onKey in windows uses the same names.</p>
-<h3 id="lib-nrx-console-h-console-display">lib nrx_console.h  -  console display</h3>
+<h3 id="lib-nrx-console-console-display">lib nrx_console  -  console display</h3>
 <pre class="ref">clear()                   clear the screen
 cursor(x, y)              move the cursor to column x, row y (from 0)
 color(&quot;red&quot;)              text color for the next prints
@@ -542,28 +574,28 @@ runCommand(command)       run a cmd command, returns its output (stdout and
                           stderr) as text: runCommand(&quot;dir&quot;)
 commandStatus()           exit code of the last command (0 = success)</pre>
 <p>Console colors: black, red, green, yellow, blue, purple, cyan, white, gray (or the Indonesian names), or &quot;#RRGGBB&quot;.</p>
-<h3 id="lib-nrx-sound-h-sound">lib nrx_sound.h  -  sound</h3>
+<h3 id="lib-nrx-sound-sound">lib nrx_sound  -  sound</h3>
 <pre class="ref">playSound(&quot;coin.wav&quot;)     play an effect once (several can overlap)
 playMusic(&quot;song.mp3&quot;)     play music on repeat (replaces the old one)
 stopMusic()               stop the music
 stopSound()               stop all effects</pre>
 <pre class="ref">Formats: WAV and MP3.</pre>
-<h3 id="lib-nrx-json-h-json">lib nrx_json.h  -  JSON</h3>
+<h3 id="lib-nrx-json-json">lib nrx_json  -  JSON</h3>
 <pre class="ref">toJson(data)          nerx data -&gt; one-line JSON text
 toJson(data, true)    same, but pretty (lines and indentation)
 fromJson(text)        JSON text -&gt; nerx data</pre>
 <ul><li>JSON object &lt;-&gt; map, array &lt;-&gt; list, true/false &lt;-&gt; bool, null -&gt; empty text. Types are saved as objects.</li><li>To save and load data from a file, pair it with nrx_crudfile:</li></ul>
 <pre class="prog">writeFile(&quot;data.json&quot;, toJson(data, true))
 be result json = fromJson(readFile(&quot;data.json&quot;))   # content may be mixed</pre>
-<h3 id="lib-nrx-http-h-internet-http-and-https">lib nrx_http.h  -  internet (HTTP and HTTPS)</h3>
+<h3 id="lib-nrx-http-internet-http-and-https">lib nrx_http  -  internet (HTTP and HTTPS)</h3>
 <pre class="ref">httpGet(url)                  page/data content as text
 httpPost(url, body)           send text, returns the reply text
 httpPost(url, body, kind)     with a content type, e.g. &quot;application/json&quot;
 httpPost(url, body, kind, headers)  extra headers as a map of text
 httpGet(url, headers)         same, for GET
 httpStatus()                  status code of the last request (200, 404, ...)</pre>
-<pre class="prog">lib nrx_http.h
-lib nrx_json.h
+<pre class="prog">lib nrx_http
+lib nrx_json
 be data json = fromJson(httpGet(&quot;https://api.example.com/data&quot;))
 if httpStatus() != 200
     print &quot;failed: &quot; httpStatus()</pre>
@@ -583,7 +615,7 @@ loop running3d()
         be reply = httpResult()
     ...draw as usual...</pre>
 <ul><li>One request at a time: the next httpStart is only allowed after httpResult. Connection errors appear at httpResult.</li></ul>
-<h3 id="lib-nrx-3d-h-simple-3d-games-raylib">lib nrx_3d.h  -  simple 3D games (raylib)</h3>
+<h3 id="lib-nrx-3d-simple-3d-games-raylib">lib nrx_3d  -  simple 3D games (raylib)</h3>
 <pre class="ref">open3d(title, width, height)          open a 3D window
 running3d()                           true while the window is open
 camera3d(x, y, z, lookX, lookY, lookZ)  camera and the point it looks at
@@ -627,7 +659,7 @@ close3d()                             close the window</pre>
 <pre class="ref">colors: &quot;red&quot;, &quot;green&quot;, &quot;blue&quot;, &quot;white&quot;, &quot;black&quot;, &quot;gray&quot;, &quot;darkgray&quot;,
         &quot;yellow&quot;, &quot;orange&quot;, &quot;purple&quot;, &quot;pink&quot;, &quot;brown&quot;, &quot;skyblue&quot;, &quot;#rrggbb&quot;,
         &quot;#rrggbbaa&quot; (aa = transparency, 00 invisible to ff solid)</pre>
-<pre class="prog">lib nrx_3d.h
+<pre class="prog">lib nrx_3d
 open3d(&quot;Game&quot;, 800, 600)
 be x = 0.0
 loop running3d()
@@ -670,7 +702,7 @@ nerx game.nrx out\game.exe             # choose the .exe name
 nerx                                 # no arguments: it asks for the file and the .exe
 nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
 nerx run game.nrx                      # compile to a temporary .exe, run it, delete it</pre>
-<ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.h.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
+<ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
 <p>Differences from the old interpreter that are not matched yet:</p>
 <ul><li>Integers that pass the 64-bit limit wrap around (the old interpreter turns them into decimals).</li><li>min(2.5, 1) returns a decimal (old interpreter: the integer 1).</li><li>Type names are not separated per file (ordinary functions and variables already are).</li></ul>
 <h3 id="nrxc-intrinsics-for-writing-libraries-in-nerx">nrxc intrinsics  -  for writing libraries in nerx</h3>
