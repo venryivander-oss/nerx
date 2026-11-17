@@ -28,7 +28,8 @@ option, adds it to your PATH so you can use it from any folder.
 nerx run program.nrx                     run it (compiled to a temporary exe, then deleted)
 nerx build program.nrx                   build program.exe
 nerx build program.nrx -o game.exe
-Nerx program.nrx                         same as build
+nerx program.nrx                         same as build
+nerx repl                                 type code and see the result (also just "nerx")
 ```
 
 - The resulting `.exe` is standalone: the `.nrx` file does not need to be shipped with it.

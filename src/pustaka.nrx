@@ -1157,3 +1157,32 @@ func shText(perintah string) string
     callp(dllFn("msvcrt.dll", "_pclose"), f)
     free(buf)
     return replace(hasil, "\r", "")
+
+# teks berformat f"...": isinya sudah digabung oleh compiler, fungsi ini hanya meneruskan hasilnya
+func fmtTeks(s string) string
+    return s
+
+# argumen perintah program: nerx run skrip.nrx a b  ->  args() = ["a", "b"]
+func args() list string
+    be semua list string
+    be cmd = fromC(api(10, 0, 0, 0, 0, 0, 0, 0))
+    be n = len(cmd)
+    be i = 0
+    be pos = 0
+    loop i < n
+        loop i < n and (substr(cmd, i, 1) == " " or substr(cmd, i, 1) == "\t")
+            be i += 1
+        if i < n
+            be tok = ""
+            be dlm = false
+            loop i < n and (dlm or (substr(cmd, i, 1) != " " and substr(cmd, i, 1) != "\t"))
+                be ch = substr(cmd, i, 1)
+                if ch == "\""
+                    be dlm = not dlm
+                else
+                    be tok = tok + ch
+                be i += 1
+            if pos > 0
+                add(semua, tok)
+            be pos += 1
+    return semua

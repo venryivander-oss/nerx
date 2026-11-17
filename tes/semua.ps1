@@ -17,4 +17,6 @@ Pop-Location
 powershell -NoProfile -File cmp_err.ps1 2>&1 | Out-String | Add-Content $o
 "== err id" | Add-Content $o
 powershell -NoProfile -File cmp_err.ps1 -dir uji_err_id 2>&1 | Out-String | Add-Content $o
+"== nerx (sh, f-teks, args, repl, os, db)" | Add-Content $o
+powershell -NoProfile -File nerx.ps1 2>&1 | Out-String | Add-Content $o
 "SELESAI" | Add-Content $o

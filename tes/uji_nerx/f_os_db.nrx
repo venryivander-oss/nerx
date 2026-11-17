@@ -1,0 +1,21 @@
+lib nrx_os
+lib nrx_crudfile
+lib nrx_db
+print mkdir("tmp_uji_nerx")
+print cd("tmp_uji_nerx")
+be db = Db()
+db.open("a.db")
+db.exec("CREATE TABLE t (n TEXT, u INT)")
+db.execWith("INSERT INTO t VALUES (?, ?)", ["Budi", "20"])
+be r = db.query("SELECT n, u FROM t")
+loop r.next()
+    print f"{r.text(0)} {r.int(1) + 1}"
+print db.value("SELECT COUNT(*) FROM t")
+try
+    db.exec("SELECT * FROM tidak_ada")
+catch e
+    print e
+db.close()
+deleteFile("a.db")
+print cd("..")
+print rmdir("tmp_uji_nerx")

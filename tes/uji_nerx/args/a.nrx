@@ -1,0 +1,4 @@
+be a = args()
+print len(a)
+for x in a
+    print f"[{x}]"

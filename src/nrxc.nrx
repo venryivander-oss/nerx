@@ -936,6 +936,65 @@ func pecah(s string) list string
                     be j = j2
             add(hasil, slice(s, i, j))
             be i = j
+        else if ch == "f" and i + 1 < n and substr(s, i + 1, 1) == "\"" and (i == 0 or not (contains(HURUF, substr(s, i - 1, 1)) or contains(DIGIT, substr(s, i - 1, 1))))
+            # teks berformat: f"halo {nama}, umur {umur + 1}"  ->  fmtTeks("" "halo " (nama) ", umur " (umur + 1))
+            # {{ dan }} = kurung kurawal biasa; isi { } tidak boleh memuat tanda kutip
+            be j = i + 2
+            be lit = ""
+            be tutup = false
+            add(hasil, "fmtTeks")
+            add(hasil, "(")
+            add(hasil, "\"")
+            loop j < n and not tutup
+                be c2 = substr(s, j, 1)
+                if c2 == "\\" and j + 1 < n
+                    be e2 = substr(s, j + 1, 1)
+                    if e2 == "n"
+                        be lit = lit + "\n"
+                    else if e2 == "t"
+                        be lit = lit + "\t"
+                    else if e2 == "r"
+                        be lit = lit + "\r"
+                    else if e2 == "\\" or e2 == "\""
+                        be lit = lit + e2
+                    else
+                        be lit = lit + "\\" + e2
+                    be j += 2
+                else if c2 == "\""
+                    be tutup = true
+                    be j += 1
+                else if c2 == "{" and j + 1 < n and substr(s, j + 1, 1) == "{"
+                    be lit = lit + "{"
+                    be j += 2
+                else if c2 == "}" and j + 1 < n and substr(s, j + 1, 1) == "}"
+                    be lit = lit + "}"
+                    be j += 2
+                else if c2 == "{"
+                    be k = j + 1
+                    loop k < n and substr(s, k, 1) != "}" and substr(s, k, 1) != "\""
+                        be k += 1
+                    if k >= n or substr(s, k, 1) != "}"
+                        galatK(35, "missing } in the f-text")
+                    be isi = trim(slice(s, j + 1, k))
+                    if isi == ""
+                        galat("f\"...\": isi { } tidak boleh kosong")
+                    if lit != ""
+                        add(hasil, "\"" + lit)
+                        be lit = ""
+                    add(hasil, "(")
+                    for tk in pecah(isi)
+                        add(hasil, tk)
+                    add(hasil, ")")
+                    be j = k + 1
+                else
+                    be lit = lit + c2
+                    be j += 1
+            if not tutup
+                galatK(31, "quote \" is not closed")
+            if lit != ""
+                add(hasil, "\"" + lit)
+            add(hasil, ")")
+            be i = j
         else if contains(HURUF, ch)
             be j = i
             loop j < n and (contains(HURUF, substr(s, j, 1)) or contains(DIGIT, substr(s, j, 1)))
@@ -4419,6 +4478,92 @@ func kompilasi(sumber string, keluar string)
     if not diam
         print "Done: " keluar " (" total " bytes)"
 
+# ---------------------------------------------------------------- REPL: nerx repl (atau nerx tanpa argumen)
+# Tiap masukan dikompilasi bersama definisi sebelumnya (func, type, be, lock, lib, im) lalu dijalankan sebagai program kecil
+# lewat nerx build; galat tidak mematikan REPL. be-an lama dijalankan ulang (diam), perintah lain hanya dijalankan sekali.
+# replBangun: "" kalau berhasil dikompilasi, kalau tidak teks galatnya.
+func replBangun(prog string, tmp string, exe string, diri string) string
+    writeFile(tmp, prog)
+    be o = shText("\"\"" + diri + "\" build \"" + tmp + "\" -o \"" + exe + "\"\"")
+    if substr(o, 0, 5) == "Done:"
+        return ""
+    return trim(replace(replace(o, "\r", ""), tmp, "<repl>"))
+
+func replJalan(exe string) string
+    return trim(replace(shText("\"" + exe + "\""), "\r", ""))
+func replMain(diri string)
+    print "Nerx REPL. :help for help, :quit to exit."
+    be defs list string
+    be bufT = newBuffer(520)
+    GetTempPathA(500, bufT)
+    be tmp = peekText(bufT) + "nerx_repl_" + str(GetCurrentProcessId()) + ".nrx"
+    be exe = peekText(bufT) + "nerx_repl_" + str(GetCurrentProcessId()) + ".exe"
+    be kosong = 0
+    be selesai = false
+    loop not selesai
+        be baris = ask "> "
+        be b = trim(baris)
+        if b == ""
+            be kosong += 1
+            if kosong > 20
+                be selesai = true
+            continue
+        be kosong = 0
+        if b == ":quit" or b == ":q" or b == ":exit"
+            be selesai = true
+            continue
+        if b == ":help"
+            print "  type code and press Enter. An expression prints its value: 1 + 2"
+            print "  blocks (func, type, if, for, loop, try) continue on the next lines; an empty line ends them"
+            print "  be, func, type, lock, lib, im are remembered. :defs shows them, :reset forgets them, :quit exits"
+            print "  each line runs in a fresh process: sh cd and state of earlier statements do not carry over"
+            continue
+        if b == ":reset"
+            be defs = slice(defs, 0, 0)
+            print "forgotten"
+            continue
+        if b == ":defs"
+            for d in defs
+                print d
+            continue
+        be entri = baris
+        be kata = split(b)[0]
+        if indexOf(split("func type if for loop try options else catch"), kata) >= 0
+            be lanjut = true
+            loop lanjut
+                be l2 = ask ". "
+                if trim(l2) == ""
+                    be lanjut = false
+                else
+                    be entri = entri + "\n" + l2
+        be jenisDef = indexOf(split("func type lock lib im ffi be"), kata) >= 0
+        be awal = join(defs, "\n") + "\n"
+        be hasil = ""
+        if jenisDef or contains(entri, "\n")
+            be g = replBangun(awal + entri, tmp, exe, diri)
+            if g == ""
+                be hasil = replJalan(exe)
+                if jenisDef
+                    add(defs, entri)
+            else
+                be hasil = g
+        else
+            be g1 = replBangun(awal + "print " + entri, tmp, exe, diri)
+            if g1 == ""
+                be hasil = replJalan(exe)
+            else
+                be g2 = replBangun(awal + entri, tmp, exe, diri)
+                if g2 == ""
+                    be hasil = replJalan(exe)
+                else if contains(g2, "E0113")
+                    be hasil = g1
+                else
+                    be hasil = g2
+        if hasil != ""
+            print hasil
+    DeleteFileA(tmp)
+    DeleteFileA(exe)
+
 # ---------------------------------------------------------------- program utama
 # argumen: nrxc file.nrx [hasil.exe]   (tanpa argumen: tanya lewat layar). Dijalankan lewat
 # "nerx run nrxc.nrx" argumen dihitung setelah nama nrxc.nrx.
@@ -4460,6 +4605,9 @@ if len(sisaArg) >= 2 and sisaArg[0] == "run"
     be kode = system(cmdRun + "\"")
     DeleteFileA(exeTmp)
     exit(kode)
+if len(sisaArg) == 1 and sisaArg[0] == "repl"
+    replMain(namaEx)
+    exit(0)
 if len(sisaArg) >= 2 and sisaArg[0] == "build"
     be sisaBaru list string
     add(sisaBaru, sisaArg[1])
@@ -4481,14 +4629,4 @@ if len(sisaArg) >= 1
     tentukanBahasa(sumber)
     kompilasi(sumber, keluar)
 else
-    print "=== nrxc: compiler nerx -> .exe tanpa C ==="
-    be sumber = ask "File sumber [contoh.nrx]: "
-    be sumber = trim(sumber)
-    if sumber == ""
-        be sumber = "contoh.nrx"
-    be keluar = ask "Nama .exe [hasil.exe]: "
-    be keluar = trim(keluar)
-    if keluar == ""
-        be keluar = "hasil.exe"
-    tentukanBahasa(sumber)
-    kompilasi(sumber, keluar)
+    replMain(namaEx)

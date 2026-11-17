@@ -792,6 +792,38 @@ lib nrx_crudfile  -  file
                             akhir baris file (CRLF/LF) tetap
 
 ------------------------------------------------------------------------------
+Teks berformat, argumen program, dan REPL
+------------------------------------------------------------------------------
+
+  f"..." teks dengan nilai di dalam { }:
+      be nama = "Budi"
+      be umur = 20
+      print f"halo {nama}, tahun depan umurmu {umur + 1}"     # halo Budi, tahun depan umurmu 21
+  - Ekspresi apa pun boleh di dalam { }: variabel, hitungan, pemanggilan fungsi, d.field.
+    Angka, true/false, list, dan sebagainya otomatis diubah jadi teks.
+  - {{ dan }} menghasilkan { dan } biasa. Isi { } tidak boleh memuat tanda kutip.
+  - Hasilnya nilai teks biasa: be s = f"{a}-{b}", atau diberikan ke fungsi.
+
+  args()                    argumen yang diberikan ke program, sebagai list teks
+      nerx run alat.nrx satu "dua kata" 3     ->   args() = ["satu", "dua kata", "3"]
+      alat.exe satu "dua kata" 3              ->   sama, kalau menjalankan .exe hasil build
+
+  nerx repl  (atau cukup nerx) prompt tempat mengetik kode dan langsung melihat hasilnya:
+      > 1 + 2
+      3
+      > be x = 5
+      > x * 2
+      10
+      > func dua(n int) int            blok (func, type, if, for, loop, try)
+      .     return n * 2               berlanjut di baris berikutnya
+      .                                baris kosong mengakhiri blok
+      > dua(21)
+      42
+  - Ekspresi dicetak nilainya. Baris be, func, type, lock, lib, dan im diingat.
+    :defs menampilkannya, :reset melupakannya, :quit keluar.
+  - Tiap baris dibangun dan dijalankan sebagai program kecil, jadi galat tidak
+    menutup REPL. Baris be yang lama dijalankan ulang (diam); baris lain hanya sekali.
+------------------------------------------------------------------------------
 sh  -  menjalankan perintah shell (bawaan, tanpa lib)
 ------------------------------------------------------------------------------
 
@@ -1082,7 +1114,7 @@ Memakai:
 
     nerx game.nrx                          # -> game.exe
     nerx game.nrx hasil\game.exe           # pilih nama .exe
-    nerx                                 # tanpa argumen: ditanya nama file dan .exe
+    nerx                                 # tanpa argumen: REPL (lihat bagian REPL)
     nerx build game.nrx -o game.exe        # sama, dengan pilihan nama .exe
     nerx run game.nrx                      # kompilasi ke .exe sementara, jalankan, hapus
 

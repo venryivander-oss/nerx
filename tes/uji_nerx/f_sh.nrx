@@ -1,0 +1,9 @@
+be nama = "dunia"
+sh echo halo dari sh
+sh "echo halo " nama
+be hasil = shText("echo satu & echo dua")
+print len(split(trim(hasil), "\n"))
+print shCode("exit 3")
+print shCode("exit 0")
+sh cd ..
+sh cd tidak_ada_folder_ini

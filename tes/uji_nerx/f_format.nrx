@@ -1,0 +1,12 @@
+be nama = "Budi"
+be umur = 20
+be d = 2.5
+be ok = true
+print f"halo {nama}, umur {umur + 1}"
+print f"d={d} ok={ok} kurung {{literal}}"
+print len(f"abc {nama}")
+be xs = [1, 2, 3]
+print f"list {xs} dan {len(xs)} item"
+print f"tab\tdan \"kutip\" {nama}"
+be f = 3
+print f + 1

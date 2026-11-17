@@ -45,6 +45,7 @@
 <li class="sub"><a href="#lib-nrx-window-windows-buttons-canvas">lib nrx_window</a></li>
 <li class="sub"><a href="#lib-nrx-rand-random-numbers">lib nrx_rand</a></li>
 <li class="sub"><a href="#lib-nrx-crudfile-files">lib nrx_crudfile</a></li>
+<li class="sub"><a href="#formatted-text-program-arguments-and-the-repl">Formatted text, program arguments and the REPL</a></li>
 <li class="sub"><a href="#sh-run-shell-commands-built-in-no-lib-needed">sh</a></li>
 <li class="sub"><a href="#lib-nrx-db-sqlite-database-uses-winsqlite3-dll-that-comes-with-windows">lib nrx_db</a></li>
 <li class="sub"><a href="#lib-nrx-os-working-folder-folders-and-running-commands">lib nrx_os</a></li>
@@ -530,6 +531,33 @@ readRange(path, start, n) list of n lines from line start (first line is 1)
 findInFile(path, text)    list of line numbers that contain text
 replaceInFile(path, old, new)  replace all, returns how many were replaced;
                           the file&#x27;s line endings (CRLF/LF) are kept</pre>
+<h3 id="formatted-text-program-arguments-and-the-repl">Formatted text, program arguments and the REPL</h3>
+<pre class="ref">f&quot;...&quot; text with values inside { }:
+    be name = &quot;Budi&quot;
+    be age = 20
+    print f&quot;hello {name}, next year you are {age + 1}&quot;     # hello Budi, next year you are 21
+- Any expression fits in { }: variables, calculations, function calls, d.field.
+  Numbers, true/false, lists and so on are turned into text automatically.
+- {{ and }} give a literal { and }. The inside of { } cannot contain quotes.
+- It is a normal text value: be s = f&quot;{a}-{b}&quot;, or pass it to a function.</pre>
+<pre class="ref">args()                    the arguments given to the program, as a list of text
+    nerx run tool.nrx one &quot;two words&quot; 3     -&gt;   args() = [&quot;one&quot;, &quot;two words&quot;, &quot;3&quot;]
+    tool.exe one &quot;two words&quot; 3              -&gt;   the same, when you run the built .exe</pre>
+<pre class="ref">nerx repl  (or just nerx) a prompt where you type code and see the result:
+    &gt; 1 + 2
+    3
+    &gt; be x = 5
+    &gt; x * 2
+    10
+    &gt; func twice(n int) int          blocks (func, type, if, for, loop, try)
+    .     return n * 2               continue on the next lines
+    .                                an empty line ends the block
+    &gt; twice(21)
+    42
+- An expression prints its value. be, func, type, lock, lib and im lines are
+  remembered. :defs shows them, :reset forgets them, :quit leaves.
+- Every line is built and run as a small program, so an error never closes the
+  REPL. Earlier be lines run again quietly; other lines run once only.</pre>
 <h3 id="sh-run-shell-commands-built-in-no-lib-needed">sh  -  run shell commands (built in, no lib needed)</h3>
 <pre class="ref">sh dir /b                 run a command like in cmd; its output shows on screen
 sh &quot;echo hello &quot; name     text in quotes plus variables, joined like print
@@ -732,7 +760,7 @@ pop3d()                     # back to how it was before push3d</pre>
 <p>Using it:</p>
 <pre class="prog">nerx game.nrx                          # -&gt; game.exe
 nerx game.nrx out\game.exe             # choose the .exe name
-nerx                                 # no arguments: it asks for the file and the .exe
+nerx                                 # no arguments: the REPL (see the section on the REPL)
 nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
 nerx run game.nrx                      # compile to a temporary .exe, run it, delete it</pre>
 <ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, db, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>

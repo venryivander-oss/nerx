@@ -803,6 +803,38 @@ lib nrx_crudfile  -  files
                             the file's line endings (CRLF/LF) are kept
 
 ------------------------------------------------------------------------------
+Formatted text, program arguments and the REPL
+------------------------------------------------------------------------------
+
+  f"..." text with values inside { }:
+      be name = "Budi"
+      be age = 20
+      print f"hello {name}, next year you are {age + 1}"     # hello Budi, next year you are 21
+  - Any expression fits in { }: variables, calculations, function calls, d.field.
+    Numbers, true/false, lists and so on are turned into text automatically.
+  - {{ and }} give a literal { and }. The inside of { } cannot contain quotes.
+  - It is a normal text value: be s = f"{a}-{b}", or pass it to a function.
+
+  args()                    the arguments given to the program, as a list of text
+      nerx run tool.nrx one "two words" 3     ->   args() = ["one", "two words", "3"]
+      tool.exe one "two words" 3              ->   the same, when you run the built .exe
+
+  nerx repl  (or just nerx) a prompt where you type code and see the result:
+      > 1 + 2
+      3
+      > be x = 5
+      > x * 2
+      10
+      > func twice(n int) int          blocks (func, type, if, for, loop, try)
+      .     return n * 2               continue on the next lines
+      .                                an empty line ends the block
+      > twice(21)
+      42
+  - An expression prints its value. be, func, type, lock, lib and im lines are
+    remembered. :defs shows them, :reset forgets them, :quit leaves.
+  - Every line is built and run as a small program, so an error never closes the
+    REPL. Earlier be lines run again quietly; other lines run once only.
+------------------------------------------------------------------------------
 sh  -  run shell commands (built in, no lib needed)
 ------------------------------------------------------------------------------
 
@@ -1094,7 +1126,7 @@ Using it:
 
     nerx game.nrx                          # -> game.exe
     nerx game.nrx out\game.exe             # choose the .exe name
-    nerx                                 # no arguments: it asks for the file and the .exe
+    nerx                                 # no arguments: the REPL (see the section on the REPL)
     nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
     nerx run game.nrx                      # compile to a temporary .exe, run it, delete it
 
