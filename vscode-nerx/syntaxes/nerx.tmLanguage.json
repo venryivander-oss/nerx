@@ -4,6 +4,7 @@
   "scopeName": "source.nrx",
   "patterns": [
     { "include": "#comment" },
+    { "include": "#fstring" },
     { "include": "#string" },
     { "include": "#style-property" },
     { "include": "#lib" },
@@ -45,7 +46,7 @@
       }
     },
     "lib": {
-      "match": "^\\s*(lib)\\s+(nrx_[A-Za-z0-9_]+\\.h)",
+      "match": "^\\s*(lib)\\s+(nrx_[A-Za-z0-9_]+(?:\\.h)?)",
       "captures": {
         "1": { "name": "keyword.control.import.nrx" },
         "2": { "name": "entity.name.namespace.nrx" }

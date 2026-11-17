@@ -500,6 +500,7 @@ func tabelPesanId() list string
     add(r, "274|operator %c butuh angka, tapi dapat %s|operator %c needs numbers, but got %s")
     add(r, "275|tidak bisa membandingkan %s dengan %s; ubah dulu pakai int(...), float(...), atau str(...)|cannot compare %s with %s; convert first with int(...), float(...), or str(...)")
     add(r, "350|%s() tidak bisa dipakai pada %s|%s() cannot be used on %s")
+    add(r, "351|%s() tidak ditemukan. Mungkin coba pakai lib %s|%s() was not found. Maybe try using lib %s")
     add(r, "319|listFiles: folder %s tidak ditemukan|listFiles: folder %s not found")
     add(r, "321|replaceInFile: teks yang dicari tidak boleh kosong|replaceInFile: the text to find cannot be empty")
     add(r, "60|%s() butuh library keyboard, tambahkan di atas: lib nrx_keyboard|%s() needs the keyboard library, add at the top: lib nrx_keyboard")
@@ -571,12 +572,14 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
         galatK(6, nama + " needs 1 arguments, but got " + str(n))
     if n >= 1 and contains("int float abs max min round sqrt pow", nama) and len(nama) > 2
         galatK(350, nama + "() cannot be used on " + kataJenisPendek(tipeArg[0]))
-    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299")
+    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299 nrx_os 351 nrx_db 351")
     for q in range(0, len(kdLib), 2)
         be bt = "lib\\" + kdLib[q] + ".nrx"
         if fileExists(jalurRt(bt))
             be isiLib = readFile(jalurRt(bt))
-            if contains(isiLib, "func " + nama + "(") or contains(isiLib, "func " + nama + "__") or contains(isiLib, "func " + nama + "_a")
+            if contains(isiLib, "func " + nama + "(") or contains(isiLib, "func " + nama + "__") or contains(isiLib, "func " + nama + "_a") or contains(isiLib, "type " + nama + "\n") or contains(isiLib, "type " + nama + "\r")
+                if kdLib[q + 1] == "351"
+                    galatK(351, nama + "() was not found. Maybe try using lib " + kdLib[q])
                 if kdLib[q] == "nrx_window"
                     galatK(112, "this command needs the window library, add at the top: lib nrx_window")
                 galatK(int(kdLib[q + 1]), nama + "() needs the " + namaLib(kdLib[q]) + " library, add at the top: lib " + kdLib[q])
@@ -4482,15 +4485,31 @@ func kompilasi(sumber string, keluar string)
 # Tiap masukan dikompilasi bersama definisi sebelumnya (func, type, be, lock, lib, im) lalu dijalankan sebagai program kecil
 # lewat nerx build; galat tidak mematikan REPL. be-an lama dijalankan ulang (diam), perintah lain hanya dijalankan sekali.
 # replBangun: "" kalau berhasil dikompilasi, kalau tidak teks galatnya.
-func replBangun(prog string, tmp string, exe string, diri string) string
+# nomor baris di galat dihitung dari masukan, bukan dari definisi yang ditempel di depannya
+func replNomor(teks string, geser int) string
+    be p = indexOf(teks, "<repl>:")
+    if p < 0 or geser <= 0
+        return teks
+    be i = p + 7
+    be j = i
+    loop j < len(teks) and contains(DIGIT, substr(teks, j, 1))
+        be j += 1
+    if j == i
+        return teks
+    be baru = int(slice(teks, i, j)) - geser
+    if baru < 1
+        return teks
+    return slice(teks, 0, i) + str(baru) + slice(teks, j)
+
+func replBangun(prog string, tmp string, exe string, diri string, geser int) string
     writeFile(tmp, prog)
     be o = shText("\"\"" + diri + "\" build \"" + tmp + "\" -o \"" + exe + "\"\"")
     if substr(o, 0, 5) == "Done:"
         return ""
-    return trim(replace(replace(o, "\r", ""), tmp, "<repl>"))
+    return replNomor(trim(replace(replace(o, "\r", ""), tmp, "<repl>")), geser)
 
-func replJalan(exe string) string
-    return trim(replace(shText("\"" + exe + "\""), "\r", ""))
+func replJalan(exe string, tmp string, geser int) string
+    return replNomor(trim(replace(replace(shText("\"" + exe + "\""), "\r", ""), tmp, "<repl>")), geser)
 func replMain(diri string)
     print "Nerx REPL. :help for help, :quit to exit."
     be defs list string
@@ -4538,23 +4557,24 @@ func replMain(diri string)
                     be entri = entri + "\n" + l2
         be jenisDef = indexOf(split("func type lock lib im ffi be"), kata) >= 0
         be awal = join(defs, "\n") + "\n"
+        be geser = len(split(awal, "\n")) - 1
         be hasil = ""
         if jenisDef or contains(entri, "\n")
-            be g = replBangun(awal + entri, tmp, exe, diri)
+            be g = replBangun(awal + entri, tmp, exe, diri, geser)
             if g == ""
-                be hasil = replJalan(exe)
+                be hasil = replJalan(exe, tmp, geser)
                 if jenisDef
                     add(defs, entri)
             else
                 be hasil = g
         else
-            be g1 = replBangun(awal + "print " + entri, tmp, exe, diri)
+            be g1 = replBangun(awal + "print " + entri, tmp, exe, diri, geser)
             if g1 == ""
-                be hasil = replJalan(exe)
+                be hasil = replJalan(exe, tmp, geser)
             else
-                be g2 = replBangun(awal + entri, tmp, exe, diri)
+                be g2 = replBangun(awal + entri, tmp, exe, diri, geser)
                 if g2 == ""
-                    be hasil = replJalan(exe)
+                    be hasil = replJalan(exe, tmp, geser)
                 else if contains(g2, "E0113")
                     be hasil = g1
                 else

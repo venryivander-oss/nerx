@@ -34,6 +34,14 @@ function highlight(src) {
       while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++;
       const w = src.slice(i, j);
       const isField = src[i - 1] === ".";
+      if (w === "f" && src[j] === '"' && !isField) {
+        let k = j + 1;
+        while (k < src.length && src[k] !== '"' && src[k] !== "\n") k += src[k] === "\\" ? 2 : 1;
+        k = Math.min(k + 1, src.length);
+        out += '<span class="tk-str">' + esc(src.slice(i, k)) + "</span>";
+        i = k;
+        continue;
+      }
       out += KEYWORDS.has(w) && !isField ? '<span class="tk-key">' + w + "</span>" : w;
       i = j;
     } else {
