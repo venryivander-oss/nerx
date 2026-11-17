@@ -35,7 +35,7 @@ Jadikan .exe (tidak butuh apa-apa lagi; yang membuatnya adalah compiler nerx
 
     nerx build contoh_fitur.nrx       -> contoh_fitur.exe
     nerx build game.nrx -o hasil\game.exe
-    Nerx contoh_fitur.nrx             (sama dengan build)
+    nerx contoh_fitur.nrx             (sama dengan build)
 
 - Hasil .exe berdiri sendiri: isi file .nrx (dan file yang di-im) ikut
   ditanam, jadi file .nrx tidak perlu ikut dibagikan.
@@ -1004,9 +1004,9 @@ x64 + header PE), tanpa VM dan tanpa toolchain luar.
 
 Memakai:
 
-    Nerx game.nrx                          # -> game.exe
-    Nerx game.nrx hasil\game.exe           # pilih nama .exe
-    Nerx                                 # tanpa argumen: ditanya nama file dan .exe
+    nerx game.nrx                          # -> game.exe
+    nerx game.nrx hasil\game.exe           # pilih nama .exe
+    nerx                                 # tanpa argumen: ditanya nama file dan .exe
     nerx build game.nrx -o game.exe        # sama, dengan pilihan nama .exe
     nerx run game.nrx                      # kompilasi ke .exe sementara, jalankan, hapus
 
@@ -1025,16 +1025,16 @@ Memakai:
 - nrx_3d di nrxc adalah renderer perangkat lunak (GDI), bukan raylib: bentuk
   dan fungsinya sama, tetapi warna #rrggbbaa hanya dibedakan tembus (alpha 00)
   atau tidak, dan hurufnya memakai Segoe UI.
-- Pesan error saat jalan sama dengan interpreter Nerx lama:
+- Pesan error saat jalan sama dengan interpreter lama:
       error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items)
   Pesan error saat kompilasi (sebelum .exe dibuat) masih berbeda bentuknya.
   Setelah selesai nrxc mencetak Done: game.exe (N bytes).
 
-Beda dengan interpreter Nerx lama yang belum disamakan:
+Beda dengan interpreter lama yang belum disamakan:
 
-- Bilangan bulat yang melewati batas 64-bit melingkar (Nerx mengubahnya
+- Bilangan bulat yang melewati batas 64-bit melingkar (interpreter lama mengubahnya
   jadi desimal).
-- min(2.5, 1) mengembalikan desimal (Nerx: bilangan bulat 1).
+- min(2.5, 1) mengembalikan desimal (interpreter lama: bilangan bulat 1).
 - Nama type tidak dipisah per file (fungsi dan variabel biasa sudah dipisah).
 
 ------------------------------------------------------------------------------

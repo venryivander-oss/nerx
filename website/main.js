@@ -1,4 +1,4 @@
-// nrxl website: syntax colors, the typing hero, and the example tabs.
+// nerx website: syntax colors, the typing hero, and the example tabs.
 
 const KEYWORDS = new Set(("be lock print ask if else loop for in not and or func return type own init " +
   "options option try catch throw break continue exit im ex from lib ffi as delete true false errlang").split(" "));
@@ -44,7 +44,7 @@ function highlight(src) {
   return out;
 }
 
-document.querySelectorAll('pre[data-lang="nrxl"]').forEach((pre) => {
+document.querySelectorAll('pre[data-lang="nerx"]').forEach((pre) => {
   pre.dataset.src = pre.textContent;
   pre.innerHTML = highlight(pre.textContent);
 });

@@ -35,7 +35,7 @@ built into nerx.exe makes it; see section 14):
 
     nerx build contoh_fitur.nrx       -> contoh_fitur.exe
     nerx build game.nrx -o out\game.exe
-    Nerx contoh_fitur.nrx             (the same as build)
+    nerx contoh_fitur.nrx             (the same as build)
 
 - The .exe stands alone: the .nrx file (and every file it pulls in with im)
   is embedded, so the .nrx files do not need to be shared.
@@ -1017,9 +1017,9 @@ header), with no VM and no external toolchain.
 
 Using it:
 
-    Nerx game.nrx                          # -> game.exe
-    Nerx game.nrx out\game.exe             # choose the .exe name
-    Nerx                                 # no arguments: it asks for the file and the .exe
+    nerx game.nrx                          # -> game.exe
+    nerx game.nrx out\game.exe             # choose the .exe name
+    nerx                                 # no arguments: it asks for the file and the .exe
     nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
     nerx run game.nrx                      # compile to a temporary .exe, run it, delete it
 
@@ -1038,16 +1038,16 @@ Using it:
 - nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and
   functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from
   not, and text uses Segoe UI.
-- Runtime error messages match the old Nerx interpreter:
+- Runtime error messages match the old interpreter:
       error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items)
   Errors found while compiling (before the .exe exists) still look different.
   nrxc prints Done: game.exe (N bytes) when it finishes.
 
-Differences from the old Nerx interpreter that are not matched yet:
+Differences from the old interpreter that are not matched yet:
 
-- Integers that pass the 64-bit limit wrap around (Nerx turns them into
+- Integers that pass the 64-bit limit wrap around (the old interpreter turns them into
   decimals).
-- min(2.5, 1) returns a decimal (Nerx: the integer 1).
+- min(2.5, 1) returns a decimal (old interpreter: the integer 1).
 - Type names are not separated per file (ordinary functions and variables
   already are).
 
