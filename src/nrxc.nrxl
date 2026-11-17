@@ -426,6 +426,10 @@ func tabelPesanId() list string
     add(r, "24|tidak bisa dibagi dengan nol|cannot divide by zero")
     add(r, "25|index harus angka|index must be a number")
     add(r, "26|index %d di luar list (isi list ada %d)|index %d is outside the list (the list has %d items)")
+    add(r, "29|index %d di luar teks (panjang teks %d)|index %d is outside the text (text length is %d)")
+    add(r, "360|pow: bilangan bulat dengan pangkat negatif menghasilkan pecahan, pakai basis desimal, misalnya pow(2.0, -1)|pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
+    add(r, "361|pow: hasilnya terlalu besar untuk bilangan bulat, pakai basis desimal, misalnya pow(2.0, 70)|pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+    add(r, "362|%s(): \"%s\" terlalu besar untuk bilangan bulat|%s(): \"%s\" is too large for a whole number")
     add(r, "27|%s tidak punya field %s|%s has no field %s")
     add(r, "28|key \"%s\" tidak ada di map (cek dulu dengan contains(map, \"%s\"))|key \"%s\" is not in the map (check first with contains(map, \"%s\"))")
     add(r, "30|angka tidak bisa diberi index [ ]|a number cannot be indexed with [ ]")
@@ -495,6 +499,7 @@ func tabelPesanId() list string
     add(r, "273|operator %c butuh angka, tapi dapat teks; ubah dulu pakai int(...) atau float(...)|operator %c needs numbers, but got text; convert it first with int(...) or float(...)")
     add(r, "274|operator %c butuh angka, tapi dapat %s|operator %c needs numbers, but got %s")
     add(r, "275|tidak bisa membandingkan %s dengan %s; ubah dulu pakai int(...), float(...), atau str(...)|cannot compare %s with %s; convert first with int(...), float(...), or str(...)")
+    add(r, "350|%s() tidak bisa dipakai pada %s|%s() cannot be used on %s")
     add(r, "319|listFiles: folder %s tidak ditemukan|listFiles: folder %s not found")
     add(r, "321|replaceInFile: teks yang dicari tidak boleh kosong|replaceInFile: the text to find cannot be empty")
     add(r, "60|%s() butuh library keyboard, tambahkan di atas: lib nrx_keyboard.h|%s() needs the keyboard library, add at the top: lib nrx_keyboard.h")
@@ -564,6 +569,8 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
         galatK(47, nama + " needs a map: " + nama + "({\"a\": 1})")
     if contains("int float str bool double", nama) and n != 1
         galatK(6, nama + " needs 1 arguments, but got " + str(n))
+    if n >= 1 and contains("int float abs max min round sqrt pow", nama) and len(nama) > 2
+        galatK(350, nama + "() cannot be used on " + kataJenisPendek(tipeArg[0]))
     be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299")
     for q in range(0, len(kdLib), 2)
         be bt = "lib\\" + kdLib[q] + ".nrxl"
@@ -1055,8 +1062,7 @@ func langkahBaca(tipe string) string
             if lihat() != "]"
                 galatK(35, "missing ]")
             maju()
-            dorongInt(1)
-            panggilNama("substr", 3)
+            panggilNama("idxTeks", 2)     # (teks, indeks) -> satu huruf; galat kalau di luar
             return "string"
         if not tipeList(tipe)
             galatK(30, kataJenis(tipe) + " cannot be indexed with [ ]")

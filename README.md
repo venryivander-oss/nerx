@@ -67,6 +67,23 @@ The full test suite (output comparison against the previous implementation in
 `installer\buat.bat` (requires Inno Setup 6). Earlier versions of the project
 are kept in [history\](history/README.md).
 
+## Status and known limitations
+
+nrxlang is an early version. Expect bugs, and please report them.
+
+- Windows 10/11, 64-bit only. No Linux or macOS yet.
+- Recursive function calls are slower than loops (about 4x slower than an
+  optimizing native compiler on a naive Fibonacci).
+- Whole numbers beyond about 2^62 become floating point numbers instead of
+  wrapping around.
+- `min` and `max` with a mix of whole and decimal numbers can return a
+  different type than you might expect.
+- The 3D library has no partial transparency (alpha) yet.
+- No debugger and no package manager yet.
+- The installer is not code-signed, so Windows may show an "unknown
+  publisher" warning. Some antivirus programs may also flag executables
+  made by the compiler by mistake (a false positive).
+
 ## How it is made
 
 Designed and directed by Nerxelity; implemented with AI assistance (Claude).

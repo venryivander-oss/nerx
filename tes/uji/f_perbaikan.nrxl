@@ -1,0 +1,22 @@
+print substr("Hello World", -3, 2)
+print substr("Hello World", -5)
+print substr("Hello World", -100, 3)
+print round(5)
+print round(-7)
+print round(-2.5)
+print round(1234.5678, -2)
+print round(1234.5678, -1)
+print round(2.567, 2)
+print join(["a", "b"], "-")
+be s = "Hello World"
+print s[0]
+print s[10]
+try
+    print s[11]
+catch e
+    print "galat"
+
+print join([1, 2, 3], "-")
+print join([1.5, 2.5], "+")
+print pow(2.0, -1)
+print pow(2, 10)

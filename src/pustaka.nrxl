@@ -105,6 +105,22 @@ func join(xs list string, sep string) string
         be r = r + xs[i]
     return r
 
+func join_a2__list_int(xs list int, sep string) string
+    be r = ""
+    for i in range(len(xs))
+        if i > 0
+            be r = r + sep
+        be r = r + str(xs[i])
+    return r
+
+func join_a2__list_double(xs list double, sep string) string
+    be r = ""
+    for i in range(len(xs))
+        if i > 0
+            be r = r + sep
+        be r = r + str(xs[i])
+    return r
+
 func replace(s string, a string, b string) string
     be m = len(a)
     if m == 0
@@ -381,19 +397,35 @@ func fmodD(a double, b double) double
 
 func round_a2__double(x double, d int) double
     be f double = 1
-    for i in range(d)
+    if d >= 0
+        for i in range(d)
+            be f = f * 10
+        if x >= 0
+            return int(x * f + 0.5) / f
+        return int(x * f - 0.5) / f
+    for i in range(0 - d)
         be f = f * 10
     if x >= 0
-        return int(x * f + 0.5) / f
-    return int(x * f - 0.5) / f
+        return int(x / f + 0.5) * f
+    return int(x / f - 0.5) * f
 
 func round_a2__int(x int, d int) double
-    return x
+    be y double = x
+    return round_a2__double(y, d)
 
 func round__double(x double) int
     if x >= 0
         return int(x + 0.5)
     return int(x - 0.5)
+
+func round__int(x int) int
+    return x
+
+# s[i]: satu huruf, galat kalau indeks di luar teks
+func idxTeks(s string, i int) string
+    if i < 0 or i >= len(s)
+        _lemparK(29, "index " i " is outside the text (text length is " len(s) ")")
+    return substr(s, i, 1)
 
 func max_a2__int(a int, b int) int
     if a >= b
@@ -653,15 +685,29 @@ func atan2_a2__int(y int, x int) double
 
 func pow_a2__int(a int, b int) int
     if b < 0
-        return 0
+        _lemparK(360, "pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
     be r = 1
     be base = a
     be e = b
     loop e > 0
         if e % 2 == 1
+            be ar = r
+            if ar < 0
+                be ar = 0 - ar
+            be ab = base
+            if ab < 0
+                be ab = 0 - ab
+            if ab != 0 and ar > idiv(9223372036854775807, ab)
+                _lemparK(361, "pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
             be r = r * base
-        be base = base * base
         be e = idiv(e, 2)
+        if e > 0
+            be ab2 = base
+            if ab2 < 0
+                be ab2 = 0 - ab2
+            if ab2 > 3037000499
+                _lemparK(361, "pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+            be base = base * base
     return r
 
 func pow_a2__double(a double, b double) double
@@ -1002,6 +1048,10 @@ func nrxTabelId() list string
     add(r, "24|tidak bisa dibagi dengan nol|cannot divide by zero")
     add(r, "241|fungsi %s harus mengembalikan %s, tapi tidak ada return|function %s must return %s, but there is no return")
     add(r, "26|index %d di luar list (isi list ada %d)|index %d is outside the list (the list has %d items)")
+    add(r, "29|index %d di luar teks (panjang teks %d)|index %d is outside the text (text length is %d)")
+    add(r, "360|pow: bilangan bulat dengan pangkat negatif menghasilkan pecahan, pakai basis desimal, misalnya pow(2.0, -1)|pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
+    add(r, "361|pow: hasilnya terlalu besar untuk bilangan bulat, pakai basis desimal, misalnya pow(2.0, 70)|pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+    add(r, "362|%s(): \"%s\" terlalu besar untuk bilangan bulat|%s(): \"%s\" is too large for a whole number")
     add(r, "28|key \"%s\" tidak ada di map (cek dulu dengan contains(map, \"%s\"))|key \"%s\" is not in the map (check first with contains(map, \"%s\"))")
     add(r, "42|%s(): \"%s\" bukan angka|%s(): \"%s\" is not a number")
     add(r, "44|%s: isinya di-lock, tidak bisa diubah|%s: its contents are locked and cannot be changed")

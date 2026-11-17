@@ -97,6 +97,8 @@ func substr(s string, i int, n int) string
     be ls = peek64(ps, 0)
     be mulai = i
     if mulai < 0
+        be mulai = ls + mulai
+    if mulai < 0
         be mulai = 0
     if mulai > ls
         be mulai = ls
@@ -279,6 +281,8 @@ func int__string(s string) int
         be i += 1
     be awal = i
     loop i < m and ord(s, i) >= 48 and ord(s, i) <= 57
+        if n > 922337203685477580 or (n == 922337203685477580 and ord(s, i) > 55)
+            _lemparK(362, "int(): \"" s "\" is too large for a whole number")
         be n = n * 10 + ord(s, i) - 48
         be i += 1
     be ok = i > awal
