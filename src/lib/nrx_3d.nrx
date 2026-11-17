@@ -1,4 +1,4 @@
-# nrx_3d.nrxl - game 3D sederhana tanpa raylib: renderer perangkat lunak (algoritma pelukis) di atas GDI, ditulis dalam nrxl.
+# nrx_3d.nrx - game 3D sederhana tanpa raylib: renderer perangkat lunak (algoritma pelukis) di atas GDI, ditulis dalam nrxl.
 # Segitiga/poligon dikumpulkan selama frame (end3d mengurutkan dari yang terjauh), lalu digambar dengan Polygon GDI.
 # Slot tersembunyi 14 = alamat blok. Blok (offset byte):
 #   0 hwnd   8 DC buffer   16 bitmap buffer   24 lebar   32 tinggi   40 tertutup   48 terbuka   56 dalam frame   64 kedalaman push3d

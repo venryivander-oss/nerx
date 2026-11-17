@@ -1,0 +1,46 @@
+{
+  "name": "nerx",
+  "displayName": "Nerx",
+  "description": "Warna sintaks, cuplikan, dan pengaturan editor untuk bahasa Nerxelity (.nrx)",
+  "version": "0.1.1",
+  "publisher": "nerx-local",
+  "engines": {
+    "vscode": "^1.64.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nerx",
+        "aliases": [
+          "Nerxelity",
+          "nerx"
+        ],
+        "extensions": [
+          ".nrx"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/nerx-n-light.svg",
+          "dark": "./icons/nerx-n-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nerx",
+        "scopeName": "source.nrx",
+        "path": "./syntaxes/nerx.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "nerx",
+        "path": "./snippets/nerx.json"
+      }
+    ]
+  }
+}

@@ -1,11 +1,11 @@
-# Hitung SHA-256 installer, simpan di website\download\nrxl-setup.sha256, dan isi di halaman unduh website.
+# Hitung SHA-256 installer, simpan di website\download\nerx-setup.sha256, dan isi di halaman unduh website.
 # Dipanggil otomatis oleh buat.bat setelah installer jadi.
 $ErrorActionPreference = "Stop"
 $enc = New-Object System.Text.UTF8Encoding($false)
-$exe = Join-Path $PSScriptRoot "out\nrxl-setup.exe"
+$exe = Join-Path $PSScriptRoot "out\nerx-setup.exe"
 $site = Join-Path $PSScriptRoot "..\website"
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLower()
-[IO.File]::WriteAllText((Join-Path $site "download\nrxl-setup.sha256"), "$hash  nrxl-setup.exe`n", $enc)
+[IO.File]::WriteAllText((Join-Path $site "download\nerx-setup.sha256"), "$hash  nerx-setup.exe`n", $enc)
 $html = Join-Path $site "index.html"
 $t = [IO.File]::ReadAllText($html)
 $n = [regex]::Replace($t, '(<code id="sha256"[^>]*>)[^<]*(</code>)', "`${1}$hash`${2}")

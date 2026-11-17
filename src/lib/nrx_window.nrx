@@ -1,4 +1,4 @@
-# nrx_window.nrxl - window GUI lewat user32 / gdi32, ditulis dalam nrxl.
+# nrx_window.nrx - window GUI lewat user32 / gdi32, ditulis dalam nrxl.
 # Dipakai oleh compiler: newWindow(...) dengan windowTemplate memanggil winBuka, winCanvas, winInput, winText, winTombol,
 # winOnKey, winOnMouse, winOnTimer, winGayaWin, winGayaEl, winMuncul. Fungsi gambar: drawRect, drawCircle, drawLine, drawText, clearCanvas.
 # Slot tersembunyi 10 = alamat blok jendela. Blok: [0] hwnd [8] daftar elemen [16] onKey [24] arity [32] onMouse [40] arity

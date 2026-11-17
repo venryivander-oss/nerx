@@ -1,4 +1,4 @@
-# nrx_sound.nrxl - suara lewat winmm.dll (MCI + PlaySound), ditulis dalam nrxl.
+# nrx_sound.nrx - suara lewat winmm.dll (MCI + PlaySound), ditulis dalam nrxl.
 # Slot tersembunyi: 3 = musik sedang diputar lewat MCI (mp3), 8 = daftar file efek yang sudah dibuka (alias sfx0, sfx1, ...).
 
 func sndMci(perintah string) bool

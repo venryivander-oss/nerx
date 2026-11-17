@@ -1,10 +1,10 @@
-# agent.nrxl: agen terminal untuk AI lokal (llama.cpp / LM Studio / Ollama).
+# agent.nrx: agen terminal untuk AI lokal (llama.cpp / LM Studio / Ollama).
 # Berbeda dari chatbot biasa: AI bisa bekerja BERLANGKAH-LANGKAH di project besar.
 # Tiap langkah AI memilih satu aksi, hasilnya dikirim balik, sampai tugas selesai.
 #
 # Aksi: read_file, edit_file, write_file, run_cmd.
 # Setiap aksi yang mengubah sesuatu (edit, write, run) minta izin dulu.
-# Jalankan dari folder project:  nrxlang run agent.nrxl
+# Jalankan dari folder project:  nerx run agent.nrx
 lib nrx_http.h
 lib nrx_json.h
 lib nrx_console.h
@@ -362,13 +362,13 @@ func sistemPrompt(cwd string) string
     add(b, "6. Jangan menjalankan perintah merusak (rm -rf, format, dll.) kecuali user memintanya jelas.")
     add(b, "7. Kalau tugas selesai atau cuma perlu menjawab, balas teks biasa (bukan JSON) berisi ringkasan singkat.")
     add(b, "8. Hindari sudo dan pemasangan paket kecuali benar-benar perlu. Tiap perintah sudo butuh persetujuan khusus user. Jangan pernah mencoba mencari, mencetak, atau menyalin password.")
-    add(b, "9. Bahasa pemrograman utama user adalah nrxl (file berakhiran .nrxl, dijalankan dengan nrxlang). Kalau user minta program tanpa menyebut bahasa (mis. 'halo', 'hello world'), tulis dalam nrxl, BUKAN C. Sebelum menulis nrxl, baca SYNTAX.txt di folder project untuk sintaksnya, lalu jalankan dengan: nrxlang run file.nrxl")
+    add(b, "9. Bahasa pemrograman utama user adalah nerx (file berakhiran .nrx, dijalankan dengan Nerx). Kalau user minta program tanpa menyebut bahasa (mis. 'halo', 'hello world'), tulis dalam nerx, BUKAN C. Sebelum menulis nerx, baca SYNTAX.txt di folder project untuk sintaksnya, lalu jalankan dengan: nerx run file.nrx")
     return join(b, "\n")
 
 # ---------------------------------------------------------------- program
 
 color("cyan")
-print "=== Agen AI Lokal (nrxl) ==="
+print "=== Agen AI Lokal (nerx) ==="
 color()
 
 be cwd = trim(runCommand("cd"))
@@ -401,7 +401,7 @@ be riwayat json = fromJson("[]")
 add(riwayat, sistem)
 
 func bantuan()
-    print "Tulis tugasnya, mis: cari bug di src/nrxlang.c lalu perbaiki dan build."
+    print "Tulis tugasnya, mis: cari bug di src/Nerx.c lalu perbaiki dan build."
     print "Perintah:"
     print "  /auto    setujui semua aksi otomatis (hati-hati)"
     print "  /manual  kembali minta izin tiap aksi"

@@ -1,6 +1,6 @@
-# chatbot.nrxl: chatbot di console untuk AI lokal (API kompatibel OpenAI)
+# chatbot.nrx: chatbot di console untuk AI lokal (API kompatibel OpenAI)
 # Cocok untuk llama.cpp (llama-server), LM Studio, Ollama, atau URL cloudflared-nya.
-# Jalankan: nrxlang run chatbot.nrxl
+# Jalankan: nerx run chatbot.nrx
 lib nrx_http.h
 lib nrx_json.h
 lib nrx_console.h
@@ -30,7 +30,7 @@ func bantuan()
     print "  /exit    keluar"
 
 color("cyan")
-print "=== Chatbot AI Lokal (nrxl) ==="
+print "=== Chatbot AI Lokal (nerx) ==="
 color()
 
 be alamat = ask "Alamat server [http://localhost:8080]: "

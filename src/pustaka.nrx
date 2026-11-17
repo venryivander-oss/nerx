@@ -1,4 +1,4 @@
-# pustaka.nrxl - fungsi string/list tambahan, ditulis dalam subset nrxl yang didukung nrxc.
+# pustaka.nrx - fungsi string/list tambahan, ditulis dalam subset nerx yang didukung nrxc.
 # Nama dengan akhiran __tipe = overload menurut tipe argumen pertama; _aN = menurut jumlah argumen.
 
 func contains__string(s string, t string) bool
@@ -81,7 +81,7 @@ func split(s string, sep string) list string
     be r list string
     be m = len(sep)
     if m == 0
-        # per byte (seperti nrxl asli)
+        # per byte (seperti nerx asli)
         for k in range(len(s))
             add(r, substr(s, k, 1))
         return r
@@ -255,7 +255,7 @@ func hapusNolBelakang(s string) string
         be j -= 1
     return substr(s, 0, j)
 
-# double -> teks seperti nrxl asli: bilangan bulat di bawah 1e15 jadi "5.0", selain itu gaya %.10g
+# double -> teks seperti nerx asli: bilangan bulat di bawah 1e15 jadi "5.0", selain itu gaya %.10g
 func dblStr(x double) string
     if x != x
         return "nan"
@@ -447,7 +447,7 @@ func min_a2__double(a double, b double) double
         return a
     return b
 
-# urutan teks per byte (seperti perbandingan nrxl)
+# urutan teks per byte (seperti perbandingan nerx)
 func strKurang(a string, b string) bool
     be n = len(a)
     if len(b) < n
@@ -988,7 +988,7 @@ func str__map_double(m map double) string
 
 func str__map_bool(m map bool) string
     return koleksiStr__map_bool(m)
-# cetak galat yang tidak tertangkap, format sama dengan nrxlang: error E#### in berkas:baris: pesan
+# cetak galat yang tidak tertangkap, format sama dengan Nerx: error E#### in berkas:baris: pesan
 
 # terjemahan pesan error ke Indonesia (errlang = id): tabel "kode|indonesia|inggris" dari src\nrx_msgs.h
 func nrxIsiTemplate(idT string, enT string, pesan string) string

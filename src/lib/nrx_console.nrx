@@ -1,4 +1,4 @@
-# nrx_console.nrxl - tampilan console, jalankan perintah. Slot tersembunyi: 4 = console siap (1 ya, 2 tidak),
+# nrx_console.nrx - tampilan console, jalankan perintah. Slot tersembunyi: 4 = console siap (1 ya, 2 tidak),
 # 5 = kode keluar perintah terakhir, 6 = warna dipakai.
 
 func esc() string

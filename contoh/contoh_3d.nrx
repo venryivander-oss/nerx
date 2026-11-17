@@ -1,9 +1,9 @@
-# contoh_3d.nrxl: gerakkan kotak oranye, kumpulkan bola ungu
+# contoh_3d.nrx: gerakkan kotak oranye, kumpulkan bola ungu
 # W A S D = jalan, space = lompat, escape atau tombol X = keluar
 lib nrx_3d.h
 lib nrx_rand.h
 
-open3d("nrxl 3D - kumpulkan bola", 960, 600)
+open3d("nerx 3D - kumpulkan bola", 960, 600)
 
 be x = 0.0
 be z = 0.0

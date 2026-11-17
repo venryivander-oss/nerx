@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<title>nrxl syntax</title>
-<meta name="description" content="The complete nrxl syntax: the core language, built-in functions, and every library.">
+<title>nerx syntax</title>
+<meta name="description" content="The complete nerx syntax: the core language, built-in functions, and every library.">
 <link rel="preload" href="fonts/plex-sans-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -21,7 +21,7 @@
       <a href="index.html#examples">Examples</a>
       <a href="docs.html" aria-current="page">Syntax</a>
       <a href="index.html#download">Download</a>
-      <a href="https://github.com/venryivander-oss/nrxlang">GitHub</a>
+      <a href="https://github.com/venryivander-oss/nerx">GitHub</a>
     </nav>
   </div>
 </header>
@@ -53,23 +53,23 @@
 <li class="sub"><a href="#lib-nrx-3d-h-simple-3d-games-raylib">lib nrx_3d.h</a></li>
 <li><a href="#limits">Limits</a></li>
 <li><a href="#vs-code-extension">VS Code extension</a></li>
-<li><a href="#nrxc-the-compiler-written-in-nrxl-no-vm">nrxc: the compiler written in nrxl (no VM)</a></li>
-<li class="sub"><a href="#nrxc-intrinsics-for-writing-libraries-in-nrxl">nrxc intrinsics</a></li>
+<li><a href="#nrxc-the-compiler-written-in-nerx-no-vm">nrxc: the compiler written in nerx (no VM)</a></li>
+<li class="sub"><a href="#nrxc-intrinsics-for-writing-libraries-in-nerx">nrxc intrinsics</a></li>
     </ol>
   </nav>
   <main class="doc" id="doc">
     <h1 style="font-size:40px;letter-spacing:-.02em;margin:0 0 8px">Syntax</h1>
-    <p class="sub">The complete language, built-in functions, and every library. Also in the repository as <a href="https://github.com/venryivander-oss/nrxlang/blob/main/SYNTAX.en.txt">SYNTAX.en.txt</a>.</p>
+    <p class="sub">The complete language, built-in functions, and every library. Also in the repository as <a href="https://github.com/venryivander-oss/nerx/blob/main/SYNTAX.en.txt">SYNTAX.en.txt</a>.</p>
     <p class="empty" id="none" hidden>Nothing matches that search. Try a function name like <code>len</code> or a word like <code>list</code>.</p>
 <section class="part" data-part>
 <h2 id="running-and-building">Running and building</h2>
 <p>Run a script (it is compiled to a temporary .exe, run, then deleted):</p>
-<pre class="prog">nrxlang run contoh_fitur.nrxl</pre>
-<p>Turn it into an .exe (nothing else needed; the nrxl compiler (nrxc) that is built into nrxlang.exe makes it; see section 14):</p>
-<pre class="prog">nrxlang build contoh_fitur.nrxl       -&gt; contoh_fitur.exe
-nrxlang build game.nrxl -o out\game.exe
-nrxlang contoh_fitur.nrxl             (the same as build)</pre>
-<ul><li>The .exe stands alone: the .nrxl file (and every file it pulls in with im) is embedded, so the .nrxl files do not need to be shared.</li><li>Type errors are caught at build time, and no .exe is made.</li><li>Output and error messages of the .exe are exactly the same as running the script directly.</li><li>The .exe holds x64 machine code written by nrxc directly (no VM, no interpreter), so calculations are much faster than with run. The syntax does not change.</li><li>lib nrx_window.h and ffi can be built too.</li><li>The installer puts nrxlang.exe, prelude.nrxl, pustaka.nrxl, and the lib\ folder in one folder; nothing else is needed.</li><li>The earlier implementation was moved to the history\ folder of the repository; it is not needed to use or build nrxl.</li></ul>
+<pre class="prog">nerx run contoh_fitur.nrx</pre>
+<p>Turn it into an .exe (nothing else needed; the nerx compiler (nrxc) that is built into nerx.exe makes it; see section 14):</p>
+<pre class="prog">nerx build contoh_fitur.nrx       -&gt; contoh_fitur.exe
+nerx build game.nrx -o out\game.exe
+Nerx contoh_fitur.nrx             (the same as build)</pre>
+<ul><li>The .exe stands alone: the .nrx file (and every file it pulls in with im) is embedded, so the .nrx files do not need to be shared.</li><li>Type errors are caught at build time, and no .exe is made.</li><li>Output and error messages of the .exe are exactly the same as running the script directly.</li><li>The .exe holds x64 machine code written by nrxc directly (no VM, no interpreter), so calculations are much faster than with run. The syntax does not change.</li><li>lib nrx_window.h and ffi can be built too.</li><li>The installer puts nerx.exe, prelude.nrx, pustaka.nrx, and the lib\ folder in one folder; nothing else is needed.</li><li>The earlier implementation was moved to the history\ folder of the repository; it is not needed to use or build Nerx.</li></ul>
 <p>Files a script reads (readFile, playSound, newImage, ...) are looked up from the folder the command runs in, not the script&#x27;s folder. The exception is im: files for im are looked up from the script&#x27;s folder.</p>
 </section>
 <section class="part" data-part>
@@ -97,7 +97,7 @@ type      Player(&quot;Budi&quot;, 100)            (see section 8)</pre>
 <p>Error message language:</p>
 <pre class="prog">errlang = en                 # errors in English
 errlang = id                 # errors in Indonesian</pre>
-<ul><li>Without errlang, the language follows Windows: Indonesian Windows gets Indonesian errors, any other language gets English.</li><li>errlang is only allowed in the main file, at the far left. It applies to the whole program, including files pulled in with im.</li><li>Every error has the same code in every language, for example: error E0003 in game.nrxl:5: variable skor has not been created error E0003 di game.nrxl:5: variabel skor belum dibuat The code can be searched online even when the message is in another language.</li></ul>
+<ul><li>Without errlang, the language follows Windows: Indonesian Windows gets Indonesian errors, any other language gets English.</li><li>errlang is only allowed in the main file, at the far left. It applies to the whole program, including files pulled in with im.</li><li>Every error has the same code in every language, for example: error E0003 in game.nrx:5: variable skor has not been created error E0003 di game.nrx:5: variabel skor belum dibuat The code can be searched online even when the message is in another language.</li></ul>
 </section>
 <section class="part" data-part>
 <h2 id="variables">Variables</h2>
@@ -129,7 +129,7 @@ be h = 2.5                   # no type: a decimal becomes double
 be h float = 2.5             # float must be written out
 be h = 3                     # allowed: int goes into double, becomes 3.0</pre>
 <ul><li>A variable&#x27;s kind is set when it is created (from the written type, or from its first value) and cannot change. The guess: 5 -&gt; int, 2.5 / 5.0 -&gt; double, &quot;a&quot; -&gt; string, true -&gt; bool.</li><li>List and map items must be one kind: [1, &quot;two&quot;] and add(scoreList, &quot;x&quot;) are errors. [1, 2.5] is allowed and everything becomes double.</li><li>Mixed data (name and age together) uses a type, not a map.</li><li>be x = [] and be x = {} are errors because the item kind is unknown; write be x list int or be x map string.</li><li>Type fields keep the kind written in the type.</li><li>Decimals with a whole value print with .0 (4 / 2 -&gt; 2.0) so they look different from ints.</li><li>fromJson results may be mixed, because JSON is mixed. Their type is json: be data json = fromJson(text). be data json alone = empty json {}. typeOf still names the shape of the content (map, list, ...).</li><li>be m[k] += value: if key k does not exist yet, it starts from the empty value of the map&#x27;s item kind (0, 0.0, &quot;&quot;, false). So be count[word] += 1 just works.</li><li>Function parameters follow the kind of the argument given.</li></ul>
-<p>Check before running: before the first line runs, nrxl checks the whole file (including the bodies of functions that are never called). If something is certainly wrong, the program does not run at all and the error shows right away:</p>
+<p>Check before running: before the first line runs, nerx checks the whole file (including the bodies of functions that are never called). If something is certainly wrong, the program does not run at all and the error shows right away:</p>
 <pre class="prog">be score = 10
 be score += 0.5              # error before running: score is an int
 add2(1, &quot;two&quot;)               # error: parameter b is an int
@@ -230,7 +230,7 @@ for i in range(5)              # 0, 1, 2, 3, 4</pre>
 catch err                      # plain &quot;catch&quot; is fine too
     print &quot;failed: &quot; err</pre>
 <pre class="prog">throw &quot;error message&quot;          # raise your own error</pre>
-<pre class="ref">Every nrxl error (including ones from libraries and functions) can be
+<pre class="ref">Every nerx error (including ones from libraries and functions) can be
 caught.</pre>
 <p>exit:</p>
 <pre class="prog">exit()                         # stop the program
@@ -284,16 +284,16 @@ be t = Point(1, 2)                     # number of values = number of fields</pr
 </section>
 <section class="part" data-part>
 <h2 id="other-files-export-libraries-and-ffi">Other files, export, libraries, and ffi</h2>
-<p>im (use your own .nrxl file):</p>
-<pre class="prog">im calc                        # = calc.nrxl
-im &quot;calc.nrxl&quot;
-im tools/calc                  # = tools/calc.nrxl
+<p>im (use your own .nrx file):</p>
+<pre class="prog">im calc                        # = calc.nrx
+im &quot;calc.nrx&quot;
+im tools/calc                  # = tools/calc.nrx
 im &quot;tools/calc&quot;</pre>
-<ul><li>nrxl looks for the file from the folder of the file that writes im.</li><li>The same file is only loaded once.</li><li>im must be written at the far left (not indented).</li><li>im is a reserved word: it cannot be a function or type name, and im() is always an error. A variable named im (be im = 5) is still allowed.</li></ul>
+<ul><li>nerx looks for the file from the folder of the file that writes im.</li><li>The same file is only loaded once.</li><li>im must be written at the far left (not indented).</li><li>im is a reserved word: it cannot be a function or type name, and im() is always an error. A variable named im (be im = 5) is still allowed.</li></ul>
 <p>im ... from (take only certain names):</p>
-<pre class="prog">im area, Point from &quot;tools&quot;    # from tools.nrxl, only area and Point
+<pre class="prog">im area, Point from &quot;tools&quot;    # from tools.nrx, only area and Point
 im area from tools             # without quotes is fine too</pre>
-<ul><li>Other names exported (ex) in tools.nrxl cannot be used from this file. The error says which name needs to be added to im.</li><li>Every name written must be exported in that file; otherwise it is an error before the program runs.</li><li>im &quot;tools&quot; without from is still allowed, and opens everything exported.</li></ul>
+<ul><li>Other names exported (ex) in tools.nrx cannot be used from this file. The error says which name needs to be added to im.</li><li>Every name written must be exported in that file; otherwise it is an error before the program runs.</li><li>im &quot;tools&quot; without from is still allowed, and opens everything exported.</li></ul>
 <p>ex (export): In a file used through im, only what has ex can be used by other files.</p>
 <pre class="prog">ex func circleArea(r)
     return tidy(PI * r * r)
@@ -325,7 +325,7 @@ ffi &quot;kernel32.dll&quot; (
     func GetTickCount() int
     func Sleep(ms int)                 # no result kind = returns
 )                                      # nothing</pre>
-<pre class="prog">MessageBoxA(0, &quot;Hello from nrxl!&quot;, &quot;Message&quot;, 0)
+<pre class="prog">MessageBoxA(0, &quot;Hello from nerx!&quot;, &quot;Message&quot;, 0)
 SetCursorPos(100, 200)</pre>
 <pre class="ref">Argument and result kinds:
   int        32-bit whole number (also BOOL, UINT, DWORD)
@@ -334,7 +334,7 @@ SetCursorPos(100, 200)</pre>
   double     64-bit decimal
   string     text (char*)
   pointer    address / handle (HWND, HANDLE, H..., *); 0 = NULL</pre>
-<ul><li>Write &quot;name kind&quot; for each argument (the name may be left out, the kind is enough). The result kind goes after the closing parenthesis.</li><li>At most 12 arguments. Windows 64-bit only.</li><li>nrxl checks the DLL file and function name while reading the program, so a typo is an error before the program runs.</li><li>ffi functions win over built-in functions with the same name (e.g. sqrt).</li><li>An ffi function name cannot be the same as your own nrxl function/type.</li><li>ffi functions can be called from every file (no ex needed).</li><li>Another name for a DLL function: write &quot;as RealName&quot; after the result kind.</li></ul>
+<ul><li>Write &quot;name kind&quot; for each argument (the name may be left out, the kind is enough). The result kind goes after the closing parenthesis.</li><li>At most 12 arguments. Windows 64-bit only.</li><li>nerx checks the DLL file and function name while reading the program, so a typo is an error before the program runs.</li><li>ffi functions win over built-in functions with the same name (e.g. sqrt).</li><li>An ffi function name cannot be the same as your own nerx function/type.</li><li>ffi functions can be called from every file (no ex needed).</li><li>Another name for a DLL function: write &quot;as RealName&quot; after the result kind.</li></ul>
 <pre class="prog">ffi &quot;msvcrt.dll&quot; (
     func length(s string) int as strlen
 )</pre>
@@ -352,8 +352,8 @@ poke(s, 8, &quot;double&quot;, 2.5)
 cFunction(s)                 # passed as a pointer
 print peek(s, 8, &quot;double&quot;)
 freeBuffer(s)</pre>
-<ul><li>A struct passed by value (not a pointer) that is 8 bytes or smaller: read it first with peek(s, 0, &quot;int64&quot;), then pass it as int64.</li><li>A wrong address crashes the program; nrxl cannot check it.</li></ul>
-<p>Callbacks (nrxl functions called by native code):</p>
+<ul><li>A struct passed by value (not a pointer) that is 8 bytes or smaller: read it first with peek(s, 0, &quot;int64&quot;), then pass it as int64.</li><li>A wrong address crashes the program; nerx cannot check it.</li></ul>
+<p>Callbacks (nerx functions called by native code):</p>
 <pre class="prog">func compare(a int, b int) int
     return peek(a, 0, &quot;int&quot;) - peek(b, 0, &quot;int&quot;)</pre>
 <pre class="prog">qsort(data, count, 4, callback(&quot;compare&quot;))</pre>
@@ -416,7 +416,7 @@ indexOf(t, part)         indexOf(&quot;hello&quot;, &quot;lo&quot;) -&gt; 3
 substr(t, start, length)
                          substr(&quot;Hello World&quot;, 0, 5) -&gt; &quot;Hello&quot;
                          (length optional)
-slice(t, start, end)     slice(&quot;nrxlang&quot;, -4) -&gt; &quot;lang&quot;
+slice(t, start, end)     slice(&quot;Nerx&quot;, -4) -&gt; &quot;lang&quot;
 reverse(t)               reverse(&quot;hello&quot;) -&gt; &quot;olleh&quot;</pre>
 <h4>Conversion</h4>
 <pre class="ref">str(x)                   to text
@@ -549,9 +549,9 @@ stopMusic()               stop the music
 stopSound()               stop all effects</pre>
 <pre class="ref">Formats: WAV and MP3.</pre>
 <h3 id="lib-nrx-json-h-json">lib nrx_json.h  -  JSON</h3>
-<pre class="ref">toJson(data)          nrxl data -&gt; one-line JSON text
+<pre class="ref">toJson(data)          nerx data -&gt; one-line JSON text
 toJson(data, true)    same, but pretty (lines and indentation)
-fromJson(text)        JSON text -&gt; nrxl data</pre>
+fromJson(text)        JSON text -&gt; nerx data</pre>
 <ul><li>JSON object &lt;-&gt; map, array &lt;-&gt; list, true/false &lt;-&gt; bool, null -&gt; empty text. Types are saved as objects.</li><li>To save and load data from a file, pair it with nrx_crudfile:</li></ul>
 <pre class="prog">writeFile(&quot;data.json&quot;, toJson(data, true))
 be result json = fromJson(readFile(&quot;data.json&quot;))   # content may be mixed</pre>
@@ -651,7 +651,7 @@ cube(0, -0.4, 0, 0.3, 0.8, 0.3, &quot;orange&quot;)
 pop3d()
 pop3d()                     # back to how it was before push3d</pre>
 <ul><li>Every push3d must be closed with pop3d before end3d. text2d/rect2d only outside push3d.</li></ul>
-<ul><li>Draw only between begin3d and end3d (screenshot3d after end3d).</li><li>The environment variable NRX3D_HIDDEN=1 keeps the window hidden (for automated tests); drawing and screenshot3d still work.</li><li>Full example with a text box: agen/kantor.nrxl.</li><li>A built .exe of a 3D program is about 1.7 MB (raylib is inside it); other programs do not carry raylib.</li></ul>
+<ul><li>Draw only between begin3d and end3d (screenshot3d after end3d).</li><li>The environment variable NRX3D_HIDDEN=1 keeps the window hidden (for automated tests); drawing and screenshot3d still work.</li><li>Full example with a text box: agen/kantor.nrx.</li><li>A built .exe of a 3D program is about 1.7 MB (raylib is inside it); other programs do not carry raylib.</li></ul>
 </section>
 <section class="part" data-part>
 <h2 id="limits">Limits</h2>
@@ -659,22 +659,22 @@ pop3d()                     # back to how it was before push3d</pre>
 </section>
 <section class="part" data-part>
 <h2 id="vs-code-extension">VS Code extension</h2>
-<p>The vscode-nrxl folder holds the extension for syntax colors and code snippets. How to install it, and later how to publish it, is in vscode-nrxl/README.md.</p>
+<p>The vscode-nerx folder holds the extension for syntax colors and code snippets. How to install it, and later how to publish it, is in vscode-nerx/README.md.</p>
 </section>
 <section class="part" data-part>
-<h2 id="nrxc-the-compiler-written-in-nrxl-no-vm">nrxc: the compiler written in nrxl (no VM)</h2>
-<p>nrxc is the nrxl compiler written in nrxl itself (src\nrxc.nrxl). It reads a .nrxl file and writes a 64-bit Windows .exe directly (x64 machine code + PE header), with no VM and no external toolchain.</p>
+<h2 id="nrxc-the-compiler-written-in-nerx-no-vm">nrxc: the compiler written in nerx (no VM)</h2>
+<p>nrxc is the nerx compiler written in nerx itself (src\nrxc.nrx). It reads a .nrx file and writes a 64-bit Windows .exe directly (x64 machine code + PE header), with no VM and no external toolchain.</p>
 <p>Using it:</p>
-<pre class="prog">nrxlang game.nrxl                          # -&gt; game.exe
-nrxlang game.nrxl out\game.exe             # choose the .exe name
-nrxlang                                 # no arguments: it asks for the file and the .exe
-nrxlang build game.nrxl -o game.exe        # the same, with an option for the .exe name
-nrxlang run game.nrxl                      # compile to a temporary .exe, run it, delete it</pre>
-<ul><li>nrxlang.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrxl, pustaka.nrxl, and the lib\nrx_*.nrxl folder) are read from the folder where nrxlang.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrxl nrxlang_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, window, 3d) was rewritten in nrxl in src\lib\nrx_*.nrxl. They are used the same way: lib nrx_window.h.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old nrxlang interpreter: error E0026 in game.nrxl:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
-<p>Differences from the old nrxlang interpreter that are not matched yet:</p>
-<ul><li>Integers that pass the 64-bit limit wrap around (nrxlang turns them into decimals).</li><li>min(2.5, 1) returns a decimal (nrxlang: the integer 1).</li><li>Type names are not separated per file (ordinary functions and variables already are).</li></ul>
-<h3 id="nrxc-intrinsics-for-writing-libraries-in-nrxl">nrxc intrinsics  -  for writing libraries in nrxl</h3>
-<p>Most of these functions exist only in nrxc (peek, poke, and newBuffer also work in nrxlang). The libraries in src\lib\nrx_*.nrxl and the runtime (prelude.nrxl, pustaka.nrxl) use them. Ordinary programs do not need them. Every value is a 64-bit integer (a memory address or bits).</p>
+<pre class="prog">Nerx game.nrx                          # -&gt; game.exe
+Nerx game.nrx out\game.exe             # choose the .exe name
+Nerx                                 # no arguments: it asks for the file and the .exe
+nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
+nerx run game.nrx                      # compile to a temporary .exe, run it, delete it</pre>
+<ul><li>nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx, pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where nerx.exe is, so it can run from any folder.</li><li>To build it yourself: from the src folder run nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).</li><li>nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.</li><li>Only functions that are actually called go into the .exe, so it stays small.</li><li>The .exe has two sections: .text (code, read/execute only) and .data (variables).</li><li>Every library (nrx_crudfile, rand, console, keyboard, json, http, sound, window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used the same way: lib nrx_window.h.</li><li>nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from not, and text uses Segoe UI.</li><li>Runtime error messages match the old Nerx interpreter: error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items) Errors found while compiling (before the .exe exists) still look different. nrxc prints Done: game.exe (N bytes) when it finishes.</li></ul>
+<p>Differences from the old Nerx interpreter that are not matched yet:</p>
+<ul><li>Integers that pass the 64-bit limit wrap around (Nerx turns them into decimals).</li><li>min(2.5, 1) returns a decimal (Nerx: the integer 1).</li><li>Type names are not separated per file (ordinary functions and variables already are).</li></ul>
+<h3 id="nrxc-intrinsics-for-writing-libraries-in-nerx">nrxc intrinsics  -  for writing libraries in nerx</h3>
+<p>Most of these functions exist only in nrxc (peek, poke, and newBuffer also work in Nerx). The libraries in src\lib\nrx_*.nrx and the runtime (prelude.nrx, pustaka.nrx) use them. Ordinary programs do not need them. Every value is a 64-bit integer (a memory address or bits).</p>
 <p>Calling Windows DLLs:</p>
 <pre class="ref">dllFn(&quot;user32.dll&quot;, &quot;MessageBoxA&quot;)   address of a function in a DLL
                                      (LoadLibraryA + GetProcAddress); 0 if
@@ -697,17 +697,17 @@ poke(p, off, kind, value)            read / write a typed value at p + off
 peek8(p, off)  peek64(p, off)        read 1 byte / 8 bytes
 poke8(p, off, v)  poke64(p, off, v)  write 1 byte / 8 bytes
 idiv(a, b)                           integer division (int result)</pre>
-<p>Turning nrxl values into addresses and back:</p>
+<p>Turning nerx values into addresses and back:</p>
 <pre class="ref">asInt(x)       address of a string / list / map / json (or the bits of a double)
 asString(p)    string at an address     asListI(p)  list int
 asListS(p)     list string              asListD(p)  list double
 asListJ(p)     list json                asJson(p)   json
 asDouble(bit)  a double from its bits</pre>
 <p>Callbacks and calling by address:</p>
-<pre class="ref">_callback(&quot;function&quot;)   address of an nrxl function Windows can call (thread,
+<pre class="ref">_callback(&quot;function&quot;)   address of an nerx function Windows can call (thread,
                         WndProc, qsort); same as callback(&quot;function&quot;); up to
                         4 integer arguments
-_callfn(address, a1, ..., ak)   call an nrxl function by its address</pre>
+_callfn(address, a1, ..., ak)   call an nerx function by its address</pre>
 <p>Errors and state:</p>
 <pre class="ref">_lempar(&quot;message&quot;)        throw an error that try/catch can catch
 _lemparK(code, &quot;message&quot;) same, with an E#### number for uncaught errors
@@ -715,7 +715,7 @@ _gget(k)  _gset(k, v)     hidden global slot k (0..14) owned by a library:
                           0 rand, 1 http status, 2 http background, 3 sound,
                           4-6 console, 7 keyboard, 8 sound list,
                           9 stdout handle, 10 window, 14 nrx_3d</pre>
-<p>Decimal math (used by pustaka.nrxl): _sqrt(x) _sin(x) _cos(x) _tan(x) _atan2(y, x) _fpow(x, y).</p>
+<p>Decimal math (used by pustaka.nrx): _sqrt(x) _sin(x) _cos(x) _tan(x) _atan2(y, x) _fpow(x, y).</p>
 <p>A small library example (user32 + kernel32):</p>
 <pre class="prog">func message(text string, title string) int
     return callp(dllFn(&quot;user32.dll&quot;, &quot;MessageBoxA&quot;), 0, cstr(text), cstr(title), 0)</pre>
@@ -727,8 +727,8 @@ _gget(k)  _gset(k, v)     hidden global slot k (0..14) owned by a library:
 
 <footer class="foot">
   <div class="wrap">
-    <span>nrxl (Nerxelity), MIT License</span>
-    <span><a href="index.html">Home</a> &middot; <a href="https://github.com/venryivander-oss/nrxlang">GitHub</a></span>
+    <span>nerx (Nerxelity), MIT License</span>
+    <span><a href="index.html">Home</a> &middot; <a href="https://github.com/venryivander-oss/nerx">GitHub</a></span>
   </div>
 </footer>
 <script>

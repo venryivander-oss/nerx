@@ -1,8 +1,8 @@
-# chat_gui.nrxl: aplikasi chat AI lokal dengan tampilan window (seperti ChatGPT / Gemini).
+# chat_gui.nrx: aplikasi chat AI lokal dengan tampilan window (seperti ChatGPT / Gemini).
 # Terhubung ke llama-server (atau LM Studio / Ollama) lewat API kompatibel OpenAI,
 # jawaban tampil mengalir (streaming) sambil diketik model.
 #
-# Jalankan:   nrxlang run chat_gui.nrxl        Jadikan .exe:   nrxlang build chat_gui.nrxl
+# Jalankan:   nerx run chat_gui.nrx        Jadikan .exe:   nerx build chat_gui.nrx
 # Pengaturan: buat file chat_gui.json di folder yang sama (semua kolom opsional):
 #   {"alamat": "http://localhost:8080", "model": "qwen3-coder", "api_key": "", "tema": "gelap"}
 #   tema: "gelap" (bawaan) atau "terang"
@@ -103,8 +103,8 @@ be chipW list int
 be chipH list int
 be kataKunci list string = split("func if else loop for return be print lib type im ex lock try catch throw options option delete int float double bool string def class import while const let var void struct include", " ")
 
-add(chipTeks, "Jelaskan cara kerja bahasa pemrograman nrxl")
-add(chipTeks, "Tulis program nrxl untuk menghitung faktorial")
+add(chipTeks, "Jelaskan cara kerja bahasa pemrograman nerx")
+add(chipTeks, "Tulis program nerx untuk menghitung faktorial")
 add(chipTeks, "Bantu aku mencari bug di kode C")
 for i in range(len(chipTeks))
     add(chipL, 0)

@@ -4,5 +4,5 @@ ffi "kernel32.dll" (
 ffi "msvcrt.dll" (
     func length(s string) int as strlen
 )
-print length("nrxlang")
+print length("Nerx")
 print GetTickCount() > 0

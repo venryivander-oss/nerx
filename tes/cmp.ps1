@@ -2,7 +2,7 @@
 param([string]$list, [string]$comp = "..\src\nrxc3.exe")
 Set-Location $PSScriptRoot
 foreach ($n in ($list -split "[ ,]+")) {
-    $f = "$PSScriptRoot\uji\$n.nrxl"
+    $f = "$PSScriptRoot\uji\$n.nrx"
     $in = "$PSScriptRoot\uji\$n.in"; if (-not (Test-Path $in)) { $in = "NUL" }
     $asli = cmd /c "type `"$in`" | ..\history\dist\nrxlang_c.exe run `"$f`" 2>&1" | Out-String
     $ec1 = $LASTEXITCODE

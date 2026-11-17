@@ -3,11 +3,11 @@
 param([string]$list = "", [string]$dir = "uji_err")
 Set-Location $PSScriptRoot
 $nrxlang = "..\history\dist\nrxlang_c.exe"; $nrxc = if (Test-Path ..\src\nrxc3.exe) { "..\src\nrxc3.exe" } else { "..\src\nrxc2.exe" }
-$names = if ($list) { $list -split "[ ,]+" | ? { $_ } } else { Get-ChildItem "$dir\*.nrxl" | % BaseName }
+$names = if ($list) { $list -split "[ ,]+" | ? { $_ } } else { Get-ChildItem "$dir\*.nrx" | % BaseName }
 $sama = 0; $beda = 0
 foreach ($n in $names) {
-    $asli = (cmd /c "`"$nrxlang`" run $dir\$n.nrxl <NUL 2>&1" | Out-String).Trim(); $ka = $LASTEXITCODE
-    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrxl <NUL 2>&1" | Out-String).Trim(); $km = $LASTEXITCODE
+    $asli = (cmd /c "`"$nrxlang`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim(); $ka = $LASTEXITCODE
+    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim(); $km = $LASTEXITCODE
     if ($asli -eq $mini -and $ka -eq $km) { $sama++ }
     else { $beda++; "BEDA $n (exit $ka vs $km)"; "   real: $asli"; "   nrxc: $mini" }
 }

@@ -8,7 +8,7 @@ Static site for nrxl. No build step except the docs page.
 
       powershell -ExecutionPolicy Bypass -File website\build_docs.ps1
 
-- `examples/`: the .nrxl files shown on the page. Every output on the page came
+- `examples/`: the .nrx files shown on the page. Every output on the page came
   from running these with `nrxc run`. If the language changes, run them again
   and update the page.
 - Preview locally: open index.html directly (some viewers skip the CSS; any static
@@ -17,7 +17,7 @@ Static site for nrxl. No build step except the docs page.
 
 ## Design decisions (direction in ../DESIGN.md)
 
-- Palette from DESIGN.md (kantor.nrxl colors). Fixed light theme: the paper
+- Palette from DESIGN.md (kantor.nrx colors). Fixed light theme: the paper
   palette is the brand, chosen by the owner. All text pairs checked for WCAG AA
   (lowest: white on accent-dark button 4.53, accent on code box 4.79).
 - Type: IBM Plex Sans for text, IBM Plex Mono only for code, self-hosted in
@@ -32,8 +32,8 @@ Static site for nrxl. No build step except the docs page.
   prefers-reduced-motion the code is shown in full and nothing types.
 - Speed numbers: measured 2026-11-04 on an Intel Xeon E3-1220 v2, wall time
   including process start, best of 3 (script) and 5 (.exe) runs, from
-  examples/bench_fib.nrxl and examples/bench_loop.nrxl. Re-measure before
+  examples/bench_fib.nrx and examples/bench_loop.nrx. Re-measure before
   changing them.
-- nrxl vs C numbers (section #vs-c): measured 2026-11-16 on an Intel Core
+- nerx vs C numbers (section #vs-c): measured 2026-11-16 on an Intel Core
   i7-14700F, timed inside the program, C built with gcc -O2 (fib also -O0);
-  sources in examples/cmp_*.c and examples/cmp_*.nrxl.
+  sources in examples/cmp_*.c and examples/cmp_*.nrx.

@@ -1,6 +1,6 @@
-# Nerxelity (nrxl) untuk VS Code
+# Nerx untuk VS Code
 
-Extension ini memberi warna sintaks, cuplikan kode, dan pengaturan editor untuk file `.nrxl`.
+Extension ini memberi warna sintaks, cuplikan kode, dan pengaturan editor untuk file `.nrx`.
 
 ## Isi
 
@@ -12,11 +12,11 @@ Di editor, `Ctrl+/` membuat komentar, tanda kurung dan kutip ditutup otomatis, d
 
 ## Pasang lokal (belum dirilis)
 
-Dari folder `vscode-nrxl`, jalankan di PowerShell:
+Dari folder `vscode-nerx`, jalankan di PowerShell:
 
 ```
 powershell -ExecutionPolicy Bypass -File pack.ps1
-code --install-extension nrxl-0.1.0.vsix
+code --install-extension nerx-0.1.0.vsix
 ```
 
 Setelah itu restart VS Code, atau jalankan `Developer: Reload Window`.
@@ -25,6 +25,6 @@ Untuk menghapus: buka panel Extensions, cari "Nerxelity", lalu klik Uninstall.
 
 ## Merilis ke VS Code Marketplace (nanti)
 
-1. Ganti `"publisher": "nrxl-local"` di `package.json` dengan nama publisher Marketplace-mu.
+1. Ganti `"publisher": "nerx-local"` di `package.json` dengan nama publisher Marketplace-mu.
 2. Kalau sudah ada, tambahkan `"repository"` dan `"icon"` di `package.json`.
 3. Jalankan `npx @vscode/vsce publish`.

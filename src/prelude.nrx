@@ -232,7 +232,7 @@ func exit(kode int) int
     api(2, kode, 0, 0, 0, 0, 0, 0)
     return 0
 
-# pembungkus kernel32 (nrxl asli memakai blok ffi dengan nama yang sama)
+# pembungkus kernel32 (nerx asli memakai blok ffi dengan nama yang sama)
 func CreateFileA(nama string, a int, b int, c int, d int, e int, f int) int
     return api(6, asInt(nama) + 8, a, b, c, d, e, f)
 
@@ -269,7 +269,7 @@ func askLine(prompt string) string
 
 # int(s): ubah teks angka (boleh diawali -) menjadi int
 func int__string(s string) int
-    # bentuk yang diterima (seperti nrxl): spasi, tanda +/-, digit (minimal satu), pecahan .digit (dibuang), spasi
+    # bentuk yang diterima (seperti nerx): spasi, tanda +/-, digit (minimal satu), pecahan .digit (dibuang), spasi
     be n = 0
     be neg = false
     be i = 0
@@ -297,12 +297,12 @@ func int__string(s string) int
     if neg
         return 0 - n
     return n
-# ---- pemanggilan fungsi DLL Windows secara dinamis (dipakai library lib\nrx_*.nrxl)
-# alamat byte pertama isi string (string nrxl selalu berakhir 0, jadi cocok sebagai teks C)
+# ---- pemanggilan fungsi DLL Windows secara dinamis (dipakai library lib\nrx_*.nrx)
+# alamat byte pertama isi string (string nerx selalu berakhir 0, jadi cocok sebagai teks C)
 func cstr(s string) int
     return asInt(s) + 8
 
-# teks C (berakhir 0) di alamat p -> string nrxl
+# teks C (berakhir 0) di alamat p -> string nerx
 func fromC(p int) string
     if p == 0
         return ""

@@ -1,9 +1,9 @@
-# uji.ps1 - uji pembeda: jalankan tiap uji\*.nrxl dengan nrxlang ASLI dan dengan nrxc, bandingkan keluarannya.
+# uji.ps1 - uji pembeda: jalankan tiap uji\*.nrx dengan nrxlang ASLI dan dengan nrxc, bandingkan keluarannya.
 # Jalankan:   powershell -File tes\uji.ps1
 $nrxlang = Join-Path $PSScriptRoot "..\history\dist\nrxlang_c.exe"
 Set-Location $PSScriptRoot
 $gagal = 0
-foreach ($f in @(Get-ChildItem uji\*.nrxl) + @(Get-ChildItem uji_im*\utama.nrxl)) {
+foreach ($f in @(Get-ChildItem uji\*.nrx) + @(Get-ChildItem uji_im*\utama.nrx)) {
     $n = $f.BaseName; if ($n -eq "utama") { $n = "im_" + $f.Directory.Name }
     $in = Join-Path $f.DirectoryName "$n.in"; if (-not (Test-Path $in)) { $in = "NUL" }
     $asli = cmd /c "type `"$in`" | `"$nrxlang`" run `"$($f.FullName)`" 2>&1" | Out-String

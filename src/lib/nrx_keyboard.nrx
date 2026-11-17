@@ -1,4 +1,4 @@
-# nrx_keyboard.nrxl - keyboard console. Slot tersembunyi 7 = alamat blok keadaan:
+# nrx_keyboard.nrx - keyboard console. Slot tersembunyi 7 = alamat blok keadaan:
 #   [0..255] ditekan sejak dicek, [256..511] ditahan, [512..767] pernah ada "dilepas", [768] console siap (0 belum dicek, 1 ya, 2 tidak), [776] handle input
 
 func kbNama() list string

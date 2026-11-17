@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Nerxelity",
-  "scopeName": "source.nrxl",
+  "scopeName": "source.nrx",
   "patterns": [
     { "include": "#comment" },
     { "include": "#string" },
@@ -27,109 +27,109 @@
   "repository": {
     "comment": {
       "match": "#.*$",
-      "name": "comment.line.number-sign.nrxl"
+      "name": "comment.line.number-sign.nrx"
     },
     "string": {
       "begin": "\"",
       "end": "\"",
-      "name": "string.quoted.double.nrxl",
+      "name": "string.quoted.double.nrx",
       "patterns": [
-        { "match": "\\\\[nt\"\\\\]", "name": "constant.character.escape.nrxl" }
+        { "match": "\\\\[nt\"\\\\]", "name": "constant.character.escape.nrx" }
       ]
     },
     "style-property": {
       "match": "^\\s*(size|font|bold|italic|color|background|width|height|hover|hoverColor)\\s*(:)",
       "captures": {
-        "1": { "name": "support.type.property-name.nrxl" },
-        "2": { "name": "punctuation.separator.key-value.nrxl" }
+        "1": { "name": "support.type.property-name.nrx" },
+        "2": { "name": "punctuation.separator.key-value.nrx" }
       }
     },
     "lib": {
       "match": "^\\s*(lib)\\s+(nrx_[A-Za-z0-9_]+\\.h)",
       "captures": {
-        "1": { "name": "keyword.control.import.nrxl" },
-        "2": { "name": "entity.name.namespace.nrxl" }
+        "1": { "name": "keyword.control.import.nrx" },
+        "2": { "name": "entity.name.namespace.nrx" }
       }
     },
     "import": {
       "match": "^\\s*(im)\\b(?:[^\"#]*?\\s(from)\\b)?",
       "captures": {
-        "1": { "name": "keyword.control.import.nrxl" },
-        "2": { "name": "keyword.control.import.nrxl" }
+        "1": { "name": "keyword.control.import.nrx" },
+        "2": { "name": "keyword.control.import.nrx" }
       }
     },
     "func-def": {
       "match": "\\b(func)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
-        "1": { "name": "storage.type.function.nrxl" },
-        "2": { "name": "entity.name.function.nrxl" }
+        "1": { "name": "storage.type.function.nrx" },
+        "2": { "name": "entity.name.function.nrx" }
       }
     },
     "struct-def": {
       "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
-        "1": { "name": "storage.type.struct.nrxl" },
-        "2": { "name": "entity.name.type.struct.nrxl" }
+        "1": { "name": "storage.type.struct.nrx" },
+        "2": { "name": "entity.name.type.struct.nrx" }
       }
     },
     "block-def": {
       "match": "\\b(windowTemplate|templateStyle)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
-        "1": { "name": "storage.type.nrxl" },
-        "2": { "name": "entity.name.type.nrxl" }
+        "1": { "name": "storage.type.nrx" },
+        "2": { "name": "entity.name.type.nrx" }
       }
     },
     "declare": {
       "match": "\\b(be|lock|ex|ffi|delete|errlang|type|init|own)\\b",
-      "name": "storage.modifier.nrxl"
+      "name": "storage.modifier.nrx"
     },
     "keyword": {
       "match": "\\b(if|else|loop|for|in|break|continue|return|try|catch|throw|options|option)\\b",
-      "name": "keyword.control.nrxl"
+      "name": "keyword.control.nrx"
     },
     "io": {
       "match": "\\b(print|ask\\.int|ask|wait\\.float|wait\\.double|wait)\\b",
-      "name": "support.function.io.nrxl"
+      "name": "support.function.io.nrx"
     },
     "constant": {
       "match": "\\b(true|false)\\b",
-      "name": "constant.language.boolean.nrxl"
+      "name": "constant.language.boolean.nrx"
     },
     "ffi-type": {
       "match": "(?<=[\\s(])(int|int64|float|double|string|pointer)\\b(?=\\s*(,|\\)|$))",
-      "name": "support.type.nrxl"
+      "name": "support.type.nrx"
     },
     "typed-declare": {
       "match": "\\b(be|lock)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(int|float|double|bool|string|list|map|json|array)\\b",
       "captures": {
-        "1": { "name": "storage.modifier.nrxl" },
-        "2": { "name": "variable.other.nrxl" },
-        "3": { "name": "support.type.nrxl" }
+        "1": { "name": "storage.modifier.nrx" },
+        "2": { "name": "variable.other.nrx" },
+        "3": { "name": "support.type.nrx" }
       }
     },
     "window": {
       "match": "\\b(newWindow|closeWindow|newText|newButton|newInput|newCheck|newSelect|newList|newCanvas|newImage|onKey|onMouse|onTimer|onclick)\\b",
-      "name": "support.class.window.nrxl"
+      "name": "support.class.window.nrx"
     },
     "builtin": {
       "match": "\\b(len|add|write|takeLast|remove|sort|reverse|filled|array|newBuffer|freeBuffer|peek|poke|peekText|callback|httpGet|httpPost|httpStatus|httpStart|httpDone|httpResult|httpPartial|runCommand|commandStatus|listFiles|readRange|findInFile|replaceInFile|pressed3d|typed3d|textWidth2d|rect2d|clipboard3d|screenshot3d|toScreen3d|exitKey3d|mouse3d|click3d|wheel3d|ground3d|push3d|pop3d|move3d|turn3d|cylinder|rectGrad2d|open3d|running3d|camera3d|begin3d|end3d|cube|cubeWire|sphere|plane|grid|text2d|key3d|fps3d|frameTime|close3d|indexOf|substr|slice|typeOf|str|int|float|trim|upper|lower|split|join|replace|contains|keys|values|range|abs|round|floor|ceil|sqrt|sin|cos|tan|atan2|pi|pow|min|max|time|date|timer|exit|random|randomSeed|choice|createFile|readFile|readLines|writeFile|writeLines|appendFile|appendLine|deleteFile|fileExists|keyPressed|getKey|clear|cursor|color|playSound|playMusic|stopMusic|stopSound|toJson|fromJson|clearCanvas|drawRect|drawCircle|drawLine|drawText|drawImage)(?=\\s*\\()",
-      "name": "support.function.builtin.nrxl"
+      "name": "support.function.builtin.nrx"
     },
     "call": {
       "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
-      "name": "entity.name.function.call.nrxl"
+      "name": "entity.name.function.call.nrx"
     },
     "number": {
       "match": "\\b\\d+(\\.\\d+)?\\b",
-      "name": "constant.numeric.nrxl"
+      "name": "constant.numeric.nrx"
     },
     "locked-name": {
       "match": "\\b[A-Z][A-Z0-9_]+\\b",
-      "name": "variable.other.constant.nrxl"
+      "name": "variable.other.constant.nrx"
     },
     "operator": {
       "match": "(\\+=|-=|\\*=|/=|%=|==|!=|<=|>=|<|>|=|\\+|-|\\*|/|%)|\\b(and|or|not)\\b",
-      "name": "keyword.operator.nrxl"
+      "name": "keyword.operator.nrx"
     }
   }
 }

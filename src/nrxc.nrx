@@ -1,4 +1,4 @@
-# nrxc.nrxl  -  self-hosting TAHAP 5: compiler mini yang ditulis dalam nrxl dan menghasilkan
+# nrxc.nrx  -  self-hosting TAHAP 5: compiler mini yang ditulis dalam nerx dan menghasilkan
 # file .exe Windows 64-bit LANGSUNG (tanpa gcc, tanpa C, tanpa VM, tanpa runtime tambahan).
 #
 # Bahasa sumber mini (satu perintah per baris, indentasi = spasi; # = komentar):
@@ -28,13 +28,13 @@
 #   Intrinsik tingkat rendah: alloc(n), free(p), peek8/peek64(p, offset), poke8/poke64(p, offset, nilai),
 #   asString(int), asInt(string/list), asListI(int), asListS(int),
 #   api(indeks, a1..a7) = panggil fungsi Windows dari tabel impor (lihat OFF_IAT di bawah).
-#   Pustaka standar (prelude.nrxl, ditulis dalam bahasa ini juga): str, substr, ord, chr, indexOf, ...
+#   Pustaka standar (prelude.nrx, ditulis dalam bahasa ini juga): str, substr, ord, chr, indexOf, ...
 #   Memori: delete(x) membebaskan string atau list (data dan kepalanya). Setelah delete, jangan
 #   pakai x lagi. Isi list yang berupa string tidak ikut dibebaskan (delete tiap elemen dulu).
 #   Intrinsik free(p) membebaskan blok dari alloc(n). Indeks list tidak dicek batasnya.
 #
-# Pakai:   nrxlang run src\nrxc.nrxl      (lalu isi nama file sumber dan nama .exe)
-#          File prelude.nrxl harus ada di folder kerja.
+# Pakai:   nerx run src\nrxc.nrx      (lalu isi nama file sumber dan nama .exe)
+#          File prelude.nrx harus ada di folder kerja.
 
 lib nrx_crudfile.h
 
@@ -144,7 +144,7 @@ be metaJenis list string         # templateStyle ("s") dan windowTemplate ("t") 
 be metaNama list string
 be metaBody list string           # baris isinya dipisah \n
 be metaAktif = false
-be libMuat list string            # file library nrx_*.nrxl yang sudah dimuat
+be libMuat list string            # file library nrx_*.nrx yang sudah dimuat
 be tryAktif list int              # slot catat try yang sedang terbuka (disp rbp), dari luar ke dalam
 be tryBase list int               # panjang tryAktif saat tiap loop dimulai
 # struct (type)
@@ -215,7 +215,7 @@ be kknPos = 0                         # posisi "movabs rcx, konstanta" itu
 
 # M = floor(2^(63+l)/d) + 1 (64 bit tanpa tanda), l = ceil(log2 d), untuk pembagian bertanda 64-bit dengan d konstan
 # (Granlund-Montgomery: m' = M - 2^64 sebagai bilangan bertanda punya pola bit yang sama dengan M).
-# Pembagian panjang basis 2^15 supaya semua hasil antara kecil (nrxlang asli mengubah int besar jadi double);
+# Pembagian panjang basis 2^15 supaya semua hasil antara kecil (Nerx asli mengubah int besar jadi double);
 # hasilnya dua kata 32-bit di magLo dan magHi.
 be magLo = 0
 be magHi = 0
@@ -331,7 +331,7 @@ func galat(pesan string)
     print "Error " berkNama " baris " noBaris ": " pesan
     exit(1)
 
-# error kompilasi berformat sama dengan nrxlang: error E0229 in file.nrxl:4: pesan
+# error kompilasi berformat sama dengan Nerx: error E0229 in file.nrx:4: pesan
 be errId = false                       # pesan error dalam bahasa Indonesia (errlang = id, atau bahasa Windows)
 be errPilih = 0                       # 1 = errlang = id di sumber, 2 = errlang = en, 0 = ikut bahasa Windows
 
@@ -346,7 +346,7 @@ func galatK(kode int, pesan string)
     print "error E" + ks + kata + berkNama + ":" + str(noBaris) + ": " + pesan
     exit(1)
 
-# bahasa pesan error: baris "errlang = id/en" di file utama, kalau tidak ada ikut bahasa Windows (seperti nrxlang)
+# bahasa pesan error: baris "errlang = id/en" di file utama, kalau tidak ada ikut bahasa Windows (seperti Nerx)
 func tentukanBahasa(sumber string)
     be errId = (GetUserDefaultUILanguage() % 1024) == 33
     if not fileExists(sumber)
@@ -573,7 +573,7 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
         galatK(350, nama + "() cannot be used on " + kataJenisPendek(tipeArg[0]))
     be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299")
     for q in range(0, len(kdLib), 2)
-        be bt = "lib\\" + kdLib[q] + ".nrxl"
+        be bt = "lib\\" + kdLib[q] + ".nrx"
         if fileExists(jalurRt(bt))
             be isiLib = readFile(jalurRt(bt))
             if contains(isiLib, "func " + nama + "(") or contains(isiLib, "func " + nama + "__") or contains(isiLib, "func " + nama + "_a")
@@ -617,7 +617,7 @@ func harusInt(t string)
     if t != "int"
         galat("butuh int, tetapi tipenya " t)
 
-# nilai di puncak stack dijadikan bool (seperti nrxlang: 0, teks kosong, 0.0, dan list/map kosong = false)
+# nilai di puncak stack dijadikan bool (seperti Nerx: 0, teks kosong, 0.0, dan list/map kosong = false)
 func harusBool(t string)
     if t == "bool"
         return
@@ -1412,7 +1412,7 @@ func jadiTeks(t string)
     else if t != "string"
         galat("tidak bisa digabung sebagai teks: " t)
 
-# fungsi buatan compiler: ubah list / map / type jadi teks (Player{nama: Budi, hp: 70}); ditulis sebagai teks nrxl lalu dibaca seperti file
+# fungsi buatan compiler: ubah list / map / type jadi teks (Player{nama: Budi, hp: 70}); ditulis sebagai teks nerx lalu dibaca seperti file
 func buatFungsiTeks(t string, nmK string)
     be src = ""
     if cariStruct(t) >= 0
@@ -1593,7 +1593,7 @@ func panggil(nama string) string
         return "string"
     if nama == "_callback" or nama == "callback"
         # _callback("fungsi"): alamat pintu masuk yang bisa dipanggil Windows (thread, WndProc); argumen Windows (rcx, rdx, r8, r9)
-        # didorong ke stack sesuai arity fungsi nrxl; rbx (handle stdout) dipulihkan
+        # didorong ke stack sesuai arity fungsi nerx; rbx (handle stdout) dipulihkan
         if n != 1 or tipeArg[0] != "string"
             galat("_callback(\"nama fungsi\")")
         be cbNama = ""
@@ -1695,7 +1695,7 @@ func panggil(nama string) string
             panggilNama("cariI", 2)
         return "int"
     if nama == "_callfn"
-        # _callfn(alamat, a1..ak): panggil fungsi nrxl lewat alamatnya (handler window); argumen apa pun (8 byte), hasil rax
+        # _callfn(alamat, a1..ak): panggil fungsi nerx lewat alamatnya (handler window); argumen apa pun (8 byte), hasil rax
         if n < 1 or tipeArg[0] != "int"
             galat("_callfn(alamat, argumen...)")
         hex("FF 94 24")                   # call [rsp + 8k]
@@ -1867,7 +1867,7 @@ func panggil(nama string) string
         hex("48 89 14 C8 6A 00")          # mov [rax + rcx*8], rdx; push 0
         return "int"
     if nama == "idiv"
-        # pembagian bilangan bulat (hanya untuk prelude / pustaka; nrxl asli tidak punya)
+        # pembagian bilangan bulat (hanya untuk prelude / pustaka; nerx asli tidak punya)
         if n != 2 or tipeArg[0] != "int" or tipeArg[1] != "int"
             galat("idiv(a int, b int)")
         hex("59 58 48 99 48 F7 F9 50")    # pop rcx; pop rax; cqo; idiv rcx; push rax
@@ -1920,7 +1920,7 @@ func inferRet(fi int)
     be retInferensi = ""
     be dalamFungsi = true
     be paksaLokal = false
-    be globalOK = berk[funcStmt[fi]] != "prelude.nrxl" and berk[funcStmt[fi]] != "pustaka.nrxl" and substr(berk[funcStmt[fi]], 0, 4) != "lib\\"
+    be globalOK = berk[funcStmt[fi]] != "prelude.nrx" and berk[funcStmt[fi]] != "pustaka.nrx" and substr(berk[funcStmt[fi]], 0, 4) != "lib\\"
     be ps3 = 0
     if funcArity[fi] > 0
         be tipeParam3 = split(funcPT[fi], ",")
@@ -1969,7 +1969,7 @@ func inferRet(fi int)
     be funcRet[fi] = hasilT
 func panggilBuatan(nama string, tipeArg list string) string
     be n = len(tipeArg)
-    if indexOf(funcNama, "u$" + nama) >= 0 and berk[si] != "prelude.nrxl" and berk[si] != "pustaka.nrxl" and substr(berk[si], 0, 4) != "lib\\"
+    if indexOf(funcNama, "u$" + nama) >= 0 and berk[si] != "prelude.nrx" and berk[si] != "pustaka.nrx" and substr(berk[si], 0, 4) != "lib\\"
         be nama = "u$" + nama
     if nama == "wait" and indexOf(funcNama, "winTunggu__int") >= 0
         be nama = "winTunggu"
@@ -2006,7 +2006,7 @@ func panggilBuatan(nama string, tipeArg list string) string
             break
     if indexOf(funcNama, nm2) < 0
         galatNamaTakAda(nama, n, tipeArg)
-    if (nama == "readFile" or nama == "writeFile" or nama == "fileExists") and berkasPengguna(berkNama) and indexOf(libMuat, "nrx_crudfile.nrxl") < 0
+    if (nama == "readFile" or nama == "writeFile" or nama == "fileExists") and berkasPengguna(berkNama) and indexOf(libMuat, "nrx_crudfile.nrx") < 0
         galatK(66, nama + "() needs the file library, add at the top: lib nrx_crudfile.h")
     be fi = cariFungsi(nm2)
     if n != funcArity[fi]
@@ -2188,7 +2188,7 @@ func bandingkan() string
         maju()
         be tkum = ekspresi()
         if tkum == "int" or tkum == "double" or tkum == "bool"
-            # x in 5 : cari di bentuk teks angkanya (seperti nrxlang)
+            # x in 5 : cari di bentuk teks angkanya (seperti Nerx)
             jadiTeks(tkum)
             be tkum = "string"
             if tl != "string"
@@ -2533,7 +2533,7 @@ func anak(ind int) int
     return ind + 1
 
 # simpan nilai di rax ke variabel (buat slot baru kalau belum ada); tipe harus konsisten
-#   Aturan seperti nrxl: di luar fungsi selalu global. Di dalam fungsi: lokal kalau sudah ada
+#   Aturan seperti nerx: di luar fungsi selalu global. Di dalam fungsi: lokal kalau sudah ada
 #   (parameter / variabel lokal), kalau tidak global yang sudah ada diubah, kalau tidak buat lokal baru.
 func simpanVar(nama string, tipe string)
     be idx = indexOf(scNama, nama)
@@ -2820,7 +2820,7 @@ func buatSalinan(nm2 string, tipeArg list string) string
         add(funcRet, funcRet[fi])
     return kunciF
 
-# dorong alamat handler (fungsi nrxl) dan jumlah parameternya; tipeKirim = tipe nilai yang dikirim window
+# dorong alamat handler (fungsi nerx) dan jumlah parameternya; tipeKirim = tipe nilai yang dikirim window
 func dorongHandler(fn string, tipeKirim list string)
     be fi0 = cariFungsi(fn)
     be k = funcArity[fi0]
@@ -3109,7 +3109,7 @@ func paksaLokalSet()
     be paksaLokal = dalamFungsi
 
 func berkasPengguna(b string) bool
-    return b != "prelude.nrxl" and b != "pustaka.nrxl" and b != "sintesis" and substr(b, 0, 4) != "lib\\"
+    return b != "prelude.nrx" and b != "pustaka.nrx" and b != "sintesis" and substr(b, 0, 4) != "lib\\"
 
 # slot berkas = alamat nama file (teks) yang sedang berjalan
 func catatBerkas(b string)
@@ -3463,10 +3463,10 @@ func buangKomentar(s string) string
     return s
 
 # ---------------------------------------------------------------- baca sumber (lewatan 1)
-# semua baris "lib nrx_xxx.h" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrxl sebelum kode program
+# semua baris "lib nrx_xxx.h" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrx sebelum kode program
 # jalur file runtime (prelude, pustaka, lib\...) relatif terhadap folder nrxc.exe; file lain apa adanya
 func jalurRt(nama string) string
-    if rtDir != "" and (nama == "prelude.nrxl" or nama == "pustaka.nrxl" or substr(nama, 0, 4) == "lib\\")
+    if rtDir != "" and (nama == "prelude.nrx" or nama == "pustaka.nrx" or substr(nama, 0, 4) == "lib\\")
         return rtDir + nama
     return nama
 
@@ -3497,7 +3497,7 @@ func muatLibDari(nama string)
         be nbL += 1
         be b = trim(baris)
         if substr(b, 0, 4) == "lib "
-            be nmLib = replace(trim(slice(b, 4)), ".h", ".nrxl")
+            be nmLib = replace(trim(slice(b, 4)), ".h", ".nrx")
             if not fileExists(jalurRt("lib\\" + nmLib))
                 be berkNama = nama
                 be noBaris = nbL
@@ -3576,7 +3576,7 @@ func tulisDefault(b string, tambahan list string) string
         add(tambahan, "    return " + fnm + "(" + panggil + ")" + tanda)
     return "func " + fnm + "(" + join(decls, ", ") + ")" + sisa
 
-# im hitung / im "alat/hitung" / im luas, Titik from "alat": muat file .nrxl lain (relatif terhadap file yang menulis im) sebelum program
+# im hitung / im "alat/hitung" / im luas, Titik from "alat": muat file .nrx lain (relatif terhadap file yang menulis im) sebelum program
 func muatImDari(nama string)
     be dirN = ""
     be ks = len(nama) - 1 - indexOf(reverse(replace(nama, "\\", "/")), "/")
@@ -3593,8 +3593,11 @@ func muatImDari(nama string)
                 be sisa = trim(slice(sisa, fp + 6))
             be sisa = replace(sisa, "\"", "")
             be sisa = replace(sisa, "/", "\\")
-            if slice(sisa, -5) != ".nrxl"
-                be sisa = sisa + ".nrxl"
+            if slice(sisa, -4) != ".nrx" and slice(sisa, -5) != ".nrxl"
+                if fileExists(jalurRt(dirN + sisa + ".nrx")) or not fileExists(jalurRt(dirN + sisa + ".nrxl"))
+                    be sisa = sisa + ".nrx"
+                else
+                    be sisa = sisa + ".nrxl"
             be jalur = dirN + sisa
             if indexOf(imMuat, jalur) < 0
                 add(imMuat, jalur)
@@ -3838,7 +3841,7 @@ func bacaSumber(nama string)
     if teksOverride != ""
         be teksSumber = teksOverride
         be teksOverride = ""
-    if nama != "prelude.nrxl" and nama != "pustaka.nrxl" and nama != "sintesis"
+    if nama != "prelude.nrx" and nama != "pustaka.nrx" and nama != "sintesis"
         be teksSumber = ubahFfi(teksSumber)
         if isoAwalan != ""
             be teksSumber = isolasiNama(teksSumber, isoAwalan)
@@ -4044,8 +4047,8 @@ func bacaSumber(nama string)
                 # fungsi pustaka bernama sama boleh ditimpa oleh fungsi program: disimpan sebagai u$nama
                 be fiAda = indexOf(funcNama, fn)
                 be berkAda = berk[funcStmt[fiAda]]
-                be adaRuntime = berkAda == "prelude.nrxl" or berkAda == "pustaka.nrxl" or substr(berkAda, 0, 4) == "lib\\"
-                be iniUser = nama != "prelude.nrxl" and nama != "pustaka.nrxl" and substr(nama, 0, 4) != "lib\\"
+                be adaRuntime = berkAda == "prelude.nrx" or berkAda == "pustaka.nrx" or substr(berkAda, 0, 4) == "lib\\"
+                be iniUser = nama != "prelude.nrx" and nama != "pustaka.nrx" and substr(nama, 0, 4) != "lib\\"
                 if adaRuntime and iniUser and indexOf(funcNama, "u$" + fn) < 0
                     be fnReg = "u$" + fn
                 else
@@ -4055,7 +4058,7 @@ func bacaSumber(nama string)
                 add(exlStmt, len(jenis))      # tipe hasil ditulis: wajib return (E0241)
             if tipeKembali == ""
                 be tipeKembali = "int"
-                if nama != "prelude.nrxl" and nama != "pustaka.nrxl" and substr(nama, 0, 4) != "lib\\"
+                if nama != "prelude.nrx" and nama != "pustaka.nrx" and substr(nama, 0, 4) != "lib\\"
                     be tipeKembali = "?"          # tipe hasil ditebak dari isi fungsi (inferRet)
             be dalam = trim(slice(b, ps + 1, rp))
             be namaP list string
@@ -4065,7 +4068,7 @@ func bacaSumber(nama string)
                     be kt = split(trim(prm))
                     add(namaP, kt[0])
                     if len(kt) == 1
-                        if nama == "prelude.nrxl" or nama == "pustaka.nrxl" or substr(nama, 0, 4) == "lib\\"
+                        if nama == "prelude.nrx" or nama == "pustaka.nrx" or substr(nama, 0, 4) == "lib\\"
                             add(tipeP, "int")
                         else
                             add(tipeP, "?")           # parameter tanpa tipe: tipenya mengikuti pemanggil (satu salinan per kombinasi tipe)
@@ -4137,15 +4140,15 @@ func bacaSumber(nama string)
 
 # ---------------------------------------------------------------- compiler
 func kompilasi(sumber string, keluar string)
-    bacaSumber("prelude.nrxl")
-    if fileExists(jalurRt("pustaka.nrxl"))
-        bacaSumber("pustaka.nrxl")
+    bacaSumber("prelude.nrx")
+    if fileExists(jalurRt("pustaka.nrx"))
+        bacaSumber("pustaka.nrx")
     muatLibDari(sumber)
     muatImDari(sumber)
     bacaSumber(sumber)
     for nm in split("listBaru listTambah listHapus strGabung strSama boolStr")
         if indexOf(funcNama, nm) < 0
-            print "prelude.nrxl tidak lengkap: fungsi " nm " tidak ada"
+            print "prelude.nrx tidak lengkap: fungsi " nm " tidak ada"
             exit(1)
 
     # --- denah isi section: tabel impor, nama impor, nama DLL, byte baris baru, lalu kode
@@ -4259,7 +4262,7 @@ func kompilasi(sumber string, keluar string)
         loop len(funcAddr) < len(funcNama)
             add(funcAddr, 0 - 1)
             add(butuh, 0)
-            # fungsi milik pengguna selalu dikompilasi (dicek tipenya seperti nrxlang, walau tidak dipanggil)
+            # fungsi milik pengguna selalu dikompilasi (dicek tipenya seperti Nerx, walau tidak dipanggil)
             if berkasPengguna(berk[funcStmt[len(butuh) - 1]])
                 be butuh[len(butuh) - 1] = 1
         loop sudahLihat < len(callFn)
@@ -4281,7 +4284,7 @@ func kompilasi(sumber string, keluar string)
         be tryAktif list int
         be curRet = funcRet[fk]
         be curFnNama = split(funcNama[fk], "#")[0]
-        be globalOK = berk[funcStmt[fk]] != "prelude.nrxl" and berk[funcStmt[fk]] != "pustaka.nrxl" and substr(berk[funcStmt[fk]], 0, 4) != "lib\\"
+        be globalOK = berk[funcStmt[fk]] != "prelude.nrx" and berk[funcStmt[fk]] != "pustaka.nrx" and substr(berk[funcStmt[fk]], 0, 4) != "lib\\"
         be ps2 = 0
         if funcArity[fk] > 0
             be tipeParam2 = split(funcPT[fk], ",")
@@ -4407,33 +4410,33 @@ func kompilasi(sumber string, keluar string)
         print "Done: " keluar " (" total " bytes)"
 
 # ---------------------------------------------------------------- program utama
-# argumen: nrxc file.nrxl [hasil.exe]   (tanpa argumen: tanya lewat layar). Dijalankan lewat
-# "nrxlang run nrxc.nrxl" argumen dihitung setelah nama nrxc.nrxl.
+# argumen: nrxc file.nrx [hasil.exe]   (tanpa argumen: tanya lewat layar). Dijalankan lewat
+# "nerx run nrxc.nrx" argumen dihitung setelah nama nrxc.nrx.
 be argv = pecahCmd(peekText(GetCommandLineA()))
 be bufEx = newBuffer(520)
 GetModuleFileNameA(0, bufEx, 520)
 be namaEx = peekText(bufEx)
-be adaNrxlang = indexOf(lower(namaEx), "nrxlang_c.exe") >= 0
-if not adaNrxlang
+be adaNerx = indexOf(lower(namaEx), "nrxlang_c.exe") >= 0
+if not adaNerx
     # nrxc.exe terpasang: file runtime ada di sebelah nrxc.exe
     be ke = len(namaEx) - 1 - indexOf(reverse(namaEx), "\\")
     if ke >= 0
         be rtDir = slice(namaEx, 0, ke + 1)
 be sisaArg list string
 be mulaiArg = 1
-if adaNrxlang
+if adaNerx
     be mulaiArg = 2
     for k in range(len(argv))
-        if k >= 1 and slice(argv[k], -9) == "nrxc.nrxl"
+        if k >= 1 and (slice(argv[k], -9) == "nrxc.nrxl" or slice(argv[k], -8) == "nrxc.nrx")
             be mulaiArg = k + 1
 for k in range(mulaiArg, len(argv))
     add(sisaArg, argv[k])
-# nrxc run file.nrxl [argumen...]   kompilasi ke .exe sementara, jalankan, hapus (pengganti "nrxlang run")
-# nrxc build file.nrxl [-o hasil.exe]   sama dengan nrxc file.nrxl hasil.exe
+# nrxc run file.nrx [argumen...]   kompilasi ke .exe sementara, jalankan, hapus (pengganti "nerx run")
+# nrxc build file.nrx [-o hasil.exe]   sama dengan nrxc file.nrx hasil.exe
 if len(sisaArg) >= 2 and sisaArg[0] == "run"
     be sumber = sisaArg[1]
     if not fileExists(sumber)
-        print "nrxlang: file " sumber " not found"
+        print "nerx: file " sumber " not found"
         exit(1)
     be bufTmp = newBuffer(520)
     GetTempPathA(500, bufTmp)
@@ -4455,22 +4458,24 @@ if len(sisaArg) >= 2 and sisaArg[0] == "build"
     be sisaArg = sisaBaru
 if len(sisaArg) >= 1
     be sumber = sisaArg[0]
-    be keluar = slice(sumber, 0, len(sumber) - 5) + ".exe"
-    if slice(sumber, -5) != ".nrxl"
-        be keluar = sumber + ".exe"
+    be keluar = sumber + ".exe"
+    if slice(sumber, -5) == ".nrxl"
+        be keluar = slice(sumber, 0, len(sumber) - 5) + ".exe"
+    if slice(sumber, -4) == ".nrx"
+        be keluar = slice(sumber, 0, len(sumber) - 4) + ".exe"
     if len(sisaArg) >= 2
         be keluar = sisaArg[1]
     if not fileExists(sumber)
-        print "nrxlang: file " sumber " not found"
+        print "nerx: file " sumber " not found"
         exit(1)
     tentukanBahasa(sumber)
     kompilasi(sumber, keluar)
 else
-    print "=== nrxc: compiler nrxl -> .exe tanpa C ==="
-    be sumber = ask "File sumber [contoh.nrxl]: "
+    print "=== nrxc: compiler nerx -> .exe tanpa C ==="
+    be sumber = ask "File sumber [contoh.nrx]: "
     be sumber = trim(sumber)
     if sumber == ""
-        be sumber = "contoh.nrxl"
+        be sumber = "contoh.nrx"
     be keluar = ask "Nama .exe [hasil.exe]: "
     be keluar = trim(keluar)
     if keluar == ""

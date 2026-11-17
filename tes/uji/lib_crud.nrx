@@ -32,5 +32,5 @@ print deleteFile(f)
 print fileExists(f)
 be d = listFiles(".")
 print contains(d, "uji/")
-print contains(d, "prelude.nrxl")
+print contains(d, "prelude.nrx")
 print len(d) > 5

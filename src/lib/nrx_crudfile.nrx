@@ -1,4 +1,4 @@
-# nrx_crudfile.nrxl - library file ditulis dalam nrxl (tanpa C). readFile / writeFile / fileExists ada di prelude / pustaka.
+# nrx_crudfile.nrx - library file ditulis dalam nerx (tanpa C). readFile / writeFile / fileExists ada di prelude / pustaka.
 
 func createFile(path string) bool
     if fileExists(path)

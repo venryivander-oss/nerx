@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<title>nrxl: run it as a script, ship it as an .exe</title>
-<meta name="description" content="nrxl is a small, strictly typed programming language. Run a script directly, or build it into a single fast .exe with nothing else to install.">
+<title>nerx: run it as a script, ship it as an .exe</title>
+<meta name="description" content="nerx is a small, strictly typed programming language. Run a script directly, or build it into a single fast .exe with nothing else to install.">
 <link rel="preload" href="fonts/plex-sans-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -20,7 +20,7 @@
       <a href="#examples">Examples</a>
       <a href="docs.html">Syntax</a>
       <a href="#download">Download</a>
-      <a href="https://github.com/venryivander-oss/nrxlang">GitHub</a>
+      <a href="https://github.com/venryivander-oss/nerx">GitHub</a>
     </nav>
   </div>
 </header>
@@ -30,16 +30,16 @@
     <div class="wrap">
       <div>
         <h1 id="hero-title">Write a script.<br>Ship a <em>fast .exe</em>.</h1>
-        <p class="lede">nrxl is a small, strictly typed language. Run your file straight away while you work on it, then build the same file into one .exe that needs nothing else. Nothing else to install.</p>
+        <p class="lede">nerx is a small, strictly typed language. Run your file straight away while you work on it, then build the same file into one .exe that needs nothing else. Nothing else to install.</p>
         <div class="actions">
-          <a class="btn primary" href="#download">Get nrxl</a>
+          <a class="btn primary" href="#download">Get nerx</a>
           <a class="btn" href="docs.html">Read the syntax</a>
         </div>
       </div>
 
-      <figure class="code" id="hero-code" aria-label="Example: hello.nrxl and its output">
-        <figcaption class="code-head"><span>hello.nrxl</span></figcaption>
-        <pre data-lang="nrxl" id="hero-src">func fib(n int) int
+      <figure class="code" id="hero-code" aria-label="Example: hello.nrx and its output">
+        <figcaption class="code-head"><span>hello.nrx</span></figcaption>
+        <pre data-lang="nerx" id="hero-src">func fib(n int) int
     if n &lt; 2
         return n
     return fib(n - 1) + fib(n - 2)
@@ -48,12 +48,12 @@ be names = ["Budi", "Sari", "Joko"]
 for name in names
     print "Hello, " name "!"
 print "fib(25) = " fib(25)</pre>
-        <pre class="out" id="hero-out"><span class="cmd">nrxlang run hello.nrxl</span>
+        <pre class="out" id="hero-out"><span class="cmd">nerx run hello.nrx</span>
 Hello, Budi!
 Hello, Sari!
 Hello, Joko!
 fib(25) = 75025
-<span class="cmd">nrxlang build hello.nrxl</span>
+<span class="cmd">nerx build hello.nrx</span>
 <span class="tk-com"># writes hello.exe (14 KB)</span></pre>
       </figure>
     </div>
@@ -63,8 +63,8 @@ fib(25) = 75025
     <div class="wrap speed">
       <div>
         <h2 id="speed-title">Same file, two speeds</h2>
-        <p class="sub">While you write, <code>nrxlang run</code> compiles to a temporary .exe, runs it, and deletes it. When you are done, <code>nrxlang build</code> keeps the .exe. Either way the built-in compiler (<code>nrxc</code>) writes x64 machine code straight into the file. No VM, no interpreter. The syntax does not change.</p>
-        <p class="fine">Measured on 16 November 2026 on an Intel Core i7-14700F. Wall time including process start, best of 3 runs (script) and 5 runs (.exe). Programs: <a href="examples/bench_fib.nrxl">bench_fib.nrxl</a>, <a href="examples/bench_loop.nrxl">bench_loop.nrxl</a>.</p>
+        <p class="sub">While you write, <code>nerx run</code> compiles to a temporary .exe, runs it, and deletes it. When you are done, <code>nerx build</code> keeps the .exe. Either way the built-in compiler (<code>nrxc</code>) writes x64 machine code straight into the file. No VM, no interpreter. The syntax does not change.</p>
+        <p class="fine">Measured on 16 November 2026 on an Intel Core i7-14700F. Wall time including process start, best of 3 runs (script) and 5 runs (.exe). Programs: <a href="examples/bench_fib.nrx">bench_fib.nrx</a>, <a href="examples/bench_loop.nrx">bench_loop.nrx</a>.</p>
       </div>
       <div>
         <div class="bench">
@@ -87,27 +87,27 @@ fib(25) = 75025
     <div class="wrap speed">
       <div>
         <h2 id="vsc-title">Close to C on number crunching</h2>
-        <p class="sub">The same program written in C and in nrxl, both compiled to an .exe. In loops that add and take remainders, nrxl lands within about 10% of C. Function calls are the weak spot: a recursive <code>fib</code> is roughly on par with unoptimized C, and about 4x slower than gcc <code>-O2</code>, which rewrites the recursion.</p>
-        <p class="fine">Measured on 16 November 2026 on an Intel Core i7-14700F, timed inside the program (no process start). C built with gcc <code>-O2</code> unless noted; the C loops use <code>volatile</code> so gcc cannot delete them. Sources: <a href="examples/cmp_loop300.c">loop300.c</a> / <a href="examples/cmp_loop300.nrxl">.nrxl</a>, <a href="examples/cmp_sum.c">sum.c</a> / <a href="examples/cmp_sum.nrxl">.nrxl</a>, <a href="examples/cmp_fib.c">fib.c</a> / <a href="examples/cmp_fib.nrxl">.nrxl</a>.</p>
+        <p class="sub">The same program written in C and in nerx, both compiled to an .exe. In loops that add and take remainders, nerx lands within about 10% of C. Function calls are the weak spot: a recursive <code>fib</code> is roughly on par with unoptimized C, and about 4x slower than gcc <code>-O2</code>, which rewrites the recursion.</p>
+        <p class="fine">Measured on 16 November 2026 on an Intel Core i7-14700F, timed inside the program (no process start). C built with gcc <code>-O2</code> unless noted; the C loops use <code>volatile</code> so gcc cannot delete them. Sources: <a href="examples/cmp_loop300.c">loop300.c</a> / <a href="examples/cmp_loop300.nrx">.nrx</a>, <a href="examples/cmp_sum.c">sum.c</a> / <a href="examples/cmp_sum.nrx">.nrx</a>, <a href="examples/cmp_fib.c">fib.c</a> / <a href="examples/cmp_fib.nrx">.nrx</a>.</p>
       </div>
       <div>
         <div class="bench">
           <h3>300,000,000 rounds (total += i % 7), milliseconds</h3>
           <div class="bar-row"><span class="lbl">C -O2</span><span class="bar fast"><i style="width:93%"></i></span><span class="val">398 ms</span></div>
-          <div class="bar-row"><span class="lbl">nrxl</span><span class="bar"><i style="width:100%"></i></span><span class="val">428 ms</span></div>
-          <p class="times">nrxl is 1.07x of C</p>
+          <div class="bar-row"><span class="lbl">nerx</span><span class="bar"><i style="width:100%"></i></span><span class="val">428 ms</span></div>
+          <p class="times">nerx is 1.07x of C</p>
         </div>
         <div class="bench">
           <h3>300,000,000 rounds (total += i * 3 + 1), milliseconds</h3>
           <div class="bar-row"><span class="lbl">C -O2</span><span class="bar fast"><i style="width:99%"></i></span><span class="val">426 ms</span></div>
-          <div class="bar-row"><span class="lbl">nrxl</span><span class="bar"><i style="width:100%"></i></span><span class="val">430 ms</span></div>
+          <div class="bar-row"><span class="lbl">nerx</span><span class="bar"><i style="width:100%"></i></span><span class="val">430 ms</span></div>
           <p class="times">on par with C</p>
         </div>
         <div class="bench">
           <h3>Recursive fib(38), milliseconds</h3>
           <div class="bar-row"><span class="lbl">C -O2</span><span class="bar fast"><i style="width:24%"></i></span><span class="val">38 ms</span></div>
           <div class="bar-row"><span class="lbl">C -O0</span><span class="bar"><i style="width:87%"></i></span><span class="val">137 ms</span></div>
-          <div class="bar-row"><span class="lbl">nrxl</span><span class="bar"><i style="width:100%"></i></span><span class="val">158 ms</span></div>
+          <div class="bar-row"><span class="lbl">nerx</span><span class="bar"><i style="width:100%"></i></span><span class="val">158 ms</span></div>
           <p class="times">4x slower than gcc -O2, close to unoptimized C</p>
         </div>
       </div>
@@ -117,18 +117,18 @@ fib(25) = 75025
   <section aria-labelledby="check-title">
     <div class="wrap check">
       <figure class="code" aria-label="Example: a type error caught before the program runs">
-        <figcaption class="code-head"><span>types.nrxl</span></figcaption>
-        <pre data-lang="nrxl">errlang = en
+        <figcaption class="code-head"><span>types.nrx</span></figcaption>
+        <pre data-lang="nerx">errlang = en
 be score = 10
 print "starting..."
 be score += 0.5</pre>
-        <pre class="out"><span class="cmd">nrxlang run types.nrxl</span>
-<span class="tk-err">error E0229 in types.nrxl:4: score has type int,
+        <pre class="out"><span class="cmd">nerx run types.nrx</span>
+<span class="tk-err">error E0229 in types.nrx:4: score has type int,
 it cannot hold a decimal number; use int(...) to round down</span></pre>
       </figure>
       <div>
         <h2 id="check-title">Mistakes stop it before it starts</h2>
-        <p class="sub">Look at the output: <code>starting...</code> never prints. nrxl checks the whole file first, including functions that are never called, and refuses to run code that is certainly wrong.</p>
+        <p class="sub">Look at the output: <code>starting...</code> never prints. nerx checks the whole file first, including functions that are never called, and refuses to run code that is certainly wrong.</p>
         <ul>
           <li>A variable keeps the kind it was created with. <code>5</code> is an int, <code>2.5</code> is a double.</li>
           <li>Lists and maps hold one kind of item. Mixed data gets a <code>type</code>.</li>
@@ -142,17 +142,17 @@ it cannot hold a decimal number; use int(...) to round down</span></pre>
     <div class="wrap check">
       <figure class="code" aria-label="Example: building an .exe with nrxc">
         <figcaption class="code-head"><span>terminal</span></figcaption>
-        <pre class="out"><span class="cmd">nrxlang hello.nrxl</span>
+        <pre class="out"><span class="cmd">Nerx hello.nrx</span>
 Done: hello.exe (14336 bytes)
-<span class="cmd">nrxlang build player.nrxl -o p.exe</span>
+<span class="cmd">nerx build player.nrx -o p.exe</span>
 Done: p.exe (14336 bytes)</pre>
       </figure>
       <div>
-        <h2 id="nrxc-title">The compiler is written in nrxl</h2>
-        <p class="sub"><code>nrxc</code> is the nrxl compiler, and it is itself an nrxl program. It writes the Windows .exe file directly, so you do not need any other compiler or a runtime next to your program.</p>
+        <h2 id="nrxc-title">The compiler is written in nerx</h2>
+        <p class="sub"><code>nrxc</code> is the nerx compiler, and it is itself an nerx program. It writes the Windows .exe file directly, so you do not need any other compiler or a runtime next to your program.</p>
         <ul>
           <li>It compiles itself: the compiler it builds is byte-for-byte the same as the one that built it.</li>
-          <li>Every library (window, 3D, json, http, sound, files, and more) is written in nrxl too.</li>
+          <li>Every library (window, 3D, json, http, sound, files, and more) is written in nerx too.</li>
           <li>Output and error messages match the original interpreter (kept in <code>history/</code>), checked on 84 test programs and 105 error cases.</li>
         </ul>
       </div>
@@ -162,7 +162,7 @@ Done: p.exe (14336 bytes)</pre>
   <section class="band" id="examples" aria-labelledby="ex-title">
     <div class="wrap">
       <h2 id="ex-title">More examples</h2>
-      <p class="sub">Every output below was produced by running the file with <code>nrxlang run</code>.</p>
+      <p class="sub">Every output below was produced by running the file with <code>nerx run</code>.</p>
       <div class="tabs" role="tablist" aria-label="Examples">
         <button role="tab" id="t-type" aria-controls="p-type" aria-selected="true">Types</button>
         <button role="tab" id="t-map" aria-controls="p-map" aria-selected="false" tabindex="-1">Counting words</button>
@@ -171,8 +171,8 @@ Done: p.exe (14336 bytes)</pre>
 
       <div class="panel" role="tabpanel" id="p-type" aria-labelledby="t-type" tabindex="0">
         <figure class="code">
-          <figcaption class="code-head"><span>player.nrxl</span></figcaption>
-          <pre data-lang="nrxl">type Player
+          <figcaption class="code-head"><span>player.nrx</span></figcaption>
+          <pre data-lang="nerx">type Player
     name string
     hp int = 100
 
@@ -186,7 +186,7 @@ be p = Player("Budi")
 p.hit(30)
 print p.info()
 print typeOf(p)</pre>
-          <pre class="out"><span class="cmd">nrxlang run player.nrxl</span>
+          <pre class="out"><span class="cmd">nerx run player.nrx</span>
 Budi hp=70
 Player</pre>
         </figure>
@@ -198,15 +198,15 @@ Player</pre>
 
       <div class="panel" role="tabpanel" id="p-map" aria-labelledby="t-map" tabindex="0" hidden>
         <figure class="code">
-          <figcaption class="code-head"><span>words.nrxl</span></figcaption>
-          <pre data-lang="nrxl">be text = "the quick fox and the lazy dog and the cat"
+          <figcaption class="code-head"><span>words.nrx</span></figcaption>
+          <pre data-lang="nerx">be text = "the quick fox and the lazy dog and the cat"
 be count map int
 for w in split(text)
     be count[w] += 1
 for w in sort(keys(count))
     if count[w] &gt; 1
         print w ": " count[w]</pre>
-          <pre class="out"><span class="cmd">nrxlang run words.nrxl</span>
+          <pre class="out"><span class="cmd">nerx run words.nrx</span>
 and: 2
 the: 3</pre>
         </figure>
@@ -218,22 +218,22 @@ the: 3</pre>
 
       <div class="panel" role="tabpanel" id="p-ffi" aria-labelledby="t-ffi" tabindex="0" hidden>
         <figure class="code">
-          <figcaption class="code-head"><span>ffi.nrxl</span></figcaption>
-          <pre data-lang="nrxl">ffi "kernel32.dll" (
+          <figcaption class="code-head"><span>ffi.nrx</span></figcaption>
+          <pre data-lang="nerx">ffi "kernel32.dll" (
     func GetTickCount() int
 )
 ffi "msvcrt.dll" (
     func length(s string) int as strlen
 )
-print length("nrxlang")
+print length("Nerx")
 print GetTickCount() &gt; 0</pre>
-          <pre class="out"><span class="cmd">nrxlang run ffi.nrxl</span>
+          <pre class="out"><span class="cmd">nerx run ffi.nrx</span>
 7
 true</pre>
         </figure>
         <div>
           <h3>Windows DLLs, directly</h3>
-          <p>Declare the DLL function and call it. nrxl checks that the DLL and the function exist before the program starts. Buffers and callbacks cover structs and functions like <code>qsort</code>.</p>
+          <p>Declare the DLL function and call it. nerx checks that the DLL and the function exist before the program starts. Buffers and callbacks cover structs and functions like <code>qsort</code>.</p>
         </div>
       </div>
     </div>
@@ -245,30 +245,30 @@ true</pre>
         <h2 id="dl-title">Download</h2>
         <p class="sub">One small installer with everything needed to run and build. There is no separate compiler to set up.</p>
         <dl>
-          <dt>File</dt><dd><code>nrxl-setup.exe</code>, 2.2 MB</dd>
+          <dt>File</dt><dd><code>nerx-setup.exe</code>, 2.2 MB</dd>
           <dt>System</dt><dd>Windows 10 or 11, 64-bit</dd>
-          <dt>Includes</dt><dd>nrxlang (the compiler), libraries, syntax docs</dd>
+          <dt>Includes</dt><dd>Nerx (the compiler), libraries, syntax docs</dd>
           <dt>License</dt><dd>MIT</dd>
-          <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">96ebc086e5be00b961dc1d25f4a26edde16c42026cc59a53667ac851032eedd6</code></dd>
+          <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">89a3857954d7fadb9d84229ffbdfaa14c7d5ee08003aaef5fe10a8ccfb052181</code></dd>
         </dl>
         <p>
-          <a class="btn primary" href="download/nrxl-setup.exe" download>Get now</a>
-          <a class="btn" href="https://github.com/venryivander-oss/nrxlang">Get from GitHub</a>
+          <a class="btn primary" href="download/nerx-setup.exe" download>Get now</a>
+          <a class="btn" href="https://github.com/venryivander-oss/Nerx">Get from GitHub</a>
         </p>
-        <p class="note">Windows may show an "unknown publisher" warning, because the installer is not code-signed yet. Prefer to build it yourself? The steps are on the right. To verify your download, run <code>certutil -hashfile nrxl-setup.exe SHA256</code> and compare it with the SHA-256 above.</p>
+        <p class="note">Windows may show an "unknown publisher" warning, because the installer is not code-signed yet. Prefer to build it yourself? The steps are on the right. To verify your download, run <code>certutil -hashfile nerx-setup.exe SHA256</code> and compare it with the SHA-256 above.</p>
       </div>
       <div>
         <h3>Build from source</h3>
-        <p><code>nrxc</code>, the compiler inside <code>nrxlang.exe</code>, builds itself from a seed copy of <code>nrxc.exe</code> that is kept in the repository. The original interpreter and earlier code are archived in <code>history/</code>.</p>
-        <figure class="code" aria-label="Commands to build nrxl from source">
-          <pre>git clone https://github.com/venryivander-oss/nrxlang
-cd nrxlang
+        <p><code>nrxc</code>, the compiler inside <code>nerx.exe</code>, builds itself from a seed copy of <code>nrxc.exe</code> that is kept in the repository. The original interpreter and earlier code are archived in <code>history/</code>.</p>
+        <figure class="code" aria-label="Commands to build nerx from source">
+          <pre>git clone https://github.com/venryivander-oss/Nerx
+cd Nerx
 cd src
-nrxc.exe nrxc.nrxl nrxlang_new.exe
-nrxlang_new.exe run ..\contoh\contoh_fitur.nrxl</pre>
+nrxc.exe nrxc.nrx nerx_new.exe
+nerx_new.exe run ..\contoh\contoh_fitur.nrx</pre>
         </figure>
         <h3 style="margin-top:28px">Then</h3>
-        <p><code>nrxlang run file.nrxl</code> runs a script. <code>nrxlang build file.nrxl</code> (or <code>nrxlang file.nrxl</code>) makes <code>file.exe</code>. The full language, every built-in function, and every library are on the <a href="docs.html">syntax page</a>.</p>
+        <p><code>nerx run file.nrx</code> runs a script. <code>nerx build file.nrx</code> (or <code>Nerx file.nrx</code>) makes <code>file.exe</code>. The full language, every built-in function, and every library are on the <a href="docs.html">syntax page</a>.</p>
       </div>
     </div>
   </section>
@@ -276,8 +276,8 @@ nrxlang_new.exe run ..\contoh\contoh_fitur.nrxl</pre>
 
 <footer class="foot">
   <div class="wrap">
-    <span>nrxl (Nerxelity), MIT License</span>
-    <span><a href="docs.html">Syntax</a> &middot; <a href="https://github.com/venryivander-oss/nrxlang">GitHub</a></span>
+    <span>nerx (Nerxelity), MIT License</span>
+    <span><a href="docs.html">Syntax</a> &middot; <a href="https://github.com/venryivander-oss/nerx">GitHub</a></span>
   </div>
 </footer>
 <script src="main.js" defer></script>

@@ -1,5 +1,5 @@
 @echo off
-rem Buat installer\out\nrxl-setup.exe: kumpulkan paket (nrxlang.exe dari benih + runtime), lalu Inno Setup 6.
+rem Buat installer\out\nerx-setup.exe: kumpulkan paket (nerx.exe dari benih + runtime), lalu Inno Setup 6.
 cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0siapkan.ps1" || exit /b 1
 set iscc=
@@ -10,8 +10,8 @@ if not defined iscc (
     echo Inno Setup 6 belum terpasang: https://jrsoftware.org/isdl.php
     exit /b 1
 )
-%iscc% /Q "%~dp0nrxl.iss" || exit /b 1
+%iscc% /Q "%~dp0nerx.iss" || exit /b 1
 if not exist "%~dp0..\website\download" mkdir "%~dp0..\website\download"
-copy /y "%~dp0out\nrxl-setup.exe" "%~dp0..\website\download\nrxl-setup.exe" >nul
+copy /y "%~dp0out\nerx-setup.exe" "%~dp0..\website\download\nerx-setup.exe" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0hash.ps1" || exit /b 1
-echo INSTALLER OK: installer\out\nrxl-setup.exe (salinan untuk website: website\download\nrxl-setup.exe)
+echo INSTALLER OK: installer\out\nerx-setup.exe (salinan untuk website: website\download\nerx-setup.exe)

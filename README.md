@@ -1,6 +1,6 @@
-# nrxlang (Nerxelity)
+# Nerx (Nerxelity)
 
-A simple programming language with easy-to-read keywords. A single `.nrxl`
+A simple programming language with easy-to-read keywords. A single `.nrx`
 file can run directly, or be turned into a standalone `.exe`.
 
 ```
@@ -14,24 +14,24 @@ for i in range(5)
     print i " x " i " = " square(i)
 ```
 
-The compiler, `nrxlang`, is written in nrxl itself. It produces native Windows
+The compiler, `Nerx`, is written in nerx itself. It produces native Windows
 executables directly: no virtual machine, no extra toolchain, nothing else to install.
 
 ## Install
 
-Run the installer `nrxl-setup.exe`. It installs `nrxlang` and, if you tick the
+Run the installer `nerx-setup.exe`. It installs `Nerx` and, if you tick the
 option, adds it to your PATH so you can use it from any folder.
 
 ## Usage
 
 ```
-nrxlang run program.nrxl                     run it (compiled to a temporary exe, then deleted)
-nrxlang build program.nrxl                   build program.exe
-nrxlang build program.nrxl -o game.exe
-nrxlang program.nrxl                         same as build
+nerx run program.nrx                     run it (compiled to a temporary exe, then deleted)
+nerx build program.nrx                   build program.exe
+nerx build program.nrx -o game.exe
+Nerx program.nrx                         same as build
 ```
 
-- The resulting `.exe` is standalone: the `.nrxl` file does not need to be shipped with it.
+- The resulting `.exe` is standalone: the `.nrx` file does not need to be shipped with it.
 - Type errors are caught before the program runs.
 - Number-crunching loops run within a few percent of an optimizing native compiler.
   Recursive functions are still slower (about 4x on a naive Fibonacci).
@@ -50,15 +50,15 @@ nrxlang program.nrxl                         same as build
 - Error messages in Indonesian or English (`errlang = id` / `en`).
 
 The full list is in [SYNTAX.en.txt](SYNTAX.en.txt) (Indonesian: [SYNTAX.txt](SYNTAX.txt)),
-and a complete example is in [contoh_fitur.nrxl](contoh/contoh_fitur.nrxl).
+and a complete example is in [contoh_fitur.nrx](contoh/contoh_fitur.nrx).
 
 ## Build from source
 
-`nrxlang` builds itself from the seed compiler `src\nrxc.exe`:
+`Nerx` builds itself from the seed compiler `src\nrxc.exe`:
 
 ```
 cd src
-nrxc.exe nrxc.nrxl nrxlang_new.exe
+nrxc.exe nrxc.nrx nerx_new.exe
 ```
 
 The full test suite (output comparison against the previous implementation in
@@ -69,7 +69,7 @@ are kept in [history\](history/README.md).
 
 ## Status and known limitations
 
-nrxlang is an early version. Expect bugs, and please report them.
+Nerx is an early version. Expect bugs, and please report them.
 
 - Windows 10/11, 64-bit only. No Linux or macOS yet.
 - Recursive function calls are slower than loops (about 4x slower than an

@@ -1,4 +1,4 @@
-# nrx_rand.nrxl - angka acak (LCG 64-bit; keadaan di slot tersembunyi 0)
+# nrx_rand.nrx - angka acak (LCG 64-bit; keadaan di slot tersembunyi 0)
 
 # bilangan acak 0 .. 2^30-1
 func randNext() int

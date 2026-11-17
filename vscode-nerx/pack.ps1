@@ -1,4 +1,4 @@
-# Bungkus extension jadi file .vsix untuk dipasang lokal: code --install-extension nrxl-<versi>.vsix
+# Bungkus extension jadi file .vsix untuk dipasang lokal: code --install-extension nerx-<versi>.vsix
 # Tidak mengunggah apa pun. Jalankan dari folder ini: powershell -ExecutionPolicy Bypass -File pack.ps1
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
@@ -46,8 +46,8 @@ $contentTypes = @"
 
 # file yang ikut masuk ke extension (path di dalam zip pakai garis miring /)
 $files = @("package.json", "language-configuration.json", "README.md",
-           "syntaxes/nrxl.tmLanguage.json", "snippets/nrxl.json",
-           "icons/nrxl-n-light.svg", "icons/nrxl-n-dark.svg")
+           "syntaxes/nerx.tmLanguage.json", "snippets/nerx.json",
+           "icons/nerx-n-light.svg", "icons/nerx-n-dark.svg")
 
 if (Test-Path $out) { Remove-Item $out }
 $zip = [System.IO.Compression.ZipFile]::Open($out, "Create")

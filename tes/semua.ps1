@@ -6,9 +6,9 @@ Set-Location $PSScriptRoot
 $src = Join-Path $PSScriptRoot "..\src"
 $o = "hasil_tes.txt"; "mulai" | Set-Content $o
 Push-Location $src
-& .\nrxc.exe nrxc.nrxl nrxc2.exe | Add-Content "$PSScriptRoot\$o"
-& .\nrxc2.exe nrxc.nrxl nrxc3.exe | Add-Content "$PSScriptRoot\$o"
-& .\nrxc3.exe nrxc.nrxl nrxc4.exe | Add-Content "$PSScriptRoot\$o"
+& .\nrxc.exe nrxc.nrx nrxc2.exe | Add-Content "$PSScriptRoot\$o"
+& .\nrxc2.exe nrxc.nrx nrxc3.exe | Add-Content "$PSScriptRoot\$o"
+& .\nrxc3.exe nrxc.nrx nrxc4.exe | Add-Content "$PSScriptRoot\$o"
 "fixedpoint: " + ((Get-FileHash nrxc3.exe).Hash -eq (Get-FileHash nrxc4.exe).Hash) | Add-Content "$PSScriptRoot\$o"
 Pop-Location
 "== uji" | Add-Content $o

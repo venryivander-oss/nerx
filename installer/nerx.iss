@@ -1,31 +1,31 @@
-; nrxl.iss: installer nrxl (Inno Setup 6). Dibuat lewat installer\buat.bat, yang
-; mengisi installer\paket dulu (siapkan.ps1). Hasilnya installer\out\nrxl-setup.exe.
+; nerx.iss: installer nerx (Inno Setup 6). Dibuat lewat installer\buat.bat, yang
+; mengisi installer\paket dulu (siapkan.ps1). Hasilnya installer\out\nerx-setup.exe.
 
 #define AppVer "0.1.0"
 
 [Setup]
 AppId={{7B1E4C2A-9D3F-4E8B-A6C1-5F2D8E0B3A71}
-AppName=nrxl
+AppName=nerx
 AppVersion={#AppVer}
 AppPublisher=venryivander
-DefaultDirName={autopf}\nrxl
-DefaultGroupName=nrxl
+DefaultDirName={autopf}\nerx
+DefaultGroupName=nerx
 DisableProgramGroupPage=yes
 ; boleh dipasang untuk satu pemakai saja (tanpa admin) atau untuk semua
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 LicenseFile=paket\LICENSE
 OutputDir=out
-OutputBaseFilename=nrxl-setup
+OutputBaseFilename=nerx-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ChangesEnvironment=yes
-UninstallDisplayName=nrxl {#AppVer}
+UninstallDisplayName=nerx {#AppVer}
 
 [Tasks]
-Name: "addpath"; Description: "Add nrxlang to PATH (use it from any folder)"
+Name: "addpath"; Description: "Add Nerx to PATH (use it from any folder)"
 
 [Files]
 Source: "paket\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

@@ -1,8 +1,8 @@
 ==============================================================================
-                          SYNTAX NERXELITY (nrxl)
+                          SYNTAX NERXELITY (nerx)
 ==============================================================================
 
-Daftar lengkap syntax nrxl: bahasa inti, fungsi bawaan, dan semua library.
+Daftar lengkap syntax nerx: bahasa inti, fungsi bawaan, dan semua library.
 Versi bahasa Inggris: SYNTAX.en.txt.
 
 Isi:
@@ -19,7 +19,7 @@ Isi:
   11. Library
   12. Batasan
   13. Extension VS Code
-  14. nrxc: compiler dalam nrxl (tanpa VM)
+  14. nrxc: compiler dalam nerx (tanpa VM)
 
 
 ==============================================================================
@@ -28,29 +28,29 @@ Isi:
 
 Jalankan script (dikompilasi ke .exe sementara, dijalankan, lalu dihapus):
 
-    nrxlang run contoh_fitur.nrxl
+    nerx run contoh_fitur.nrx
 
-Jadikan .exe (tidak butuh apa-apa lagi; yang membuatnya adalah compiler nrxl
-(nrxc) yang sudah ada di dalam nrxlang.exe, lihat bagian 14):
+Jadikan .exe (tidak butuh apa-apa lagi; yang membuatnya adalah compiler nerx
+(nrxc) yang sudah ada di dalam nerx.exe, lihat bagian 14):
 
-    nrxlang build contoh_fitur.nrxl       -> contoh_fitur.exe
-    nrxlang build game.nrxl -o hasil\game.exe
-    nrxlang contoh_fitur.nrxl             (sama dengan build)
+    nerx build contoh_fitur.nrx       -> contoh_fitur.exe
+    nerx build game.nrx -o hasil\game.exe
+    Nerx contoh_fitur.nrx             (sama dengan build)
 
-- Hasil .exe berdiri sendiri: isi file .nrxl (dan file yang di-im) ikut
-  ditanam, jadi file .nrxl tidak perlu ikut dibagikan.
+- Hasil .exe berdiri sendiri: isi file .nrx (dan file yang di-im) ikut
+  ditanam, jadi file .nrx tidak perlu ikut dibagikan.
 - Error tipe sudah ketahuan saat build, jadi .exe tidak dibuat.
 - Hasil dan pesan error .exe sama persis dengan menjalankan langsung.
 - .exe berisi kode mesin x64 yang dibuat nrxc langsung (tanpa VM dan tanpa
   interpreter), jadi hitungan jauh lebih cepat daripada run. Syntax-nya
   tidak berubah.
 - lib nrx_window.h dan ffi juga bisa di-build.
-- Installer memasang nrxlang.exe, prelude.nrxl, pustaka.nrxl, dan folder lib\
+- Installer memasang nerx.exe, prelude.nrx, pustaka.nrx, dan folder lib\
   di satu folder; tidak butuh apa-apa lagi.
 - Implementasi yang lama dipindah ke folder history\
-  di repositori; tidak dibutuhkan untuk memakai atau membangun nrxl.
+  di repositori; tidak dibutuhkan untuk memakai atau membangun Nerx.
 
-nrxl mencari file yang dibaca script (readFile, playSound, newImage, dll.) di
+nerx mencari file yang dibaca script (readFile, playSound, newImage, dll.) di
 folder tempat perintah dijalankan, bukan di folder script. Pengecualiannya im:
 file untuk im dicari dari folder script.
 
@@ -96,8 +96,8 @@ Bahasa pesan error:
 - errlang hanya boleh di file utama, paling kiri. Berlaku untuk seluruh
   program, termasuk file yang di-im.
 - Setiap error punya kode yang sama di semua bahasa, contoh:
-      error E0003 di game.nrxl:5: variabel skor belum dibuat
-      error E0003 in game.nrxl:5: variable skor has not been created
+      error E0003 di game.nrx:5: variabel skor belum dibuat
+      error E0003 in game.nrx:5: variable skor has not been created
   Kode ini bisa dicari di internet walau pesannya beda bahasa.
 
 
@@ -161,7 +161,7 @@ Tipe ketat:
   map (0, 0.0, "", false). Jadi be hitung[kata] += 1 langsung jalan.
 - Parameter fungsi mengikuti jenis argumen yang diberikan.
 
-Cek sebelum jalan: sebelum baris pertama dijalankan, nrxl memeriksa seluruh
+Cek sebelum jalan: sebelum baris pertama dijalankan, nerx memeriksa seluruh
 file (termasuk isi fungsi yang belum dipanggil). Kalau ada yang pasti salah,
 program tidak jalan sama sekali dan errornya langsung tampil:
 
@@ -332,7 +332,7 @@ try / catch / throw:
 
     throw "pesan error"            # buat error sendiri
 
-  Semua error nrxl (termasuk dari library dan fungsi) bisa ditangkap.
+  Semua error nerx (termasuk dari library dan fungsi) bisa ditangkap.
 
 exit:
 
@@ -426,14 +426,14 @@ Tanpa init, nilai diisi sesuai urutan field:
 9. FILE LAIN, EXPORT, LIBRARY, DAN FFI
 ==============================================================================
 
-im (memakai file .nrxl buatan sendiri):
+im (memakai file .nrx buatan sendiri):
 
-    im hitung                      # = hitung.nrxl
-    im "hitung.nrxl"
-    im alat/hitung                 # = alat/hitung.nrxl
+    im hitung                      # = hitung.nrx
+    im "hitung.nrx"
+    im alat/hitung                 # = alat/hitung.nrx
     im "alat/hitung"
 
-- nrxl mencari file itu dari folder file yang menulis im.
+- nerx mencari file itu dari folder file yang menulis im.
 - File yang sama hanya dimuat sekali.
 - im harus ditulis paling kiri (tidak menjorok).
 - im adalah kata khusus: tidak boleh jadi nama fungsi atau type, dan im()
@@ -441,10 +441,10 @@ im (memakai file .nrxl buatan sendiri):
 
 im ... from (hanya mengambil nama tertentu):
 
-    im luas, Titik from "alat"     # dari alat.nrxl, hanya luas dan Titik
+    im luas, Titik from "alat"     # dari alat.nrx, hanya luas dan Titik
     im luas from alat              # tanpa tanda kutip juga boleh
 
-- Nama lain yang di-ex di alat.nrxl tidak bisa dipakai dari file ini.
+- Nama lain yang di-ex di alat.nrx tidak bisa dipakai dari file ini.
   Errornya memberi tahu nama mana yang perlu ditambahkan ke im.
 - Setiap nama yang ditulis harus di-ex di file itu; kalau tidak, error
   sebelum program jalan.
@@ -493,7 +493,7 @@ ffi (memanggil fungsi DLL langsung):
         func Sleep(milidetik int)          # tanpa jenis hasil = tidak
     )                                      # mengembalikan apa-apa
 
-    MessageBoxA(0, "Halo dari nrxl!", "Pesan", 0)
+    MessageBoxA(0, "Halo dari nerx!", "Pesan", 0)
     SetCursorPos(100, 200)
 
   Jenis argumen dan jenis hasil:
@@ -507,10 +507,10 @@ ffi (memanggil fungsi DLL langsung):
 - Tulis "nama jenis" untuk tiap argumen (nama boleh tidak ditulis, cukup
   jenisnya). Jenis hasil ditulis setelah tanda kurung tutup.
 - Maksimal 12 argumen. Hanya untuk Windows 64-bit.
-- nrxl mengecek file DLL dan nama fungsinya saat membaca program, jadi salah
+- nerx mengecek file DLL dan nama fungsinya saat membaca program, jadi salah
   tulis langsung error sebelum program jalan.
 - Fungsi ffi didahulukan dari fungsi bawaan yang namanya sama (mis. sqrt).
-- Nama fungsi ffi tidak boleh sama dengan fungsi/type nrxl buatan sendiri.
+- Nama fungsi ffi tidak boleh sama dengan fungsi/type nerx buatan sendiri.
 - Fungsi ffi bisa dipanggil dari semua file (tidak perlu ex).
 - Nama lain untuk fungsi DLL: tulis "as NamaAsli" setelah jenis hasil.
 
@@ -537,9 +537,9 @@ Buffer (memori mentah untuk struct, array, dan teks keluaran):
 
 - Struct yang dikirim sebagai nilai (bukan pointer) dan ukurannya 8 byte atau
   kurang: baca dulu dengan peek(s, 0, "int64"), lalu kirim sebagai int64.
-- Alamat yang salah membuat program crash; nrxl tidak bisa mengeceknya.
+- Alamat yang salah membuat program crash; nerx tidak bisa mengeceknya.
 
-Callback (fungsi nrxl yang dipanggil kode native):
+Callback (fungsi nerx yang dipanggil kode native):
 
     func banding(a int, b int) int
         return peek(a, 0, "int") - peek(b, 0, "int")
@@ -626,7 +626,7 @@ Nama fungsi peka huruf besar-kecil: getKey() benar, getkey() salah.
   substr(t, mulai, panjang)
                            substr("Halo Dunia", 0, 4) -> "Halo"
                            (panjang opsional)
-  slice(t, awal, akhir)    slice("nrxlang", -4) -> "lang"
+  slice(t, awal, akhir)    slice("Nerx", -4) -> "lang"
   reverse(t)               reverse("halo") -> "olah"
 
 --- Konversi ---
@@ -837,9 +837,9 @@ lib nrx_sound.h  -  suara
 lib nrx_json.h  -  JSON
 ------------------------------------------------------------------------------
 
-  toJson(data)          data nrxl -> teks JSON satu baris
+  toJson(data)          data nerx -> teks JSON satu baris
   toJson(data, true)    sama, tapi rapi (berbaris dan menjorok)
-  fromJson(teks)        teks JSON -> data nrxl
+  fromJson(teks)        teks JSON -> data nerx
 
 - Objek JSON <-> map, array <-> list, true/false <-> bool,
   null -> teks kosong. Struct disimpan sebagai objek.
@@ -970,7 +970,7 @@ Memutar dan menggeser (seperti transform di program 3D lain):
 - Gambar hanya di antara begin3d dan end3d (screenshot3d sesudah end3d).
 - Variabel lingkungan NRX3D_HIDDEN=1 membuat window tidak tampil (untuk tes
   otomatis); gambar dan screenshot3d tetap jalan.
-- Contoh lengkap dengan kotak ketik: agen/kantor.nrxl.
+- Contoh lengkap dengan kotak ketik: agen/kantor.nrx.
 - .exe hasil build program 3D sekitar 1.7 MB (raylib ikut di dalamnya);
   program lain tidak ikut membawa raylib.
 
@@ -991,58 +991,58 @@ Memutar dan menggeser (seperti transform di program 3D lain):
 13. EXTENSION VS CODE
 ==============================================================================
 
-Folder vscode-nrxl berisi extension untuk warna sintaks dan cuplikan kode.
-Cara memasang, dan nanti cara merilisnya, ada di vscode-nrxl/README.md.
+Folder vscode-nerx berisi extension untuk warna sintaks dan cuplikan kode.
+Cara memasang, dan nanti cara merilisnya, ada di vscode-nerx/README.md.
 
 ==============================================================================
-14. NRXC: COMPILER DALAM NRXL (TANPA VM)
+14. NRXC: COMPILER DALAM nerx (TANPA VM)
 ==============================================================================
 
-nrxc adalah compiler nrxl yang ditulis dengan nrxl sendiri (src\nrxc.nrxl).
-Ia membaca file .nrxl dan menulis file .exe Windows 64-bit langsung (kode mesin
+nrxc adalah compiler nerx yang ditulis dengan nerx sendiri (src\nrxc.nrx).
+Ia membaca file .nrx dan menulis file .exe Windows 64-bit langsung (kode mesin
 x64 + header PE), tanpa VM dan tanpa toolchain luar.
 
 Memakai:
 
-    nrxlang game.nrxl                          # -> game.exe
-    nrxlang game.nrxl hasil\game.exe           # pilih nama .exe
-    nrxlang                                 # tanpa argumen: ditanya nama file dan .exe
-    nrxlang build game.nrxl -o game.exe        # sama, dengan pilihan nama .exe
-    nrxlang run game.nrxl                      # kompilasi ke .exe sementara, jalankan, hapus
+    Nerx game.nrx                          # -> game.exe
+    Nerx game.nrx hasil\game.exe           # pilih nama .exe
+    Nerx                                 # tanpa argumen: ditanya nama file dan .exe
+    nerx build game.nrx -o game.exe        # sama, dengan pilihan nama .exe
+    nerx run game.nrx                      # kompilasi ke .exe sementara, jalankan, hapus
 
-- nrxlang.exe (berisi nrxc) ikut di installer. File runtime-nya (prelude.nrxl, pustaka.nrxl, dan
-  folder lib\nrx_*.nrxl) dibaca dari folder tempat nrxlang.exe berada, jadi nrxlang
+- nerx.exe (berisi nrxc) ikut di installer. File runtime-nya (prelude.nrx, pustaka.nrx, dan
+  folder lib\nrx_*.nrx) dibaca dari folder tempat nerx.exe berada, jadi Nerx
   bisa dijalankan dari folder mana saja.
 - Kalau mau membangunnya sendiri: dari folder src jalankan
-  nrxc.exe nrxc.nrxl nrxlang_baru.exe (nrxc membangun dirinya sendiri dari benih; tanpa interpreter lama).
+  nrxc.exe nrxc.nrx nerx_baru.exe (nrxc membangun dirinya sendiri dari benih; tanpa interpreter lama).
 - nrxc mengompilasi dirinya sendiri: nrxc2.exe dan nrxc3.exe hasilnya sama
   persis (byte demi byte).
 - Hanya fungsi yang benar-benar dipanggil yang masuk ke .exe, jadi hasilnya kecil.
 - .exe punya dua section: .text (kode, hanya baca/eksekusi) dan .data (variabel).
 - Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound,
-  window, 3d) ditulis ulang dalam nrxl di src\lib\nrx_*.nrxl. Cara
+  window, 3d) ditulis ulang dalam nerx di src\lib\nrx_*.nrx. Cara
   memakainya sama: lib nrx_window.h.
 - nrx_3d di nrxc adalah renderer perangkat lunak (GDI), bukan raylib: bentuk
   dan fungsinya sama, tetapi warna #rrggbbaa hanya dibedakan tembus (alpha 00)
   atau tidak, dan hurufnya memakai Segoe UI.
-- Pesan error saat jalan sama dengan interpreter nrxlang lama:
-      error E0026 in game.nrxl:3: index 5 is outside the list (the list has 1 items)
+- Pesan error saat jalan sama dengan interpreter Nerx lama:
+      error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items)
   Pesan error saat kompilasi (sebelum .exe dibuat) masih berbeda bentuknya.
   Setelah selesai nrxc mencetak Done: game.exe (N bytes).
 
-Beda dengan interpreter nrxlang lama yang belum disamakan:
+Beda dengan interpreter Nerx lama yang belum disamakan:
 
-- Bilangan bulat yang melewati batas 64-bit melingkar (nrxlang mengubahnya
+- Bilangan bulat yang melewati batas 64-bit melingkar (Nerx mengubahnya
   jadi desimal).
-- min(2.5, 1) mengembalikan desimal (nrxlang: bilangan bulat 1).
+- min(2.5, 1) mengembalikan desimal (Nerx: bilangan bulat 1).
 - Nama type tidak dipisah per file (fungsi dan variabel biasa sudah dipisah).
 
 ------------------------------------------------------------------------------
-Fungsi intrinsik nrxc  -  untuk menulis library dalam nrxl
+Fungsi intrinsik nrxc  -  untuk menulis library dalam nerx
 ------------------------------------------------------------------------------
 
-Sebagian besar fungsi ini hanya ada di nrxc (peek, poke, dan newBuffer juga jalan di nrxlang), dipakai oleh library src\lib\nrx_*.nrxl
-dan runtime (prelude.nrxl, pustaka.nrxl). Program biasa tidak membutuhkannya.
+Sebagian besar fungsi ini hanya ada di nrxc (peek, poke, dan newBuffer juga jalan di Nerx), dipakai oleh library src\lib\nrx_*.nrx
+dan runtime (prelude.nrx, pustaka.nrx). Program biasa tidak membutuhkannya.
 Semua nilai berupa bilangan bulat 64-bit (alamat memori atau bit).
 
 Memanggil DLL Windows:
@@ -1071,7 +1071,7 @@ Memori mentah:
   poke8(p, off, v)  poke64(p, off, v)  tulis 1 byte / 8 byte
   idiv(a, b)                           pembagian bilangan bulat (hasil int)
 
-Mengubah nilai nrxl jadi alamat dan sebaliknya:
+Mengubah nilai nerx jadi alamat dan sebaliknya:
 
   asInt(x)       alamat string / list / map / json (atau bit double)
   asString(p)    string dari alamat       asListI(p)  list int
@@ -1081,10 +1081,10 @@ Mengubah nilai nrxl jadi alamat dan sebaliknya:
 
 Callback dan pemanggilan lewat alamat:
 
-  _callback("fungsi")   alamat fungsi nrxl yang bisa dipanggil Windows (thread,
+  _callback("fungsi")   alamat fungsi nerx yang bisa dipanggil Windows (thread,
                         WndProc, qsort); sama dengan callback("fungsi"); sampai
                         4 argumen bilangan bulat
-  _callfn(alamat, a1, ..., ak)   panggil fungsi nrxl lewat alamatnya
+  _callfn(alamat, a1, ..., ak)   panggil fungsi nerx lewat alamatnya
 
 Error dan state:
 
@@ -1096,7 +1096,7 @@ Error dan state:
                             4-6 console, 7 keyboard, 8 daftar sound,
                             9 handle stdout, 10 window, 14 nrx_3d
 
-Matematika desimal (dipakai pustaka.nrxl): _sqrt(x) _sin(x) _cos(x) _tan(x)
+Matematika desimal (dipakai pustaka.nrx): _sqrt(x) _sin(x) _cos(x) _tan(x)
 _atan2(y, x) _fpow(x, y).
 
 Contoh library kecil (user32 + kernel32):

@@ -1,4 +1,4 @@
-# nrx_json.nrxl - tipe json (nilai dinamis) + toJson / fromJson, ditulis dalam nrxl.
+# nrx_json.nrx - tipe json (nilai dinamis) + toJson / fromJson, ditulis dalam nrxl.
 # Nilai json = blok 16 byte [tag][isi]. tag: 1 teks (penunjuk string), 2 int, 3 double (bit mentah), 4 bool,
 # 5 list (penunjuk list isi json), 6 objek (penunjuk map: key teks, nilai json). null dibaca sebagai teks kosong.
 

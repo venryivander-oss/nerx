@@ -1,4 +1,4 @@
-# nrx_http.nrxl - HTTP/HTTPS lewat winhttp.dll (dimuat saat jalan), ditulis dalam nrxl.
+# nrx_http.nrx - HTTP/HTTPS lewat winhttp.dll (dimuat saat jalan), ditulis dalam nrxl.
 # Slot tersembunyi: 1 = status permintaan terakhir, 2 = blok permintaan httpStart (0 = tidak ada).
 # Blok httpStart: [0]url [8]isi [16]jenis [24]header [32]hasil [40]status [48]errKind [56]errCode [64]selesai
 #   [72]thread [80]potongan(alamat byte) [88]panjang [96]kapasitas [104]critical section [112]ada isi
@@ -73,7 +73,7 @@ func httpMinta(url string, adaIsi bool, isi string, jenis string, extra string, 
             poke8(full, pl * 2 + i, peek8(ext, i))
         if pl + el == 0
             poke8(full, 0, 47)
-        be wnama = httpLebar("nrxl")
+        be wnama = httpLebar("nerx")
         be s = callp(fOpen, wnama, 0, 0, 0, 0)
         if s != 0
             callp(fTime, s, 0, 60000, 60000, 300000)

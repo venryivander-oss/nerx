@@ -1,8 +1,8 @@
 ==============================================================================
-                          NERXELITY (nrxl) SYNTAX
+                          NERXELITY (nerx) SYNTAX
 ==============================================================================
 
-The complete nrxl syntax: the core language, built-in functions, and every
+The complete nerx syntax: the core language, built-in functions, and every
 library. This is the English version of SYNTAX.txt.
 
 Contents:
@@ -19,7 +19,7 @@ Contents:
   11. Libraries
   12. Limits
   13. VS Code extension
-  14. nrxc: the compiler written in nrxl (no VM)
+  14. nrxc: the compiler written in nerx (no VM)
 
 
 ==============================================================================
@@ -28,17 +28,17 @@ Contents:
 
 Run a script (it is compiled to a temporary .exe, run, then deleted):
 
-    nrxlang run contoh_fitur.nrxl
+    nerx run contoh_fitur.nrx
 
-Turn it into an .exe (nothing else needed; the nrxl compiler (nrxc) that is
-built into nrxlang.exe makes it; see section 14):
+Turn it into an .exe (nothing else needed; the nerx compiler (nrxc) that is
+built into nerx.exe makes it; see section 14):
 
-    nrxlang build contoh_fitur.nrxl       -> contoh_fitur.exe
-    nrxlang build game.nrxl -o out\game.exe
-    nrxlang contoh_fitur.nrxl             (the same as build)
+    nerx build contoh_fitur.nrx       -> contoh_fitur.exe
+    nerx build game.nrx -o out\game.exe
+    Nerx contoh_fitur.nrx             (the same as build)
 
-- The .exe stands alone: the .nrxl file (and every file it pulls in with im)
-  is embedded, so the .nrxl files do not need to be shared.
+- The .exe stands alone: the .nrx file (and every file it pulls in with im)
+  is embedded, so the .nrx files do not need to be shared.
 - Type errors are caught at build time, and no .exe is made.
 - Output and error messages of the .exe are exactly the same as running the
   script directly.
@@ -46,10 +46,10 @@ built into nrxlang.exe makes it; see section 14):
   interpreter), so calculations are much faster than with run. The syntax
   does not change.
 - lib nrx_window.h and ffi can be built too.
-- The installer puts nrxlang.exe, prelude.nrxl, pustaka.nrxl, and the lib\ folder
+- The installer puts nerx.exe, prelude.nrx, pustaka.nrx, and the lib\ folder
   in one folder; nothing else is needed.
 - The earlier implementation was moved to the history\ folder of the repository;
-  it is not needed to use or build nrxl.
+  it is not needed to use or build Nerx.
 
 Files a script reads (readFile, playSound, newImage, ...) are looked up from
 the folder the command runs in, not the script's folder. The exception is im:
@@ -97,8 +97,8 @@ Error message language:
 - errlang is only allowed in the main file, at the far left. It applies to
   the whole program, including files pulled in with im.
 - Every error has the same code in every language, for example:
-      error E0003 in game.nrxl:5: variable skor has not been created
-      error E0003 di game.nrxl:5: variabel skor belum dibuat
+      error E0003 in game.nrx:5: variable skor has not been created
+      error E0003 di game.nrx:5: variabel skor belum dibuat
   The code can be searched online even when the message is in another
   language.
 
@@ -166,7 +166,7 @@ Strict types:
   just works.
 - Function parameters follow the kind of the argument given.
 
-Check before running: before the first line runs, nrxl checks the whole file
+Check before running: before the first line runs, nerx checks the whole file
 (including the bodies of functions that are never called). If something is
 certainly wrong, the program does not run at all and the error shows right
 away:
@@ -340,7 +340,7 @@ try / catch / throw:
 
     throw "error message"          # raise your own error
 
-  Every nrxl error (including ones from libraries and functions) can be
+  Every nerx error (including ones from libraries and functions) can be
   caught.
 
 exit:
@@ -434,14 +434,14 @@ Without init, values fill the fields in order:
 9. OTHER FILES, EXPORT, LIBRARIES, AND FFI
 ==============================================================================
 
-im (use your own .nrxl file):
+im (use your own .nrx file):
 
-    im calc                        # = calc.nrxl
-    im "calc.nrxl"
-    im tools/calc                  # = tools/calc.nrxl
+    im calc                        # = calc.nrx
+    im "calc.nrx"
+    im tools/calc                  # = tools/calc.nrx
     im "tools/calc"
 
-- nrxl looks for the file from the folder of the file that writes im.
+- nerx looks for the file from the folder of the file that writes im.
 - The same file is only loaded once.
 - im must be written at the far left (not indented).
 - im is a reserved word: it cannot be a function or type name, and im()
@@ -449,10 +449,10 @@ im (use your own .nrxl file):
 
 im ... from (take only certain names):
 
-    im area, Point from "tools"    # from tools.nrxl, only area and Point
+    im area, Point from "tools"    # from tools.nrx, only area and Point
     im area from tools             # without quotes is fine too
 
-- Other names exported (ex) in tools.nrxl cannot be used from this file.
+- Other names exported (ex) in tools.nrx cannot be used from this file.
   The error says which name needs to be added to im.
 - Every name written must be exported in that file; otherwise it is an
   error before the program runs.
@@ -502,7 +502,7 @@ ffi (call DLL functions directly):
         func Sleep(ms int)                 # no result kind = returns
     )                                      # nothing
 
-    MessageBoxA(0, "Hello from nrxl!", "Message", 0)
+    MessageBoxA(0, "Hello from nerx!", "Message", 0)
     SetCursorPos(100, 200)
 
   Argument and result kinds:
@@ -516,10 +516,10 @@ ffi (call DLL functions directly):
 - Write "name kind" for each argument (the name may be left out, the kind
   is enough). The result kind goes after the closing parenthesis.
 - At most 12 arguments. Windows 64-bit only.
-- nrxl checks the DLL file and function name while reading the program, so
+- nerx checks the DLL file and function name while reading the program, so
   a typo is an error before the program runs.
 - ffi functions win over built-in functions with the same name (e.g. sqrt).
-- An ffi function name cannot be the same as your own nrxl function/type.
+- An ffi function name cannot be the same as your own nerx function/type.
 - ffi functions can be called from every file (no ex needed).
 - Another name for a DLL function: write "as RealName" after the result
   kind.
@@ -547,9 +547,9 @@ Buffers (raw memory for structs, arrays, and output text):
 
 - A struct passed by value (not a pointer) that is 8 bytes or smaller: read
   it first with peek(s, 0, "int64"), then pass it as int64.
-- A wrong address crashes the program; nrxl cannot check it.
+- A wrong address crashes the program; nerx cannot check it.
 
-Callbacks (nrxl functions called by native code):
+Callbacks (nerx functions called by native code):
 
     func compare(a int, b int) int
         return peek(a, 0, "int") - peek(b, 0, "int")
@@ -636,7 +636,7 @@ Function names are case-sensitive: getKey() is right, getkey() is wrong.
   substr(t, start, length)
                            substr("Hello World", 0, 5) -> "Hello"
                            (length optional)
-  slice(t, start, end)     slice("nrxlang", -4) -> "lang"
+  slice(t, start, end)     slice("Nerx", -4) -> "lang"
   reverse(t)               reverse("hello") -> "olleh"
 
 --- Conversion ---
@@ -848,9 +848,9 @@ lib nrx_sound.h  -  sound
 lib nrx_json.h  -  JSON
 ------------------------------------------------------------------------------
 
-  toJson(data)          nrxl data -> one-line JSON text
+  toJson(data)          nerx data -> one-line JSON text
   toJson(data, true)    same, but pretty (lines and indentation)
-  fromJson(text)        JSON text -> nrxl data
+  fromJson(text)        JSON text -> nerx data
 
 - JSON object <-> map, array <-> list, true/false <-> bool,
   null -> empty text. Types are saved as objects.
@@ -982,7 +982,7 @@ Rotating and moving (like transforms in other 3D programs):
 - Draw only between begin3d and end3d (screenshot3d after end3d).
 - The environment variable NRX3D_HIDDEN=1 keeps the window hidden (for
   automated tests); drawing and screenshot3d still work.
-- Full example with a text box: agen/kantor.nrxl.
+- Full example with a text box: agen/kantor.nrx.
 - A built .exe of a 3D program is about 1.7 MB (raylib is inside it); other
   programs do not carry raylib.
 
@@ -1003,60 +1003,60 @@ Rotating and moving (like transforms in other 3D programs):
 13. VS CODE EXTENSION
 ==============================================================================
 
-The vscode-nrxl folder holds the extension for syntax colors and code
+The vscode-nerx folder holds the extension for syntax colors and code
 snippets. How to install it, and later how to publish it, is in
-vscode-nrxl/README.md.
+vscode-nerx/README.md.
 
 ==============================================================================
-14. NRXC: THE COMPILER WRITTEN IN NRXL (NO VM)
+14. NRXC: THE COMPILER WRITTEN IN nerx (NO VM)
 ==============================================================================
 
-nrxc is the nrxl compiler written in nrxl itself (src\nrxc.nrxl). It reads
-a .nrxl file and writes a 64-bit Windows .exe directly (x64 machine code + PE
+nrxc is the nerx compiler written in nerx itself (src\nrxc.nrx). It reads
+a .nrx file and writes a 64-bit Windows .exe directly (x64 machine code + PE
 header), with no VM and no external toolchain.
 
 Using it:
 
-    nrxlang game.nrxl                          # -> game.exe
-    nrxlang game.nrxl out\game.exe             # choose the .exe name
-    nrxlang                                 # no arguments: it asks for the file and the .exe
-    nrxlang build game.nrxl -o game.exe        # the same, with an option for the .exe name
-    nrxlang run game.nrxl                      # compile to a temporary .exe, run it, delete it
+    Nerx game.nrx                          # -> game.exe
+    Nerx game.nrx out\game.exe             # choose the .exe name
+    Nerx                                 # no arguments: it asks for the file and the .exe
+    nerx build game.nrx -o game.exe        # the same, with an option for the .exe name
+    nerx run game.nrx                      # compile to a temporary .exe, run it, delete it
 
-- nrxlang.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrxl,
-  pustaka.nrxl, and the lib\nrx_*.nrxl folder) are read from the folder where
-  nrxlang.exe is, so it can run from any folder.
+- nerx.exe (which contains nrxc) comes with the installer. Its runtime files (prelude.nrx,
+  pustaka.nrx, and the lib\nrx_*.nrx folder) are read from the folder where
+  nerx.exe is, so it can run from any folder.
 - To build it yourself: from the src folder run
-  nrxc.exe nrxc.nrxl nrxlang_new.exe (nrxc builds itself from a seed; no old interpreter needed).
+  nrxc.exe nrxc.nrx nerx_new.exe (nrxc builds itself from a seed; no old interpreter needed).
 - nrxc compiles itself: nrxc2.exe and nrxc3.exe are identical byte for byte.
 - Only functions that are actually called go into the .exe, so it stays small.
 - The .exe has two sections: .text (code, read/execute only) and .data
   (variables).
 - Every library (nrx_crudfile, rand, console, keyboard, json, http, sound,
-  window, 3d) was rewritten in nrxl in src\lib\nrx_*.nrxl. They are used
+  window, 3d) was rewritten in nerx in src\lib\nrx_*.nrx. They are used
   the same way: lib nrx_window.h.
 - nrx_3d in nrxc is a software renderer (GDI), not raylib: same shapes and
   functions, but #rrggbbaa colors only distinguish transparent (alpha 00) from
   not, and text uses Segoe UI.
-- Runtime error messages match the old nrxlang interpreter:
-      error E0026 in game.nrxl:3: index 5 is outside the list (the list has 1 items)
+- Runtime error messages match the old Nerx interpreter:
+      error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items)
   Errors found while compiling (before the .exe exists) still look different.
   nrxc prints Done: game.exe (N bytes) when it finishes.
 
-Differences from the old nrxlang interpreter that are not matched yet:
+Differences from the old Nerx interpreter that are not matched yet:
 
-- Integers that pass the 64-bit limit wrap around (nrxlang turns them into
+- Integers that pass the 64-bit limit wrap around (Nerx turns them into
   decimals).
-- min(2.5, 1) returns a decimal (nrxlang: the integer 1).
+- min(2.5, 1) returns a decimal (Nerx: the integer 1).
 - Type names are not separated per file (ordinary functions and variables
   already are).
 
 ------------------------------------------------------------------------------
-nrxc intrinsics  -  for writing libraries in nrxl
+nrxc intrinsics  -  for writing libraries in nerx
 ------------------------------------------------------------------------------
 
-Most of these functions exist only in nrxc (peek, poke, and newBuffer also work in nrxlang). The libraries in src\lib\nrx_*.nrxl
-and the runtime (prelude.nrxl, pustaka.nrxl) use them. Ordinary programs do
+Most of these functions exist only in nrxc (peek, poke, and newBuffer also work in Nerx). The libraries in src\lib\nrx_*.nrx
+and the runtime (prelude.nrx, pustaka.nrx) use them. Ordinary programs do
 not need them. Every value is a 64-bit integer (a memory address or bits).
 
 Calling Windows DLLs:
@@ -1086,7 +1086,7 @@ Raw memory:
   poke8(p, off, v)  poke64(p, off, v)  write 1 byte / 8 bytes
   idiv(a, b)                           integer division (int result)
 
-Turning nrxl values into addresses and back:
+Turning nerx values into addresses and back:
 
   asInt(x)       address of a string / list / map / json (or the bits of a double)
   asString(p)    string at an address     asListI(p)  list int
@@ -1096,10 +1096,10 @@ Turning nrxl values into addresses and back:
 
 Callbacks and calling by address:
 
-  _callback("function")   address of an nrxl function Windows can call (thread,
+  _callback("function")   address of an nerx function Windows can call (thread,
                           WndProc, qsort); same as callback("function"); up to
                           4 integer arguments
-  _callfn(address, a1, ..., ak)   call an nrxl function by its address
+  _callfn(address, a1, ..., ak)   call an nerx function by its address
 
 Errors and state:
 
@@ -1110,7 +1110,7 @@ Errors and state:
                             4-6 console, 7 keyboard, 8 sound list,
                             9 stdout handle, 10 window, 14 nrx_3d
 
-Decimal math (used by pustaka.nrxl): _sqrt(x) _sin(x) _cos(x) _tan(x)
+Decimal math (used by pustaka.nrx): _sqrt(x) _sin(x) _cos(x) _tan(x)
 _atan2(y, x) _fpow(x, y).
 
 A small library example (user32 + kernel32):

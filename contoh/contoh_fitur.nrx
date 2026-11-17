@@ -2,7 +2,7 @@ lib nrx_rand.h
 lib nrx_crudfile.h
 
 # --- lock: nilai yang tidak bisa diubah ---
-lock JUDUL = "Contoh Fitur nrxl"
+lock JUDUL = "Contoh Fitur nerx"
 lock MAX_SKOR = 100
 print JUDUL " (skor maksimal " MAX_SKOR ")"
 try
@@ -100,7 +100,7 @@ print jumlahKata
 be skor = [70, 95, 60, 85]
 print "urut: " sort(skor) ", terbesar dulu: " reverse(sort(skor))
 print "posisi 95: " indexOf(skor, 95)
-print substr("Halo Dunia", 0, 4) " / " slice(skor, 1, 3) " / " slice("nrxlang", -4)
+print substr("Halo Dunia", 0, 4) " / " slice(skor, 1, 3) " / " slice("Nerx", -4)
 print "jenis: " typeOf(5) ", " typeOf("teks") ", " typeOf(skor) ", " typeOf(5 > 3)
 
 # --- type: data dengan field bertipe ---
@@ -175,7 +175,7 @@ print "sekarang jam " time() ", tanggal " date()
 # --- file (lib nrx_crudfile.h) ---
 be file = "catatan.txt"
 writeFile(file, "")
-appendLine(file, "belajar nrxl")
+appendLine(file, "belajar nerx")
 appendLine(file, "bikin window")
 be isi = readLines(file)
 print "isi " file ": " isi
