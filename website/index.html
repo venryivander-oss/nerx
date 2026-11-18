@@ -149,7 +149,7 @@ Done: p.exe (14336 bytes)</pre>
       </figure>
       <div>
         <h2 id="nrxc-title">The compiler is written in Nerx</h2>
-        <p class="sub"><code>nrxc</code> is the Nerx compiler, and it is itself a Nerx program. It writes the Windows .exe file directly, so you do not need any other compiler or a runtime next to your program.</p>
+        <p class="sub"><code>nrxc</code> is the Nerx compiler, and it is itself a Nerx program. It writes the Windows .exe or Linux file directly, so you do not need any other compiler or a runtime next to your program.</p>
         <ul>
           <li>It compiles itself: the compiler it builds is byte-for-byte the same as the one that built it.</li>
           <li>Every library (window, 3D, json, http, sound, files, and more) is written in nerx too.</li>
@@ -249,12 +249,24 @@ true</pre>
           <dt>System</dt><dd>Windows 10 or 11, 64-bit</dd>
           <dt>Includes</dt><dd>Nerx (the compiler), libraries, syntax docs</dd>
           <dt>License</dt><dd>MIT</dd>
-          <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">2a4df3776c05571f2105c966e9c09b494ca1c14c5729130cf559ed758c7e3981</code></dd>
+          <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">b6e0244022686f3cb069fc9c926b31af13515fdb2a04ef3151d32acc38ab508e</code></dd>
         </dl>
         <p>
           <a class="btn primary" href="download/nerx-setup.exe" download>Get now</a>
           <a class="btn" href="https://github.com/venryivander-oss/Nerx">Get from GitHub</a>
         </p>
+        <h3 style="margin-top:28px">Linux</h3>
+        <dl>
+          <dt>File</dt><dd><code>nerx-0.1.0-linux-x86_64.tar.gz</code></dd>
+          <dt>System</dt><dd>Linux x86-64 with glibc. the 3D library is not available yet; sound needs a PulseAudio/PipeWire server; windows need X11 (or XWayland)</dd>
+          <dt>SHA-256</dt><dd><code id="sha256-linux" style="word-break:break-all;font-size:.82em">a159ac29982720d47cd44c4d28813076a8517d79a0866f0ce6c90949c78f98b5</code></dd>
+        </dl>
+        <p><a class="btn primary" href="download/nerx-0.1.0-linux-x86_64.tar.gz" download>Get for Linux</a></p>
+        <figure class="code" aria-label="Install on Linux">
+          <pre>tar xzf nerx-0.1.0-linux-x86_64.tar.gz
+cd nerx-0.1.0-linux-x86_64
+./install.sh</pre>
+        </figure>
         <p class="note">Windows may show an "unknown publisher" warning, because the installer is not code-signed yet. Prefer to build it yourself? The steps are on the right. To verify your download, run <code>certutil -hashfile nerx-setup.exe SHA256</code> and compare it with the SHA-256 above.</p>
       </div>
       <div>

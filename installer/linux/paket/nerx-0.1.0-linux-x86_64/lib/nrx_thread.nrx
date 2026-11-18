@@ -1,0 +1,112 @@
+# nrx_thread.nrx - async / await, mutex, dan sel bersama (thread Windows). Pakai: lib nrx_thread
+#
+#   func kuadrat(n int) int
+#       return n * n
+#   be f = async(callback("kuadrat"), 7)      # mulai di thread lain
+#   ...kerjakan hal lain...
+#   print await(f)                            # tunggu selesai, ambil hasilnya: 49
+#
+# Fungsi yang dijalankan menerima satu int dan mengembalikan int. Untuk mengirim teks: asInt(teks) dan di dalam
+# fungsi asString(p). Jangan memakai try/catch di beberapa thread sekaligus.
+
+# pintu masuk thread: blok [0] alamat fungsi, [8] argumen, [16] hasil, [24] selesai, [32] handle thread
+func asyncEntry(blk int) int
+    be r = callp(peek64(blk, 0), peek64(blk, 8))
+    poke64(blk, 16, r)
+    poke64(blk, 24, 1)
+    return 0
+
+# mulai fungsi (callback("nama")) di thread baru dengan satu argumen; kembalikan penanda untuk await
+func async(fn int, arg int) int
+    be b = alloc(48)
+    poke64(b, 0, fn)
+    poke64(b, 8, arg)
+    be th = 0
+    if _linux() == 1
+        # pthread_create(&tid, attr dengan stack 16 MB, fungsi, arg)
+        be at = alloc(128)
+        be tid = alloc(8)
+        poke64(tid, 0, 0)
+        callp(dllFn("libc.so.6", "pthread_attr_init"), at)
+        callp(dllFn("libc.so.6", "pthread_attr_setstacksize"), at, 16777216)
+        be rc = callp(dllFn("libc.so.6", "pthread_create"), tid, at, _callback("asyncEntry"), b)
+        if rc == 0
+            be th = peek64(tid, 0)
+        callp(dllFn("libc.so.6", "pthread_attr_destroy"), at)
+        free(at)
+        free(tid)
+    else
+        be th = callp(dllFn("kernel32.dll", "CreateThread"), 0, 16777216, _callback("asyncEntry"), b, 65536, 0)
+    if th == 0
+        free(b)
+        _lemparK(375, "async: the thread cannot be created")
+    poke64(b, 32, th)
+    return b
+
+# tunggu sampai selesai dan kembalikan hasilnya (boleh dipanggil berulang kali)
+func await(f int) int
+    be th = peek64(f, 32)
+    if th != 0
+        if _linux() == 1
+            callp(dllFn("libc.so.6", "pthread_join"), th, 0)
+        else
+            callp(dllFn("kernel32.dll", "WaitForSingleObject"), th, 4294967295)
+            callp(dllFn("kernel32.dll", "CloseHandle"), th)
+        poke64(f, 32, 0)
+    return peek64(f, 16)
+
+func isDone(f int) bool
+    return peek64(f, 24) != 0
+
+# tidur n milidetik
+func sleep(ms int)
+    if _linux() == 1
+        linuxTidur(ms)
+        return
+    callp(dllFn("kernel32.dll", "Sleep"), ms)
+
+# ---- mutex: hanya satu thread yang boleh berada di antara mutexLock dan mutexUnlock
+func mutexNew() int
+    be m = alloc(64)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_init"), m, 0)
+    else
+        callp(dllFn("kernel32.dll", "InitializeCriticalSection"), m)
+    return m
+
+func mutexLock(m int)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_lock"), m)
+        return
+    callp(dllFn("kernel32.dll", "EnterCriticalSection"), m)
+
+func mutexUnlock(m int)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_unlock"), m)
+        return
+    callp(dllFn("kernel32.dll", "LeaveCriticalSection"), m)
+
+# ---- sel bersama: satu angka yang aman diubah dari banyak thread
+func cellNew(v int) int
+    be c = mutexNew()
+    poke64(c, 48, v)
+    return c
+
+func cellGet(c int) int
+    mutexLock(c)
+    be v = peek64(c, 48)
+    mutexUnlock(c)
+    return v
+
+func cellSet(c int, v int)
+    mutexLock(c)
+    poke64(c, 48, v)
+    mutexUnlock(c)
+
+# tambah n (boleh negatif); kembalikan nilai baru
+func cellAdd(c int, n int) int
+    mutexLock(c)
+    be v = peek64(c, 48) + n
+    poke64(c, 48, v)
+    mutexUnlock(c)
+    return v

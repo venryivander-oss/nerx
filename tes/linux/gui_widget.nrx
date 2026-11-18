@@ -1,0 +1,44 @@
+lib nrx_window.h
+lib nrx_crudfile.h
+
+be pilihan list string
+add(pilihan, "merah")
+add(pilihan, "hijau")
+add(pilihan, "biru")
+be daftar list string
+add(daftar, "apel")
+add(daftar, "jeruk")
+add(daftar, "mangga")
+be aktif = false
+be warna = ""
+be buah = ""
+be nama = "budi"
+be n = 0
+
+func tik()
+    be n += 1
+    if n == 3
+        be aktif = true
+        be warna = "hijau"
+        be buah = "mangga"
+        be nama = "ani"
+    if n == 6
+        winDumpPng("/tmp/gw.png")
+    if n == 8
+        print aktif " " warna " " buah " " nama
+        closeWindow()
+
+templateStyle gelap(
+    background: "#202030"
+    color: "#ffffff"
+)
+windowTemplate menu(
+    newText("Judul", 20, 10, 18)
+    newCheck(aktif, "Aktif", 20, 50, 16)
+    newSelect(warna, pilihan, 20, 90, 160, 16)
+    newList(buah, daftar, 20, 140, 160, 90, 16)
+    newInput(nama, 220, 50, 200, 16)
+    onTimer(tik(), 0.1)
+)
+newWindow("Uji", 480, 300, menu, gelap)
+print "selesai"

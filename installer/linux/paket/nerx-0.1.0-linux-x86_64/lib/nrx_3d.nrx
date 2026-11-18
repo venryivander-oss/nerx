@@ -1,0 +1,1240 @@
+# nrx_3d.nrx - game 3D sederhana tanpa raylib: renderer perangkat lunak (algoritma pelukis) di atas GDI, ditulis dalam nrxl.
+# Segitiga/poligon dikumpulkan selama frame (end3d mengurutkan dari yang terjauh), lalu digambar dengan Polygon GDI.
+# Slot tersembunyi 14 = alamat blok. Blok (offset byte):
+#   0 hwnd   8 DC buffer   16 bitmap buffer   24 lebar   32 tinggi   40 tertutup   48 terbuka   56 dalam frame   64 kedalaman push3d
+#   72 tumpukan matriks   80 matriks sekarang (4x4 baris, double)   88 kamera (double)   96 poligon   104 operasi 2D
+#   112 jumlah poligon   120 fps   128 waktu frame terakhir (mikrodetik)   136 frameTime (double)   144 huruf diketik (string)
+#   152 klik   160 roda   168 tombol keluar   176 status tombol   184 jumlah operasi 2D   192 gdiplus aktif   200 MSG
+#   208 titik sementara (double)   216 titik poligon (int32)   224 cache font   232 bitmap lama   240 tersembunyi
+#   248 RECT   256 frekuensi QPC   264 buffer kamera   272 buffer klip   280 PAINTSTRUCT   288 urut A   296 urut B
+# Kamera (double): 0-2 posisi, 3-5 kanan, 6-8 atas, 9-11 depan, 12 tan(fov/2), 13 aspek, 14 setengah lebar, 15 setengah tinggi, 16-18 target
+# Poligon: 48 slot (qword): 0 jenis (0 isi, 1 garis, 2 lingkaran) 1 kunci 2 warna 3 jumlah titik, 4.. pasangan x,y
+
+func w3U(f string) int
+    return dllFn("user32.dll", f)
+
+func w3G(f string) int
+    return dllFn("gdi32.dll", f)
+
+func w3K(f string) int
+    return dllFn("kernel32.dll", f)
+
+func gD(p int, i int) double
+    return peek(p, i * 8, "double")
+
+func sD(p int, i int, v double) int
+    poke(p, i * 8, "double", v)
+    return 0
+
+func w3B() int
+    be b = _gget(14)
+    if b == 0
+        be b = alloc(1024)
+        _gset(14, b)
+        poke64(b, 72, alloc(2048))
+        poke64(b, 80, alloc(128))
+        poke64(b, 88, alloc(256))
+        poke64(b, 96, alloc(384 * 8001))
+        poke64(b, 104, alloc(64 * 2001))
+        poke64(b, 120, 60)
+        poke64(b, 168, 27)
+        poke64(b, 176, alloc(2560))
+        poke64(b, 200, alloc(64))
+        poke64(b, 208, alloc(2048))
+        poke64(b, 216, alloc(512))
+        be fc list int
+        poke64(b, 224, asInt(fc))
+        poke64(b, 248, alloc(32))
+        poke64(b, 264, alloc(2048))
+        poke64(b, 272, alloc(2048))
+        poke64(b, 280, alloc(128))
+        poke64(b, 288, alloc(8 * 8001))
+        poke64(b, 296, alloc(8 * 8001))
+        be ty = ""
+        poke64(b, 144, asInt(ty))
+        poke(b, 136, "double", 0.016)
+        w3Ident(peek64(b, 80))
+        be c = peek64(b, 88)
+        sD(c, 0, 6.0)
+        sD(c, 1, 6.0)
+        sD(c, 2, 6.0)
+        sD(c, 16, 0.0)
+        sD(c, 17, 0.0)
+        sD(c, 18, 0.0)
+    return b
+
+func w3Aman(fn string) int
+    be b = w3B()
+    if peek64(b, 48) == 0
+        _lempar(fn + ": open the window first with open3d(title, width, height)")
+    return b
+
+func w3Dalam(fn string) int
+    be b = w3Aman(fn)
+    if peek64(b, 56) == 0
+        _lempar(fn + ": draw between begin3d(color) and end3d()")
+    return b
+
+# ---------------------------------------------------------------- waktu
+func w3Now() int
+    be b = w3B()
+    be buf = peek64(b, 208)
+    if peek64(b, 256) == 0
+        callp(w3K("QueryPerformanceFrequency"), buf)
+        poke64(b, 256, peek64(buf, 0))
+    callp(w3K("QueryPerformanceCounter"), buf)
+    return idiv(peek64(buf, 0) * 1000, idiv(peek64(b, 256), 1000))
+
+# ---------------------------------------------------------------- teks
+func w3Lebar(s string) int
+    be f = w3K("MultiByteToWideChar")
+    be n = callp(f, 65001, 0, cstr(s), 4294967295, 0, 0) % 4294967296
+    be buf = alloc(n * 2 + 8)
+    if n > 0
+        callp(f, 65001, 0, cstr(s), 4294967295, buf, n)
+    return buf
+
+func w3LebarN(s string) int
+    be n = callp(w3K("MultiByteToWideChar"), 65001, 0, cstr(s), 4294967295, 0, 0) % 4294967296
+    if n <= 0
+        return 0
+    return n - 1
+
+func w3Font(size int) int
+    be b = w3B()
+    be fc = asListI(peek64(b, 224))
+    be i = 0
+    loop i < len(fc)
+        if fc[i] == size
+            return fc[i + 1]
+        be i += 2
+    be lf = alloc(96)
+    for k in range(12)
+        poke64(lf, k * 8, 0)
+    poke(lf, 0, "int", 0 - size)
+    poke64(lf, 16, 400)
+    poke8(lf, 23, 1)
+    poke8(lf, 26, 5)
+    be face = "Segoe UI"
+    for k in range(len(face))
+        poke8(lf, 28 + 2 * k, ord(face, k))
+    be h = callp(w3G("CreateFontIndirectW"), lf)
+    free(lf)
+    add(fc, size)
+    add(fc, h)
+    return h
+
+# ---------------------------------------------------------------- warna: hasil = COLORREF + alpha * 16777216
+func w3Rgb(r int, g int, bl int) int
+    return r + g * 256 + bl * 65536 + 4278190080
+
+func w3Hv(c int) int
+    if c >= 48 and c <= 57
+        return c - 48
+    if c >= 97 and c <= 102
+        return c - 87
+    if c >= 65 and c <= 70
+        return c - 55
+    return 0 - 1
+
+func w3Hex2(s string, p int) int
+    be a = w3Hv(ord(s, p))
+    be c = w3Hv(ord(s, p + 1))
+    if a < 0 or c < 0
+        return 0 - 1
+    return a * 16 + c
+
+func w3Color(fn string, s string) int
+    if s == "red"
+        return w3Rgb(230, 41, 55)
+    if s == "green"
+        return w3Rgb(0, 228, 48)
+    if s == "blue"
+        return w3Rgb(0, 121, 241)
+    if s == "white"
+        return w3Rgb(255, 255, 255)
+    if s == "black"
+        return w3Rgb(0, 0, 0)
+    if s == "gray"
+        return w3Rgb(130, 130, 130)
+    if s == "darkgray"
+        return w3Rgb(80, 80, 80)
+    if s == "yellow"
+        return w3Rgb(253, 249, 0)
+    if s == "orange"
+        return w3Rgb(255, 161, 0)
+    if s == "purple"
+        return w3Rgb(200, 122, 255)
+    if s == "pink"
+        return w3Rgb(255, 109, 194)
+    if s == "brown"
+        return w3Rgb(127, 106, 79)
+    if s == "skyblue"
+        return w3Rgb(102, 191, 255)
+    if len(s) >= 7 and ord(s, 0) == 35
+        be r = w3Hex2(s, 1)
+        be g = w3Hex2(s, 3)
+        be bl = w3Hex2(s, 5)
+        be al = 255
+        if len(s) == 9
+            be al = w3Hex2(s, 7)
+        if r >= 0 and g >= 0 and bl >= 0 and al >= 0 and (len(s) == 7 or len(s) == 9)
+            return r + g * 256 + bl * 65536 + al * 16777216
+    _lempar(fn + ": color " + s + " not recognized (example: \"red\" or \"#ff8800\")")
+    return 0
+
+func w3Cr(c int) int
+    return c % 16777216
+
+func w3Alfa(c int) int
+    return idiv(c, 16777216)
+
+func w3Redup(c int, f double) int
+    be r = int((c % 256) * f)
+    be g = int((idiv(c, 256) % 256) * f)
+    be bl = int((idiv(c, 65536) % 256) * f)
+    return r + g * 256 + bl * 65536 + (idiv(c, 16777216) * 16777216)
+
+# ---------------------------------------------------------------- matriks 4x4 (baris, double)
+func w3Ident(m int) int
+    for k in range(16)
+        sD(m, k, 0.0)
+    sD(m, 0, 1.0)
+    sD(m, 5, 1.0)
+    sD(m, 10, 1.0)
+    sD(m, 15, 1.0)
+    return 0
+
+# m = m * n   (n: 16 double di tmp)
+func w3Kali(m int, n int) int
+    be tmp = peek64(w3B(), 208) + 1024
+    for i in range(4)
+        for j in range(4)
+            be s = 0.0
+            for k in range(4)
+                be s = s + gD(m, i * 4 + k) * gD(n, k * 4 + j)
+            sD(tmp, i * 4 + j, s)
+    for k in range(16)
+        sD(m, k, gD(tmp, k))
+    return 0
+
+func push3d() int
+    be b = w3Dalam("push3d")
+    be d = peek64(b, 64)
+    if d >= 16
+        _lempar("push3d: too deep (maximum 16 levels)")
+    be st = peek64(b, 72)
+    be m = peek64(b, 80)
+    for k in range(16)
+        sD(st, d * 16 + k, gD(m, k))
+    poke64(b, 64, d + 1)
+    return 0
+
+func pop3d() int
+    be b = w3Dalam("pop3d")
+    be d = peek64(b, 64)
+    if d == 0
+        _lempar("pop3d without push3d")
+    be st = peek64(b, 72)
+    be m = peek64(b, 80)
+    for k in range(16)
+        sD(m, k, gD(st, (d - 1) * 16 + k))
+    poke64(b, 64, d - 1)
+    return 0
+
+func move3d(x double, y double, z double) int
+    be b = w3Dalam("move3d")
+    if peek64(b, 64) == 0
+        _lempar("move3d: call push3d() first")
+    be n = peek64(b, 208) + 1536
+    w3Ident(n)
+    sD(n, 3, x)
+    sD(n, 7, y)
+    sD(n, 11, z)
+    w3Kali(peek64(b, 80), n)
+    return 0
+
+func turn3d(sumbu string, derajat double) int
+    be b = w3Dalam("turn3d")
+    if peek64(b, 64) == 0
+        _lempar("turn3d: call push3d() first")
+    be n = peek64(b, 208) + 1536
+    w3Ident(n)
+    be a = derajat * 3.141592653589793 / 180.0
+    be c = cos(a)
+    be s = sin(a)
+    if sumbu == "x"
+        sD(n, 5, c)
+        sD(n, 6, 0.0 - s)
+        sD(n, 9, s)
+        sD(n, 10, c)
+    else if sumbu == "y"
+        sD(n, 0, c)
+        sD(n, 2, s)
+        sD(n, 8, 0.0 - s)
+        sD(n, 10, c)
+    else if sumbu == "z"
+        sD(n, 0, c)
+        sD(n, 1, 0.0 - s)
+        sD(n, 4, s)
+        sD(n, 5, c)
+    else
+        _lempar("turn3d: the axis must be \"x\", \"y\", or \"z\"")
+    w3Kali(peek64(b, 80), n)
+    return 0
+
+# ---------------------------------------------------------------- kamera
+func w3Basis(b int) int
+    be c = peek64(b, 88)
+    be fx = gD(c, 16) - gD(c, 0)
+    be fy = gD(c, 17) - gD(c, 1)
+    be fz = gD(c, 18) - gD(c, 2)
+    be fl = sqrt(fx * fx + fy * fy + fz * fz)
+    if fl < 0.000001
+        be fl = 1.0
+        be fz = 0.0 - 1.0
+    be fx = fx / fl
+    be fy = fy / fl
+    be fz = fz / fl
+    be rx = 0.0 - fz
+    be rz = fx
+    be rl = sqrt(rx * rx + rz * rz)
+    if rl < 0.000001
+        be rx = 1.0
+        be rz = 0.0
+        be rl = 1.0
+    be rx = rx / rl
+    be rz = rz / rl
+    be ux = 0.0 - rz * fy
+    be uy = rz * fx - rx * fz
+    be uz = rx * fy
+    sD(c, 3, rx)
+    sD(c, 4, 0.0)
+    sD(c, 5, rz)
+    sD(c, 6, ux)
+    sD(c, 7, uy)
+    sD(c, 8, uz)
+    sD(c, 9, fx)
+    sD(c, 10, fy)
+    sD(c, 11, fz)
+    be w = peek64(b, 24)
+    be h = peek64(b, 32)
+    if w == 0
+        be w = 800
+    if h == 0
+        be h = 600
+    sD(c, 12, tan(22.5 * 3.141592653589793 / 180.0))
+    sD(c, 13, w / h)
+    sD(c, 14, w / 2.0)
+    sD(c, 15, h / 2.0)
+    return 0
+
+func camera3d(x double, y double, z double, lx double, ly double, lz double) int
+    be b = w3Aman("camera3d")
+    be c = peek64(b, 88)
+    sD(c, 0, x)
+    sD(c, 1, y)
+    sD(c, 2, z)
+    sD(c, 16, lx)
+    sD(c, 17, ly)
+    sD(c, 18, lz)
+    w3Basis(b)
+    return 0
+
+# titik dunia (x,y,z) lewat matriks model -> koordinat kamera di out[k*3..]
+func w3Cam(b int, x double, y double, z double, out int, k int) int
+    be m = peek64(b, 80)
+    be c = peek64(b, 88)
+    be wx = gD(m, 0) * x + gD(m, 1) * y + gD(m, 2) * z + gD(m, 3)
+    be wy = gD(m, 4) * x + gD(m, 5) * y + gD(m, 6) * z + gD(m, 7)
+    be wz = gD(m, 8) * x + gD(m, 9) * y + gD(m, 10) * z + gD(m, 11)
+    be dx = wx - gD(c, 0)
+    be dy = wy - gD(c, 1)
+    be dz = wz - gD(c, 2)
+    sD(out, k * 3, dx * gD(c, 3) + dy * gD(c, 4) + dz * gD(c, 5))
+    sD(out, k * 3 + 1, dx * gD(c, 6) + dy * gD(c, 7) + dz * gD(c, 8))
+    sD(out, k * 3 + 2, dx * gD(c, 9) + dy * gD(c, 10) + dz * gD(c, 11))
+    return 0
+
+func w3Sx(c int, x double, z double) int
+    return int(gD(c, 14) + x / (z * gD(c, 12) * gD(c, 13)) * gD(c, 14))
+
+func w3Sy(c int, y double, z double) int
+    return int(gD(c, 15) - y / (z * gD(c, 12)) * gD(c, 15))
+
+# ---------------------------------------------------------------- penampung poligon
+func w3Rec(b int) int
+    be n = peek64(b, 112)
+    if n >= 8000
+        return 0 - 1
+    poke64(b, 112, n + 1)
+    return peek64(b, 96) + n * 384
+
+# poligon n titik dari buf (koordinat kamera), dipotong di bidang dekat, kunci urutan = key (kalau key < 0: rata-rata kedalaman)
+func w3Poli(b int, n int, buf int, warna int, key int) int
+    if w3Alfa(warna) == 0
+        return 0
+    be cl = peek64(b, 272)
+    be m = 0
+    be dekat = 0.05
+    for i in range(n)
+        be j = i + 1
+        if j == n
+            be j = 0
+        be az = gD(buf, i * 3 + 2)
+        be bz = gD(buf, j * 3 + 2)
+        be ain = az >= dekat
+        be bdi = bz >= dekat
+        if ain
+            sD(cl, m * 3, gD(buf, i * 3))
+            sD(cl, m * 3 + 1, gD(buf, i * 3 + 1))
+            sD(cl, m * 3 + 2, az)
+            be m += 1
+        if ain != bdi
+            be t = (dekat - az) / (bz - az)
+            sD(cl, m * 3, gD(buf, i * 3) + t * (gD(buf, j * 3) - gD(buf, i * 3)))
+            sD(cl, m * 3 + 1, gD(buf, i * 3 + 1) + t * (gD(buf, j * 3 + 1) - gD(buf, i * 3 + 1)))
+            sD(cl, m * 3 + 2, dekat)
+            be m += 1
+    if m < 3 or m > 20
+        return 0
+    be rec = w3Rec(b)
+    if rec < 0
+        return 0
+    be c = peek64(b, 88)
+    be sz = 0.0
+    for i in range(m)
+        poke64(rec, 32 + i * 16, w3Sx(c, gD(cl, i * 3), gD(cl, i * 3 + 2)))
+        poke64(rec, 40 + i * 16, w3Sy(c, gD(cl, i * 3 + 1), gD(cl, i * 3 + 2)))
+        be sz = sz + gD(cl, i * 3 + 2)
+    poke64(rec, 0, 0)
+    if key >= 0
+        poke64(rec, 8, key)
+    else
+        poke64(rec, 8, int(sz / m * 100))
+    poke64(rec, 16, w3Cr(warna))
+    poke64(rec, 24, m)
+    return 1
+
+# garis antara dua titik kamera
+func w3Garis(b int, buf int, i int, j int, warna int, key int) int
+    if w3Alfa(warna) == 0
+        return 0
+    be ax = gD(buf, i * 3)
+    be ay = gD(buf, i * 3 + 1)
+    be az = gD(buf, i * 3 + 2)
+    be bx = gD(buf, j * 3)
+    be by = gD(buf, j * 3 + 1)
+    be bz = gD(buf, j * 3 + 2)
+    be dekat = 0.05
+    if az < dekat and bz < dekat
+        return 0
+    if az < dekat
+        be t = (dekat - az) / (bz - az)
+        be ax = ax + t * (bx - ax)
+        be ay = ay + t * (by - ay)
+        be az = dekat
+    else if bz < dekat
+        be t = (dekat - bz) / (az - bz)
+        be bx = bx + t * (ax - bx)
+        be by = by + t * (ay - by)
+        be bz = dekat
+    be rec = w3Rec(b)
+    if rec < 0
+        return 0
+    be c = peek64(b, 88)
+    poke64(rec, 0, 1)
+    if key >= 0
+        poke64(rec, 8, key)
+    else
+        poke64(rec, 8, int(min(az, bz) * 100) - 50)
+    poke64(rec, 16, w3Cr(warna))
+    poke64(rec, 24, 2)
+    poke64(rec, 32, w3Sx(c, ax, az))
+    poke64(rec, 40, w3Sy(c, ay, az))
+    poke64(rec, 48, w3Sx(c, bx, bz))
+    poke64(rec, 56, w3Sy(c, by, bz))
+    return 1
+
+# muka depan? (koordinat kamera kiri-tangan: normal hitung dikali kebalik)
+func w3Depan(buf int, a int, bb int, c int) int
+    be ax = gD(buf, a * 3)
+    be ay = gD(buf, a * 3 + 1)
+    be az = gD(buf, a * 3 + 2)
+    if az < 0.05 or gD(buf, bb * 3 + 2) < 0.05 or gD(buf, c * 3 + 2) < 0.05
+        return 1
+    be e1x = gD(buf, bb * 3) - ax
+    be e1y = gD(buf, bb * 3 + 1) - ay
+    be e1z = gD(buf, bb * 3 + 2) - az
+    be e2x = gD(buf, c * 3) - ax
+    be e2y = gD(buf, c * 3 + 1) - ay
+    be e2z = gD(buf, c * 3 + 2) - az
+    be nx = e1y * e2z - e1z * e2y
+    be ny = e1z * e2x - e1x * e2z
+    be nz = e1x * e2y - e1y * e2x
+    if nx * ax + ny * ay + nz * az > 0.0
+        return 1
+    return 0
+
+# ---------------------------------------------------------------- bangun datar dan ruang
+func cube(x double, y double, z double, w double, h double, d double, warna string) int
+    be b = w3Dalam("cube")
+    be c = w3Color("cube", warna)
+    w3Kubus(b, x, y, z, w, h, d, c, 0)
+    return 0
+
+func cubeWire(x double, y double, z double, w double, h double, d double, warna string) int
+    be b = w3Dalam("cubeWire")
+    be c = w3Color("cubeWire", warna)
+    w3Kubus(b, x, y, z, w, h, d, c, 1)
+    return 0
+
+func w3Kubus(b int, x double, y double, z double, w double, h double, d double, c int, kawat int) int
+    be cb = peek64(b, 264)
+    be hw = w / 2.0
+    be hh = h / 2.0
+    be hd = d / 2.0
+    for i in range(8)
+        be px = x - hw
+        be py = y - hh
+        be pz = z - hd
+        if i % 2 == 1
+            be px = x + hw
+        if idiv(i, 2) % 2 == 1
+            be py = y + hh
+        if idiv(i, 4) == 1
+            be pz = z + hd
+        w3Cam(b, px, py, pz, cb, i)
+    # muka: depan, belakang, atas, bawah, kanan, kiri (indeks titik dikemas sebagai digit)
+    be vis = peek64(b, 208) + 1700
+    for f in range(6)
+        be ia = w3Dig(416050, f, 6)
+        be ib = w3Dig(507114, f, 6)
+        be ic = w3Dig(723536, f, 6)
+        be id = w3Dig(632472, f, 6)
+        poke64(vis, f * 8, w3Depan(cb, ia, ib, ic))
+        if kawat == 0 and peek64(vis, f * 8) == 1
+            be q = peek64(b, 272) + 1024
+            for k in range(4)
+                be idx = ia
+                if k == 1
+                    be idx = ib
+                if k == 2
+                    be idx = ic
+                if k == 3
+                    be idx = id
+                sD(q, k * 3, gD(cb, idx * 3))
+                sD(q, k * 3 + 1, gD(cb, idx * 3 + 1))
+                sD(q, k * 3 + 2, gD(cb, idx * 3 + 2))
+            w3Poli(b, 4, q, w3Redup(c, w3Fk(f)), 0 - 1)
+    if kawat == 1
+        for e in range(12)
+            if peek64(vis, w3Dig(11113322, e, 12) * 8) == 1 or peek64(vis, w3Dig(342535245454, e, 12) * 8) == 1
+                w3Garis(b, cb, w3Dig(457610230123, e, 12), w3Dig(576402314567, e, 12), c, 0 - 1)
+    return 0
+
+# digit ke-i (dari kiri) dari bilangan n digit
+func w3Dig(kode int, i int, n int) int
+    be p = 1
+    for k in range(n - 1 - i)
+        be p = p * 10
+    return idiv(kode, p) % 10
+
+func w3Fk(f int) double
+    if f == 0
+        return 0.88
+    if f == 1
+        return 0.74
+    if f == 2
+        return 1.0
+    if f == 3
+        return 0.6
+    if f == 4
+        return 0.8
+    return 0.7
+func cylinder(x double, y double, z double, jariAtas double, jariBawah double, tinggi double, warna string) int
+    be b = w3Dalam("cylinder")
+    be c = w3Color("cylinder", warna)
+    be cb = peek64(b, 264)
+    for k in range(16)
+        be a = k * 3.141592653589793 / 8.0
+        w3Cam(b, x + jariBawah * cos(a), y, z + jariBawah * sin(a), cb, k)
+        w3Cam(b, x + jariAtas * cos(a), y + tinggi, z + jariAtas * sin(a), cb, 16 + k)
+    w3Cam(b, x, y + tinggi / 2.0, z, cb, 40)
+    be key = int(gD(cb, 40 * 3 + 2) * 100)
+    be q = peek64(b, 272) + 1024
+    for k in range(16)
+        be k2 = k + 1
+        if k2 == 16
+            be k2 = 0
+        for t in range(4)
+            be idx = k
+            if t == 1
+                be idx = k2
+            if t == 2
+                be idx = 16 + k2
+            if t == 3
+                be idx = 16 + k
+            sD(q, t * 3, gD(cb, idx * 3))
+            sD(q, t * 3 + 1, gD(cb, idx * 3 + 1))
+            sD(q, t * 3 + 2, gD(cb, idx * 3 + 2))
+        w3Poli(b, 4, q, c, key)
+    if jariAtas > 0.0
+        for k in range(16)
+            sD(q, k * 3, gD(cb, (16 + k) * 3))
+            sD(q, k * 3 + 1, gD(cb, (16 + k) * 3 + 1))
+            sD(q, k * 3 + 2, gD(cb, (16 + k) * 3 + 2))
+        w3Poli(b, 16, q, c, key)
+    if jariBawah > 0.0
+        for k in range(16)
+            sD(q, k * 3, gD(cb, k * 3))
+            sD(q, k * 3 + 1, gD(cb, k * 3 + 1))
+            sD(q, k * 3 + 2, gD(cb, k * 3 + 2))
+        w3Poli(b, 16, q, c, key)
+    return 0
+
+func sphere(x double, y double, z double, jari double, warna string) int
+    be b = w3Dalam("sphere")
+    be c = w3Color("sphere", warna)
+    if w3Alfa(c) == 0
+        return 0
+    be cb = peek64(b, 264)
+    w3Cam(b, x, y, z, cb, 0)
+    be cz = gD(cb, 2)
+    if cz < 0.05
+        return 0
+    be rec = w3Rec(b)
+    if rec < 0
+        return 0
+    be cm = peek64(b, 88)
+    poke64(rec, 0, 2)
+    poke64(rec, 8, int(cz * 100))
+    poke64(rec, 16, w3Cr(c))
+    poke64(rec, 24, 1)
+    poke64(rec, 32, w3Sx(cm, gD(cb, 0), cz))
+    poke64(rec, 40, w3Sy(cm, gD(cb, 1), cz))
+    poke64(rec, 48, int(jari * gD(cm, 15) / (cz * gD(cm, 12))))
+    return 0
+
+func plane(x double, y double, z double, lebar double, dalam double, warna string) int
+    be b = w3Dalam("plane")
+    be c = w3Color("plane", warna)
+    be cb = peek64(b, 264)
+    be hx = lebar / 2.0
+    be hz = dalam / 2.0
+    w3Cam(b, x - hx, y, z - hz, cb, 0)
+    w3Cam(b, x + hx, y, z - hz, cb, 1)
+    w3Cam(b, x + hx, y, z + hz, cb, 2)
+    w3Cam(b, x - hx, y, z + hz, cb, 3)
+    w3Poli(b, 4, cb, c, 100000000000)
+    return 0
+
+func grid(jumlah double, jarak double) int
+    be b = w3Dalam("grid")
+    be cb = peek64(b, 264)
+    be half = idiv(int(jumlah), 2)
+    be hs = half * jarak
+    for i in range(0 - half, half + 1)
+        be abu = w3Rgb(190, 190, 190)
+        if i == 0
+            be abu = w3Rgb(127, 127, 127)
+        w3Cam(b, i * jarak, 0.0, 0.0 - hs, cb, 0)
+        w3Cam(b, i * jarak, 0.0, hs, cb, 1)
+        w3Garis(b, cb, 0, 1, abu, 99999999000)
+        w3Cam(b, 0.0 - hs, 0.0, i * jarak, cb, 0)
+        w3Cam(b, hs, 0.0, i * jarak, cb, 1)
+        w3Garis(b, cb, 0, 1, abu, 99999999000)
+    return 0
+
+# ---------------------------------------------------------------- 2D (digambar sesudah semua benda 3D)
+func w3Op(b int) int
+    be n = peek64(b, 184)
+    if n >= 2000
+        return 0 - 1
+    poke64(b, 184, n + 1)
+    return peek64(b, 104) + n * 64
+
+func text2d(teks string, x double, y double, ukuran double, warna string) int
+    be b = w3Dalam("text2d")
+    be c = w3Color("text2d", warna)
+    if peek64(b, 64) != 0
+        _lempar("text2d: write 2D after pop3d()")
+    be o = w3Op(b)
+    if o < 0
+        return 0
+    poke64(o, 0, 2)
+    poke64(o, 8, int(x))
+    poke64(o, 16, int(y))
+    poke64(o, 24, int(ukuran))
+    poke64(o, 32, c)
+    poke64(o, 40, asInt(teks))
+    return 0
+
+func rect2d(x double, y double, w double, h double, warna string) int
+    be b = w3Dalam("rect2d")
+    be c = w3Color("rect2d", warna)
+    if peek64(b, 64) != 0
+        _lempar("rect2d: write 2D after pop3d()")
+    be o = w3Op(b)
+    if o < 0
+        return 0
+    poke64(o, 0, 1)
+    poke64(o, 8, int(x))
+    poke64(o, 16, int(y))
+    poke64(o, 24, int(w))
+    poke64(o, 32, int(h))
+    poke64(o, 40, c)
+    return 0
+
+func rectGrad2d(x double, y double, w double, h double, atas string, bawah string) int
+    be b = w3Dalam("rectGrad2d")
+    be c1 = w3Color("rectGrad2d", atas)
+    be c2 = w3Color("rectGrad2d", bawah)
+    be o = w3Op(b)
+    if o < 0
+        return 0
+    poke64(o, 0, 3)
+    poke64(o, 8, int(x))
+    poke64(o, 16, int(y))
+    poke64(o, 24, int(w))
+    poke64(o, 32, int(h))
+    poke64(o, 40, c1)
+    poke64(o, 48, c2)
+    return 0
+
+func textWidth2d(teks string, ukuran double) int
+    be b = w3Aman("textWidth2d")
+    be dc = peek64(b, 8)
+    be f = w3Font(int(ukuran))
+    be old = callp(w3G("SelectObject"), dc, f)
+    be wt = w3Lebar(teks)
+    be sz = peek64(b, 248)
+    callp(w3G("GetTextExtentPoint32W"), dc, wt, w3LebarN(teks), sz)
+    free(wt)
+    callp(w3G("SelectObject"), dc, old)
+    return peek(sz, 0, "int")
+
+func w3Isi(dc int, x int, y int, w int, h int, warna int) int
+    be b = w3B()
+    be r = peek64(b, 248)
+    poke(r, 0, "int", x)
+    poke(r, 4, "int", y)
+    poke(r, 8, "int", x + w)
+    poke(r, 12, "int", y + h)
+    be br = callp(w3G("CreateSolidBrush"), w3Cr(warna))
+    callp(w3U("FillRect"), dc, r, br)
+    callp(w3G("DeleteObject"), br)
+    return 0
+
+func w3Grad(dc int, x int, y int, w int, h int, c1 int, c2 int) int
+    be r1 = c1 % 256
+    be g1 = idiv(c1, 256) % 256
+    be b1 = idiv(c1, 65536) % 256
+    be r2 = c2 % 256
+    be g2 = idiv(c2, 256) % 256
+    be b2 = idiv(c2, 65536) % 256
+    be yy = 0
+    loop yy < h
+        be hh = min(2, h - yy)
+        be t = (yy + 1.0) / h
+        be rr = int(r1 + (r2 - r1) * t)
+        be gg = int(g1 + (g2 - g1) * t)
+        be bb = int(b1 + (b2 - b1) * t)
+        w3Isi(dc, x, y + yy, w, hh, rr + gg * 256 + bb * 65536)
+        be yy += 2
+    return 0
+
+# ---------------------------------------------------------------- jendela
+func w3Proc(h int, m int, w int, l int) int
+    be b = w3B()
+    if m == 16 or m == 2
+        poke64(b, 40, 1)
+        return 0
+    if m == 20
+        return 1
+    if m == 15
+        be ps = peek64(b, 280)
+        be hdc = callp(w3U("BeginPaint"), h, ps)
+        callp(w3G("BitBlt"), hdc, 0, 0, peek64(b, 24), peek64(b, 32), peek64(b, 8), 0, 0, 13369376)
+        callp(w3U("EndPaint"), h, ps)
+        return 0
+    if m == 258
+        be cc = w % 65536
+        if cc >= 32 and cc != 127
+            be s = asString(peek64(b, 144))
+            if cc < 128
+                be s = s + chr(cc)
+            else if cc < 2048
+                be s = s + chr(192 + idiv(cc, 64)) + chr(128 + cc % 64)
+            else
+                be s = s + chr(224 + idiv(cc, 4096)) + chr(128 + idiv(cc, 64) % 64) + chr(128 + cc % 64)
+            poke64(b, 144, asInt(s))
+        return 0
+    if m == 513
+        poke64(b, 152, 1)
+    if m == 522
+        be dl = idiv(w % 4294967296, 65536) % 65536
+        if dl >= 32768
+            be dl = dl - 65536
+        poke64(b, 160, peek64(b, 160) + dl)
+    return callp(w3U("DefWindowProcW"), h, m, w, l)
+
+func w3Pompa() int
+    be b = w3B()
+    be msg = peek64(b, 200)
+    loop callp(w3U("PeekMessageW"), msg, 0, 0, 0, 1) % 4294967296 != 0
+        callp(w3U("TranslateMessage"), msg)
+        callp(w3U("DispatchMessageW"), msg)
+    return 0
+
+func open3d(judul string, lebar double, tinggi double) int
+    be b = w3B()
+    if peek64(b, 48) != 0
+        _lempar("open3d: the 3D window is already open")
+    be w = int(lebar)
+    be h = int(tinggi)
+    be hinst = callp(w3K("GetModuleHandleW"), 0)
+    be cls = w3Lebar("Nrx3DWindow")
+    be wc = alloc(96)
+    poke64(wc, 0, 80)
+    poke64(wc, 8, _callback("w3Proc"))
+    poke64(wc, 24, hinst)
+    poke64(wc, 40, callp(w3U("LoadCursorW"), 0, 32512))
+    poke64(wc, 64, cls)
+    callp(w3U("RegisterClassExW"), wc)
+    be r = peek64(b, 248)
+    poke(r, 0, "int", 0)
+    poke(r, 4, "int", 0)
+    poke(r, 8, "int", w)
+    poke(r, 12, "int", h)
+    callp(w3U("AdjustWindowRect"), r, 13238272, 0)
+    be ow = peek(r, 8, "int") - peek(r, 0, "int")
+    be oh = peek(r, 12, "int") - peek(r, 4, "int")
+    be wt = w3Lebar(judul)
+    be hw = callp(w3U("CreateWindowExW"), 0, cls, wt, 13238272, 2147483648, 2147483648, ow, oh, 0, 0, hinst, 0)
+    free(wt)
+    if hw == 0
+        _lempar("open3d: the 3D window cannot be opened")
+    poke64(b, 0, hw)
+    poke64(b, 24, w)
+    poke64(b, 32, h)
+    be env = alloc(16)
+    poke64(env, 0, 0)
+    callp(w3K("GetEnvironmentVariableA"), cstr("NRX3D_HIDDEN"), env, 15)
+    be sembunyi = peek(env, 0, "int8") == 49
+    poke64(b, 240, 0)
+    if sembunyi
+        poke64(b, 240, 1)
+    else
+        callp(w3U("ShowWindow"), hw, 5)
+        callp(w3U("SetForegroundWindow"), hw)
+        callp(w3U("UpdateWindow"), hw)
+    free(env)
+    be wdc = callp(w3U("GetDC"), hw)
+    be dc = callp(w3G("CreateCompatibleDC"), wdc)
+    be bmp = callp(w3G("CreateCompatibleBitmap"), wdc, w, h)
+    poke64(b, 232, callp(w3G("SelectObject"), dc, bmp))
+    callp(w3U("ReleaseDC"), hw, wdc)
+    callp(w3G("SetBkMode"), dc, 1)
+    poke64(b, 8, dc)
+    poke64(b, 16, bmp)
+    w3Isi(dc, 0, 0, w, h, 4278190080)
+    poke64(b, 48, 1)
+    poke64(b, 40, 0)
+    poke64(b, 128, w3Now())
+    w3Basis(b)
+    return 0
+
+func close3d() int
+    be b = w3B()
+    if peek64(b, 48) != 0
+        callp(w3U("DestroyWindow"), peek64(b, 0))
+        callp(w3G("DeleteDC"), peek64(b, 8))
+        callp(w3G("DeleteObject"), peek64(b, 16))
+        w3Pompa()
+    poke64(b, 48, 0)
+    poke64(b, 56, 0)
+    poke64(b, 64, 0)
+    poke64(b, 0, 0)
+    return 0
+
+func w3Vk(nama string) int
+    if len(nama) == 1
+        be c = ord(nama, 0)
+        if c >= 97 and c <= 122
+            return c - 32
+        if c >= 65 and c <= 90
+            return c
+        if c >= 48 and c <= 57
+            return c
+    if nama == "space"
+        return 32
+    if nama == "enter"
+        return 13
+    if nama == "escape"
+        return 27
+    if nama == "shift"
+        return 16
+    if nama == "up"
+        return 38
+    if nama == "down"
+        return 40
+    if nama == "left"
+        return 37
+    if nama == "right"
+        return 39
+    if nama == "backspace"
+        return 8
+    if nama == "tab"
+        return 9
+    if nama == "ctrl"
+        return 17
+    _lempar("key3d: key " + nama + " not recognized (letters, digits, space, enter, escape, shift, up, down, left, right)")
+    return 0
+
+func w3Fokus(b int) bool
+    return callp(w3U("GetForegroundWindow")) == peek64(b, 0)
+
+func w3Turun(b int, vk int) bool
+    if not w3Fokus(b)
+        return false
+    return callp(w3U("GetAsyncKeyState"), vk) % 65536 >= 32768
+
+func running3d() bool
+    be b = w3B()
+    if peek64(b, 48) == 0
+        return false
+    w3Pompa()
+    be ek = peek64(b, 168)
+    if ek != 0 and w3Turun(b, ek)
+        poke64(b, 40, 1)
+    return peek64(b, 40) == 0
+
+func key3d(nama string) bool
+    be b = w3Aman("key3d")
+    return w3Turun(b, w3Vk(nama))
+
+func pressed3d(nama string) bool
+    be b = w3Aman("pressed3d")
+    be vk = w3Vk(nama)
+    be st = peek64(b, 176)
+    if w3Turun(b, vk)
+        be now = w3Now()
+        if peek8(st, vk) == 0
+            poke8(st, vk, 1)
+            poke64(st, 256 + vk * 8, now + 400000)
+            return true
+        if now >= peek64(st, 256 + vk * 8)
+            poke64(st, 256 + vk * 8, now + 40000)
+            return true
+        return false
+    poke8(st, vk, 0)
+    return false
+
+func exitKey3d(nama string) int
+    be b = w3Aman("exitKey3d")
+    if nama == ""
+        poke64(b, 168, 0)
+    else
+        poke64(b, 168, w3Vk(nama))
+    return 0
+
+func fps3d(n double) int
+    be b = w3Aman("fps3d")
+    poke64(b, 120, max(1, int(n)))
+    return 0
+
+func frameTime() double
+    be b = w3Aman("frameTime")
+    return peek(b, 136, "double")
+
+func w3Tetikus(b int) int
+    be pt = peek64(b, 248)
+    callp(w3U("GetCursorPos"), pt)
+    callp(w3U("ScreenToClient"), peek64(b, 0), pt)
+    return pt
+
+func mouse3d() list int
+    be b = w3Aman("mouse3d")
+    be pt = w3Tetikus(b)
+    be r list int
+    add(r, peek(pt, 0, "int"))
+    add(r, peek(pt, 4, "int"))
+    return r
+
+func click3d() bool
+    be b = w3Aman("click3d")
+    return peek64(b, 152) != 0
+
+func wheel3d() double
+    be b = w3Aman("wheel3d")
+    return peek64(b, 160) / 120.0
+
+func typed3d() string
+    be b = w3Aman("typed3d")
+    be s = asString(peek64(b, 144))
+    be kosong = ""
+    poke64(b, 144, asInt(kosong))
+    return s
+
+func ground3d() list double
+    be b = w3Aman("ground3d")
+    be pt = w3Tetikus(b)
+    be c = peek64(b, 88)
+    w3Basis(b)
+    be nx = (peek(pt, 0, "int") - gD(c, 14)) / gD(c, 14)
+    be ny = (gD(c, 15) - peek(pt, 4, "int")) / gD(c, 15)
+    be th = gD(c, 12)
+    be dx = gD(c, 9) + nx * th * gD(c, 13) * gD(c, 3) + ny * th * gD(c, 6)
+    be dy = gD(c, 10) + nx * th * gD(c, 13) * gD(c, 4) + ny * th * gD(c, 7)
+    be dz = gD(c, 11) + nx * th * gD(c, 13) * gD(c, 5) + ny * th * gD(c, 8)
+    be r list double
+    if dy < 0.0 - 0.000001
+        be t = 0.0 - gD(c, 1) / dy
+        add(r, gD(c, 0) + dx * t)
+        add(r, gD(c, 2) + dz * t)
+    return r
+
+func toScreen3d(x double, y double, z double) list int
+    be b = w3Aman("toScreen3d")
+    be c = peek64(b, 88)
+    w3Basis(b)
+    be dx = x - gD(c, 0)
+    be dy = y - gD(c, 1)
+    be dz = z - gD(c, 2)
+    be cx = dx * gD(c, 3) + dy * gD(c, 4) + dz * gD(c, 5)
+    be cy = dx * gD(c, 6) + dy * gD(c, 7) + dz * gD(c, 8)
+    be cz = dx * gD(c, 9) + dy * gD(c, 10) + dz * gD(c, 11)
+    be r list int
+    if cz < 0.05
+        be cz = 0.05
+    add(r, w3Sx(c, cx, cz))
+    add(r, w3Sy(c, cy, cz))
+    return r
+
+# ---------------------------------------------------------------- clipboard
+func clipboard3d_a0() string
+    be b = w3Aman("clipboard3d")
+    be hasil = ""
+    if callp(w3U("OpenClipboard"), peek64(b, 0)) % 4294967296 != 0
+        be h = callp(w3U("GetClipboardData"), 13)
+        if h != 0
+            be p = callp(w3K("GlobalLock"), h)
+            if p != 0
+                be n = callp(w3K("WideCharToMultiByte"), 65001, 0, p, 4294967295, 0, 0, 0, 0) % 4294967296
+                if n > 1
+                    be buf = alloc(n + 8)
+                    callp(w3K("WideCharToMultiByte"), 65001, 0, p, 4294967295, buf, n, 0, 0)
+                    be hasil = fromC(buf)
+                    free(buf)
+                callp(w3K("GlobalUnlock"), h)
+        callp(w3U("CloseClipboard"))
+    return hasil
+
+func clipboard3d_a1(teks string) string
+    be b = w3Aman("clipboard3d")
+    if callp(w3U("OpenClipboard"), peek64(b, 0)) % 4294967296 != 0
+        callp(w3U("EmptyClipboard"))
+        be wt = w3Lebar(teks)
+        be nb = (w3LebarN(teks) + 1) * 2
+        be hm = callp(w3K("GlobalAlloc"), 2, nb)
+        if hm != 0
+            be p = callp(w3K("GlobalLock"), hm)
+            for k in range(nb)
+                poke8(p, k, peek(wt, k, "int8") % 256)
+            callp(w3K("GlobalUnlock"), hm)
+            callp(w3U("SetClipboardData"), 13, hm)
+        free(wt)
+        callp(w3U("CloseClipboard"))
+    return ""
+
+# ---------------------------------------------------------------- screenshot (PNG lewat GDI+)
+func screenshot3d(berkas string) int
+    be b = w3Aman("screenshot3d")
+    be gp = "gdiplus.dll"
+    if peek64(b, 192) == 0
+        be inp = alloc(32)
+        poke(inp, 0, "int", 1)
+        be tk = alloc(16)
+        callp(dllFn(gp, "GdiplusStartup"), tk, inp, 0)
+        poke64(b, 192, 1)
+    be dc = peek64(b, 8)
+    callp(w3G("SelectObject"), dc, peek64(b, 232))
+    be pb = alloc(16)
+    callp(dllFn(gp, "GdipCreateBitmapFromHBITMAP"), peek64(b, 16), 0, pb)
+    be clsid = alloc(16)
+    be bytes = split("06 F4 7C 55 04 1A D3 11 9A 73 00 00 F8 1E F3 2E")
+    for k in range(16)
+        poke8(clsid, k, w3Hex2(bytes[k], 0))
+    be wp = w3Lebar(berkas)
+    callp(dllFn(gp, "GdipSaveImageToFile"), peek64(pb, 0), wp, clsid, 0)
+    free(wp)
+    callp(dllFn(gp, "GdipDisposeImage"), peek64(pb, 0))
+    callp(w3G("SelectObject"), dc, peek64(b, 16))
+    free(pb)
+    free(clsid)
+    return 0
+
+# ---------------------------------------------------------------- frame
+func begin3d_a1(warna string) int
+    return w3Mulai(warna, "")
+
+func begin3d_a2(atas string, bawah string) int
+    return w3Mulai(atas, bawah)
+
+func w3Mulai(atas string, bawah string) int
+    be b = w3Aman("begin3d")
+    if peek64(b, 56) != 0
+        _lempar("begin3d: the previous frame has not been closed with end3d()")
+    be c1 = w3Color("begin3d", atas)
+    be dc = peek64(b, 8)
+    w3Isi(dc, 0, 0, peek64(b, 24), peek64(b, 32), c1)
+    if bawah != ""
+        w3Grad(dc, 0, 0, peek64(b, 24), peek64(b, 32), c1, w3Color("begin3d", bawah))
+    poke64(b, 112, 0)
+    poke64(b, 184, 0)
+    poke64(b, 64, 0)
+    w3Ident(peek64(b, 80))
+    w3Basis(b)
+    poke64(b, 56, 1)
+    return 0
+
+# urut naik kunci poligon (merge sort bawah-atas pada memori mentah); hasil di alamat yang dikembalikan
+func w3Urut(b int, n int) int
+    be a = peek64(b, 288)
+    be bb = peek64(b, 296)
+    be w = 1
+    loop w < n
+        be i = 0
+        loop i < n
+            be mid = min(i + w, n)
+            be hi = min(i + 2 * w, n)
+            be l = i
+            be r = mid
+            be k = i
+            loop k < hi
+                if l < mid and (r >= hi or peek64(a, l * 8) <= peek64(a, r * 8))
+                    poke64(bb, k * 8, peek64(a, l * 8))
+                    be l += 1
+                else
+                    poke64(bb, k * 8, peek64(a, r * 8))
+                    be r += 1
+                be k += 1
+            be i += 2 * w
+        be tmp = a
+        be a = bb
+        be bb = tmp
+        be w = w * 2
+    return a
+
+func w3Lukis(b int) int
+    be dc = peek64(b, 8)
+    be n = peek64(b, 112)
+    be polys = peek64(b, 96)
+    be ka = peek64(b, 288)
+    for i in range(n)
+        poke64(ka, i * 8, (peek64(polys + i * 384, 8) + 1000) * 8192 + i)
+    be urut = w3Urut(b, n)
+    be pts = peek64(b, 216)
+    be penNol = callp(w3G("GetStockObject"), 8)
+    be brNol = callp(w3G("GetStockObject"), 5)
+    be oldPen = callp(w3G("SelectObject"), dc, penNol)
+    be oldBr = callp(w3G("SelectObject"), dc, brNol)
+    be curBr = 0
+    be curPen = 0
+    be curCol = 0 - 1
+    be curColP = 0 - 1
+    be t = n - 1
+    loop t >= 0
+        be idx = peek64(urut, t * 8) % 8192
+        be rec = polys + idx * 384
+        be jenis = peek64(rec, 0)
+        be col = peek64(rec, 16)
+        if jenis == 1
+            if col != curColP
+                callp(w3G("SelectObject"), dc, penNol)
+                if curPen != 0
+                    callp(w3G("DeleteObject"), curPen)
+                be curPen = callp(w3G("CreatePen"), 0, 1, col)
+                be curColP = col
+            callp(w3G("SelectObject"), dc, curPen)
+            callp(w3G("MoveToEx"), dc, peek64(rec, 32), peek64(rec, 40), 0)
+            callp(w3G("LineTo"), dc, peek64(rec, 48), peek64(rec, 56))
+            callp(w3G("SelectObject"), dc, penNol)
+        else
+            if col != curCol
+                callp(w3G("SelectObject"), dc, brNol)
+                if curBr != 0
+                    callp(w3G("DeleteObject"), curBr)
+                be curBr = callp(w3G("CreateSolidBrush"), col)
+                be curCol = col
+            callp(w3G("SelectObject"), dc, curBr)
+            if jenis == 0
+                be m = peek64(rec, 24)
+                for k in range(m)
+                    poke(pts, k * 8, "int", peek64(rec, 32 + k * 16))
+                    poke(pts, k * 8 + 4, "int", peek64(rec, 40 + k * 16))
+                callp(w3G("Polygon"), dc, pts, m)
+            else
+                be cx = peek64(rec, 32)
+                be cy = peek64(rec, 40)
+                be rr = peek64(rec, 48)
+                callp(w3G("Ellipse"), dc, cx - rr, cy - rr, cx + rr + 1, cy + rr + 1)
+        be t -= 1
+    callp(w3G("SelectObject"), dc, oldPen)
+    callp(w3G("SelectObject"), dc, oldBr)
+    if curPen != 0
+        callp(w3G("DeleteObject"), curPen)
+    if curBr != 0
+        callp(w3G("DeleteObject"), curBr)
+    return 0
+
+func w3Lukis2D(b int) int
+    be dc = peek64(b, 8)
+    be n = peek64(b, 184)
+    be ops = peek64(b, 104)
+    for i in range(n)
+        be o = ops + i * 64
+        be jenis = peek64(o, 0)
+        if jenis == 1
+            if w3Alfa(peek64(o, 40)) > 0
+                w3Isi(dc, peek64(o, 8), peek64(o, 16), peek64(o, 24), peek64(o, 32), peek64(o, 40))
+        else if jenis == 3
+            w3Grad(dc, peek64(o, 8), peek64(o, 16), peek64(o, 24), peek64(o, 32), peek64(o, 40), peek64(o, 48))
+        else
+            be col = peek64(o, 32)
+            if w3Alfa(col) > 0
+                be f = callp(w3G("SelectObject"), dc, w3Font(peek64(o, 24)))
+                be teks = asString(peek64(o, 40))
+                callp(w3G("SetTextColor"), dc, w3Cr(col))
+                be wt = w3Lebar(teks)
+                callp(w3G("TextOutW"), dc, peek64(o, 8), peek64(o, 16), wt, w3LebarN(teks))
+                free(wt)
+                callp(w3G("SelectObject"), dc, f)
+    return 0
+
+func end3d() int
+    be b = w3Aman("end3d")
+    if peek64(b, 56) == 0
+        _lempar("end3d: there is no begin3d(color) yet")
+    if peek64(b, 64) != 0
+        _lempar("end3d: push3d has not been closed with pop3d")
+    w3Lukis(b)
+    w3Lukis2D(b)
+    be hdc = callp(w3U("GetDC"), peek64(b, 0))
+    callp(w3G("BitBlt"), hdc, 0, 0, peek64(b, 24), peek64(b, 32), peek64(b, 8), 0, 0, 13369376)
+    callp(w3U("ReleaseDC"), peek64(b, 0), hdc)
+    poke64(b, 56, 0)
+    poke64(b, 152, 0)
+    poke64(b, 160, 0)
+    w3Pompa()
+    # batas frame per detik
+    be target = idiv(1000000, peek64(b, 120))
+    be now = w3Now()
+    loop now - peek64(b, 128) < target
+        if target - (now - peek64(b, 128)) > 1500
+            callp(w3K("Sleep"), 1)
+        be now = w3Now()
+    poke(b, 136, "double", (now - peek64(b, 128)) / 1000000.0)
+    poke64(b, 128, now)
+    return 0

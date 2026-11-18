@@ -1,0 +1,9 @@
+mulai
+klik tombol
+mouse 100 50 left
+mouse 100 50 release
+mouse 50 20 left
+mouse 50 20 release
+mouse 40 30 move
+key left
+true hijau mangga adc 1

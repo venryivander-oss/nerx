@@ -1,0 +1,64 @@
+# nrx_os.nrx - folder kerja, folder, file, dan menjalankan perintah (lewat fungsi Windows).
+# Pakai: lib nrx_os   (mirip nrx_crudfile: listFiles, readFile, deleteFile ada di sana)
+
+# folder kerja sekarang
+func cwd() string
+    be buf = alloc(1100)
+    if _linux() == 1
+        be n = sysCall(79, buf, 1024, 0, 0, 0, 0) - 1
+    else
+        be n = callp(dllFn("kernel32.dll", "GetCurrentDirectoryA"), 1024, buf)
+    be hasil = fromCn(buf, n)
+    free(buf)
+    return hasil
+
+# pindah folder kerja; false kalau folder tidak ada
+func cd(path string) bool
+    if _linux() == 1
+        return sysCall(80, cstr(path), 0, 0, 0, 0, 0) == 0
+    return callp(dllFn("kernel32.dll", "SetCurrentDirectoryA"), cstr(path)) != 0
+
+func mkdir(path string) bool
+    if _linux() == 1
+        return sysCall(83, cstr(path), 493, 0, 0, 0, 0) == 0
+    return callp(dllFn("kernel32.dll", "CreateDirectoryA"), cstr(path), 0) != 0
+
+# hanya untuk folder kosong
+func rmdir(path string) bool
+    if _linux() == 1
+        return sysCall(84, cstr(path), 0, 0, 0, 0, 0) == 0
+    return callp(dllFn("kernel32.dll", "RemoveDirectoryA"), cstr(path)) != 0
+
+# salin file; menimpa kalau tujuan sudah ada
+func copyFile(dari string, ke string) bool
+    if _linux() == 1
+        if not fileExists(dari)
+            return false
+        writeFile(ke, readFile(dari))
+        return true
+    return callp(dllFn("kernel32.dll", "CopyFileA"), cstr(dari), cstr(ke), 0) != 0
+
+# ganti nama atau pindahkan file/folder
+func renameFile(dari string, ke string) bool
+    if _linux() == 1
+        return sysCall(82, cstr(dari), cstr(ke), 0, 0, 0, 0) == 0
+    return callp(dllFn("kernel32.dll", "MoveFileA"), cstr(dari), cstr(ke)) != 0
+
+# nilai environment variable; teks kosong kalau tidak ada
+func getenv(nama string) string
+    if _linux() == 1
+        return linuxEnv(nama)
+    be buf = alloc(33000)
+    be n = callp(dllFn("kernel32.dll", "GetEnvironmentVariableA"), cstr(nama), buf, 32768)
+    be hasil = ""
+    if n > 0 and n < 32768
+        be hasil = fromCn(buf, n)
+    free(buf)
+    return hasil
+
+# jalankan perintah seperti di cmd (hasilnya tampil di layar), kembalikan kode keluar: run("dir /b")
+func run(perintah string) int
+    if _linux() == 1
+        linuxSh(perintah, 0)
+        return _gget(20)
+    return callp(dllFn("msvcrt.dll", "system"), cstr(perintah))

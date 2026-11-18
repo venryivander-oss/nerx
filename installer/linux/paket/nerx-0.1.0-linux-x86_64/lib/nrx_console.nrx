@@ -1,0 +1,185 @@
+# nrx_console.nrx - tampilan console, jalankan perintah. Slot tersembunyi: 4 = console siap (1 ya, 2 tidak),
+# 5 = kode keluar perintah terakhir, 6 = warna dipakai.
+
+func esc() string
+    return chr(27)
+
+func consKeluar(s string) int
+    be h = api(0, 4294967285, 0, 0, 0, 0, 0, 0)
+    be buf = alloc(8)
+    api(1, h, cstr(s), len(s), buf, 0, 0, 0)
+    free(buf)
+    return 0
+
+# nyalakan kode ANSI kalau output adalah console (bukan file / pipa)
+func consSiap() bool
+    be k = _gget(4)
+    if k == 0 and _linux() == 1
+        # Linux: ANSI selalu aktif, tetapi hanya kalau stdout adalah terminal (ioctl TCGETS)
+        be tb = alloc(64)
+        if sysCall(16, 1, 21505, tb, 0, 0, 0) == 0
+            _gset(4, 1)
+        else
+            _gset(4, 2)
+        free(tb)
+        be k = _gget(4)
+    if k == 0
+        be h = api(0, 4294967285, 0, 0, 0, 0, 0, 0)
+        be mode = alloc(8)
+        if callp(dllFn("kernel32.dll", "GetConsoleMode"), h, mode) != 0
+            be m = peek64(mode, 0) % 4294967296
+            if idiv(m, 4) % 2 == 0
+                callp(dllFn("kernel32.dll", "SetConsoleMode"), h, m + 4)
+            _gset(4, 1)
+        else
+            _gset(4, 2)
+        free(mode)
+        be k = _gget(4)
+    return k == 1
+
+func nrxAtExit() int
+    if _gget(6) == 1
+        consKeluar(esc() + "[0m")
+    return 0
+
+func commandStatus() int
+    return _gget(5)
+
+func clear() string
+    if consSiap()
+        consKeluar(esc() + "[2J" + esc() + "[3J" + esc() + "[H")
+    return ""
+
+func cursor(x int, y int) string
+    if x < 0
+        be x = 0
+    if y < 0
+        be y = 0
+    if consSiap()
+        consKeluar(esc() + "[" + str(y + 1) + ";" + str(x + 1) + "H")
+    return ""
+
+func hexDigit(c int) int
+    if c >= 48 and c <= 57
+        return c - 48
+    if c >= 97 and c <= 102
+        return c - 87
+    if c >= 65 and c <= 70
+        return c - 55
+    return 0 - 1
+
+func warnaKode(nama string, latar bool) string
+    be low = lower(nama)
+    be tambah = 0
+    if latar
+        be tambah = 10
+    be kode = 0
+    if low == "hitam" or low == "black"
+        be kode = 30
+    else if low == "merah" or low == "red"
+        be kode = 91
+    else if low == "hijau" or low == "green"
+        be kode = 92
+    else if low == "kuning" or low == "yellow"
+        be kode = 33
+    else if low == "biru" or low == "blue"
+        be kode = 94
+    else if low == "ungu" or low == "purple"
+        be kode = 95
+    else if low == "cyan" or low == "tosca"
+        be kode = 96
+    else if low == "putih" or low == "white"
+        be kode = 97
+    else if low == "abu" or low == "gray"
+        be kode = 90
+    if kode > 0
+        return str(kode + tambah)
+    if len(low) == 7 and ord(low, 0) == 35
+        be ok = true
+        be v list int
+        for i in range(6)
+            be d = hexDigit(ord(low, 1 + i))
+            if d < 0
+                be ok = false
+            add(v, d)
+        if ok
+            be jenis = 38
+            if latar
+                be jenis = 48
+            return str(jenis) + ";2;" + str(v[0] * 16 + v[1]) + ";" + str(v[2] * 16 + v[3]) + ";" + str(v[4] * 16 + v[5])
+    _lempar("color: unknown color \"" nama "\", use black, red, green, yellow, blue, purple, cyan, white, gray, or #RRGGBB")
+    return ""
+
+func warnaTulis(fg string, bg string) string
+    if consSiap()
+        _gset(6, 1)
+        be s = esc() + "[0m"
+        if fg != ""
+            be s = s + esc() + "[" + fg + "m"
+        if bg != ""
+            be s = s + esc() + "[" + bg + "m"
+        consKeluar(s)
+    return ""
+
+func color_a0() string
+    return warnaTulis("", "")
+
+func color_a1(teks string) string
+    return warnaTulis(warnaKode(teks, false), "")
+
+func color_a2(teks string, latar string) string
+    return warnaTulis(warnaKode(teks, false), warnaKode(latar, true))
+
+# jalankan perintah lewat cmd.exe, hasil = stdout + stderr (CRLF -> LF)
+func runCommand(perintah string) string
+    if _linux() == 1
+        be hs = linuxSh(perintah + " 2>&1", 1)
+        _gset(5, _gget(20))
+        return hs
+    be k32 = "kernel32.dll"
+    be sa = alloc(32)
+    poke64(sa, 0, 24)
+    poke64(sa, 16, 1)                     # bInheritHandle
+    be pipa = alloc(16)
+    if callp(dllFn(k32, "CreatePipe"), pipa, pipa + 8, sa, 0) == 0
+        _lempar("runCommand: perintah tidak bisa dijalankan")
+    be baca = peek64(pipa, 0)
+    be tulis = peek64(pipa, 8)
+    callp(dllFn(k32, "SetHandleInformation"), baca, 1, 0)      # ujung baca tidak diwariskan
+    be sinfo = alloc(128)
+    poke64(sinfo, 0, 104)
+    poke64(sinfo, 60, 256)                   # STARTF_USESTDHANDLES (dwFlags di offset 60)
+    poke64(sinfo, 80, api(0, 4294967286, 0, 0, 0, 0, 0, 0))
+    poke64(sinfo, 88, tulis)
+    poke64(sinfo, 96, tulis)
+    be pinfo = alloc(32)
+    be baris = "cmd.exe /c " + perintah + " 2>&1"
+    be ok = callp(dllFn(k32, "CreateProcessA"), 0, cstr(baris), 0, 0, 1, 134217728, 0, 0, sinfo, pinfo)
+    callp(dllFn(k32, "CloseHandle"), tulis)
+    if ok == 0
+        callp(dllFn(k32, "CloseHandle"), baca)
+        _lempar("runCommand: perintah tidak bisa dijalankan")
+    be hasil = ""
+    be buf = alloc(4096)
+    be got = alloc(8)
+    be lagi = true
+    loop lagi
+        be r = callp(dllFn(k32, "ReadFile"), baca, buf, 4096, got, 0)
+        be n = peek64(got, 0) % 4294967296
+        if r == 0 or n == 0
+            be lagi = false
+        else
+            be hasil = hasil + fromCn(buf, n)
+    callp(dllFn(k32, "WaitForSingleObject"), peek64(pinfo, 0), 4294967295)
+    callp(dllFn(k32, "GetExitCodeProcess"), peek64(pinfo, 0), got)
+    _gset(5, peek64(got, 0) % 4294967296)
+    callp(dllFn(k32, "CloseHandle"), peek64(pinfo, 0))
+    callp(dllFn(k32, "CloseHandle"), peek64(pinfo, 8))
+    callp(dllFn(k32, "CloseHandle"), baca)
+    free(sa)
+    free(pipa)
+    free(sinfo)
+    free(pinfo)
+    free(buf)
+    free(got)
+    return replace(hasil, "\r\n", "\n")

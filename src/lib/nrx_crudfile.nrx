@@ -49,11 +49,33 @@ func appendLine(path string, teks string) bool
     return appendFile(path, teks + "\n")
 
 func deleteFile(path string) bool
+    if _linux() == 1
+        return sysCall(87, cstr(path), 0, 0, 0, 0, 0) == 0
     return callp(dllFn("kernel32.dll", "DeleteFileA"), cstr(path)) != 0
 
 # nama file dan folder; folder berakhiran /
 func listFiles(folder string) list string
     be hasil list string
+    if _linux() == 1
+        be fd = sysCall(2, cstr(folder), 65536, 0, 0, 0, 0)
+        if fd < 0
+            _lemparK(319, "listFiles: folder " + folder + " not found")
+        be dbuf = alloc(32800)
+        be dn = sysCall(217, fd, dbuf, 32768, 0, 0, 0)
+        loop dn > 0
+            be pos = 0
+            loop pos < dn
+                be nm = fromC(dbuf + pos + 19)
+                if nm != "." and nm != ".."
+                    if peek8(dbuf, pos + 18) == 4
+                        be nm = nm + "/"
+                    add(hasil, nm)
+                be pos += peek8(dbuf, pos + 16) + 256 * peek8(dbuf, pos + 17)
+            be dn = sysCall(217, fd, dbuf, 32768, 0, 0, 0)
+        sysCall(3, fd, 0, 0, 0, 0, 0)
+        free(dbuf)
+        sort(hasil)
+        return hasil
     be data = alloc(400)
     be h = callp(dllFn("kernel32.dll", "FindFirstFileA"), cstr(folder + "\\*"), data)
     if h == 0 - 1

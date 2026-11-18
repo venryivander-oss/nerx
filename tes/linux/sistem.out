@@ -1,0 +1,16 @@
+satu
+dua
+
+true
+false
+[satu, dua, tiga]
+false
+[halo]
+3
+0
+lewat-sh
+10
+300000
+ok
+error E0134 in sistem.nrx:24: readFile: file tidak_ada.txt not found or cannot be opened
+

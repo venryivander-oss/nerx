@@ -1,0 +1,8 @@
+print "halo dari linux"
+be a = 6 * 7
+print a
+print "a=" a
+be s = "x"
+for i in range(3)
+    be s = s + str(i)
+print s

@@ -1,0 +1,19 @@
+lib nrx_big
+print bigFact(30)
+print bigAdd("999999999999999999999999", 1)
+print bigSub("1000000000000", "1000000000001")
+print bigMul("123456789012345678901234567890", "987654321098765432109876543210")
+print bigDiv("123456789012345678901234567890", "987654321")
+print bigMod("123456789012345678901234567890", "987654321")
+print bigPow(2, 200)
+print bigCmp("-5", "3")
+print bigCmp("100000000000000000000", "99999999999999999999")
+print bigGcd("123456789012345678901234567890", "9876543210")
+print bigDiv("-7", 2)
+print bigMod("-7", 2)
+print bigAdd("-0", "0")
+print bigDigits(bigPow(7, 100))
+try
+    print bigDiv(1, 0)
+catch e
+    print e

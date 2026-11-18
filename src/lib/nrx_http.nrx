@@ -24,9 +24,100 @@ func httpHeaderMap(m map) string
         be hasil = hasil + ks[i] + ": " + vs[i] + "\r\n"
     return hasil
 
+# ---- Linux: libcurl (libcurl.so.4, dimuat saat jalan). Penerima data: blok ud [0] buffer [8] panjang [16] kapasitas [24] bg
+func httpCurlTulis(p int, sz int, nm int, ud int) int
+    be n = sz * nm
+    be len0 = peek64(ud, 8)
+    be cap = peek64(ud, 16)
+    if len0 + n + 1 > cap
+        be cap2 = cap * 2
+        if cap2 < len0 + n + 4096
+            be cap2 = len0 + n + 65536
+        be nb = alloc(cap2)
+        be lama = peek64(ud, 0)
+        for i in range(len0)
+            poke8(nb, i, peek8(lama, i))
+        if lama != 0
+            free(lama)
+        poke64(ud, 0, nb)
+        poke64(ud, 16, cap2)
+    be tujuan = peek64(ud, 0)
+    for i in range(n)
+        poke8(tujuan, len0 + i, peek8(p, i))
+    poke64(ud, 8, len0 + n)
+    if peek64(ud, 24) != 0
+        httpPotongTambah(peek64(ud, 24), p, n)
+    return n
+
+func httpCurl(nama string) int
+    return dllFn("libcurl.so.4", nama)
+
+func httpMintaLinux(url string, adaIsi bool, isi string, jenis string, extra string, o int, bg int) string
+    poke64(o, 0, 0)
+    poke64(o, 8, 0)
+    poke64(o, 16, 0)
+    be fInit = httpCurl("curl_easy_init")
+    if fInit == 0
+        poke64(o, 8, 3)
+        return ""
+    be h = callp(fInit)
+    if h == 0
+        poke64(o, 8, 2)
+        return ""
+    be fSet = httpCurl("curl_easy_setopt")
+    callp(fSet, h, 10002, cstr(url))
+    callp(fSet, h, 52, 1)
+    callp(fSet, h, 78, 60)
+    callp(fSet, h, 99, 1)
+    callp(fSet, h, 10018, cstr("nerx"))
+    be ud = alloc(32)
+    poke64(ud, 24, bg)
+    callp(fSet, h, 20011, _callback("httpCurlTulis"))
+    callp(fSet, h, 10001, ud)
+    be h8 = ""
+    if adaIsi
+        callp(fSet, h, 10015, cstr(isi))
+        callp(fSet, h, 60, len(isi))
+        if jenis == ""
+            be h8 = "Content-Type: text/plain; charset=utf-8" + "\r\n"
+        else
+            be h8 = "Content-Type: " + jenis + "\r\n"
+    be h8 = h8 + extra
+    be sl = 0
+    for baris in split(h8, "\r\n")
+        if baris != ""
+            be sl = callp(httpCurl("curl_slist_append"), sl, cstr(baris))
+    if sl != 0
+        callp(fSet, h, 10023, sl)
+    be rc = sx32(callp(httpCurl("curl_easy_perform"), h))
+    if rc != 0
+        if rc == 3
+            poke64(o, 8, 1)
+        else
+            poke64(o, 8, 2)
+            poke64(o, 16, rc)
+    else
+        be lg = alloc(8)
+        poke64(lg, 0, 0)
+        callp(httpCurl("curl_easy_getinfo"), h, 2097154, lg)
+        poke64(o, 0, peek64(lg, 0))
+        free(lg)
+    if sl != 0
+        callp(httpCurl("curl_slist_free_all"), sl)
+    callp(httpCurl("curl_easy_cleanup"), h)
+    be hasil = ""
+    if peek64(ud, 8) > 0
+        be hasil = fromCn(peek64(ud, 0), peek64(ud, 8))
+    if peek64(ud, 0) != 0
+        free(peek64(ud, 0))
+    free(ud)
+    return hasil
+
 # satu permintaan. o = blok hasil: [0] status, [8] errKind (1 alamat salah, 2 tidak terhubung), [16] errCode.
 # bg = blok httpStart (0 kalau bukan) untuk potongan httpPartial. Tidak pernah melempar galat (aman di thread).
 func httpMinta(url string, adaIsi bool, isi string, jenis string, extra string, o int, bg int) string
+    if _linux() == 1
+        return httpMintaLinux(url, adaIsi, isi, jenis, extra, o, bg)
     be wh = "winhttp.dll"
     be fCrack = dllFn(wh, "WinHttpCrackUrl")
     be fOpen = dllFn(wh, "WinHttpOpen")
@@ -158,6 +249,8 @@ func httpMinta(url string, adaIsi bool, isi string, jenis string, extra string, 
     return hasil
 
 func httpGalat(fn string, url string, jenis int, kode int) int
+    if jenis == 3
+        _lempar(fn + ": libcurl is not installed (on Linux install libcurl4, libcurl.so.4)")
     if jenis == 1
         _lempar(fn + ": invalid address: " + url + " (example: https://example.com)")
     _lempar(fn + ": cannot connect to " + url + " (code " + str(kode) + ")")
@@ -194,9 +287,22 @@ func httpPost_a4(url string, isi string, jenis string, header map) string
     return httpSelesai("httpPost", url, true, isi, jenis, httpHeaderMap(header))
 
 # ---------------------------------------------------------------- httpStart / httpDone / httpResult / httpPartial
+# kunci, thread: Windows (critical section, CreateThread) atau Linux (pthread)
+func httpKunci(cs int)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_lock"), cs)
+    else
+        callp(dllFn("kernel32.dll", "EnterCriticalSection"), cs)
+
+func httpLepas(cs int)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_unlock"), cs)
+    else
+        callp(dllFn("kernel32.dll", "LeaveCriticalSection"), cs)
+
 func httpPotongTambah(bg int, data int, n int) int
     be cs = peek64(bg, 104)
-    callp(dllFn("kernel32.dll", "EnterCriticalSection"), cs)
+    httpKunci(cs)
     be len0 = peek64(bg, 88)
     be cap = peek64(bg, 96)
     if len0 + n + 1 > cap
@@ -215,7 +321,7 @@ func httpPotongTambah(bg int, data int, n int) int
     for i in range(n)
         poke8(p, len0 + i, peek8(data, i))
     poke64(bg, 88, len0 + n)
-    callp(dllFn("kernel32.dll", "LeaveCriticalSection"), cs)
+    httpLepas(cs)
     return 0
 
 func httpLatar(bg int) int
@@ -239,10 +345,26 @@ func httpMulai(url string, isi string, jenis string, extra string) int
     poke64(bg, 24, asInt(extra))
     poke64(bg, 112, 1)
     be cs = alloc(64)
-    callp(dllFn("kernel32.dll", "InitializeCriticalSection"), cs)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_init"), cs, 0)
+    else
+        callp(dllFn("kernel32.dll", "InitializeCriticalSection"), cs)
     poke64(bg, 104, cs)
     _gset(2, bg)
-    be th = callp(dllFn("kernel32.dll", "CreateThread"), 0, 0, _callback("httpLatar"), bg, 0, 0)
+    be th = 0
+    if _linux() == 1
+        be at = alloc(128)
+        be tid = alloc(8)
+        poke64(tid, 0, 0)
+        callp(dllFn("libc.so.6", "pthread_attr_init"), at)
+        callp(dllFn("libc.so.6", "pthread_attr_setstacksize"), at, 16777216)
+        if callp(dllFn("libc.so.6", "pthread_create"), tid, at, _callback("httpLatar"), bg) == 0
+            be th = peek64(tid, 0)
+        callp(dllFn("libc.so.6", "pthread_attr_destroy"), at)
+        free(at)
+        free(tid)
+    else
+        be th = callp(dllFn("kernel32.dll", "CreateThread"), 0, 0, _callback("httpLatar"), bg, 0, 0)
     if th == 0
         _gset(2, 0)
         _lempar("httpStart: thread cannot be created")
@@ -269,13 +391,13 @@ func httpPartial() string
     if bg == 0
         return ""
     be cs = peek64(bg, 104)
-    callp(dllFn("kernel32.dll", "EnterCriticalSection"), cs)
+    httpKunci(cs)
     be n = peek64(bg, 88)
     be teks = ""
     if n > 0
         be teks = fromCn(peek64(bg, 80), n)
     poke64(bg, 88, 0)
-    callp(dllFn("kernel32.dll", "LeaveCriticalSection"), cs)
+    httpLepas(cs)
     return teks
 
 func httpResult() string
@@ -284,14 +406,20 @@ func httpResult() string
         _lempar("httpResult: no request yet; call httpStart first")
     if peek64(bg, 64) == 0
         _lempar("httpResult: the request is not finished; check httpDone() first")
-    callp(dllFn("kernel32.dll", "WaitForSingleObject"), peek64(bg, 72), 4294967295)
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_join"), peek64(bg, 72), 0)
+    else
+        callp(dllFn("kernel32.dll", "WaitForSingleObject"), peek64(bg, 72), 4294967295)
     be r = asString(peek64(bg, 32))
     be st = peek64(bg, 40)
     be kind = peek64(bg, 48)
     be kode = peek64(bg, 56)
     be url = asString(peek64(bg, 0))
-    callp(dllFn("kernel32.dll", "CloseHandle"), peek64(bg, 72))
-    callp(dllFn("kernel32.dll", "DeleteCriticalSection"), peek64(bg, 104))
+    if _linux() == 1
+        callp(dllFn("libc.so.6", "pthread_mutex_destroy"), peek64(bg, 104))
+    else
+        callp(dllFn("kernel32.dll", "CloseHandle"), peek64(bg, 72))
+        callp(dllFn("kernel32.dll", "DeleteCriticalSection"), peek64(bg, 104))
     _gset(2, 0)
     if kind != 0
         httpGalat("httpStart", url, kind, kode)

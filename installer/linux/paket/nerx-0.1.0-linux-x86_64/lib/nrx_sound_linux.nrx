@@ -1,0 +1,601 @@
+# nrx_sound_linux.nrx - suara untuk Linux. Dipakai compiler sebagai pengganti nrx_sound.nrx kalau sasarannya Linux.
+# Keluaran lewat protokol asli PulseAudio (juga dipakai PipeWire dan WSLg) lewat soket unix, tanpa library tambahan.
+# WAV (PCM 8/16/24/32 bit, float 32 bit, mono atau stereo) dibaca sendiri; MP3 lewat libmpg123.so.0 kalau terpasang.
+# Tiap suara diputar di thread sendiri. Slot tersembunyi: 3 = blok musik (0 = tidak ada), 8 = daftar efek yang sedang jalan,
+#   elemen 0 daftar itu = cache audio efek (path, pcm, byte, rate, kanal, format).
+# Blok suara: [0] pcm [8] byte [16] rate [24] sedang jalan [32] kanal [40] format Pulse [48] batal [56] ulang [64] pcm milik blok
+
+# ---------------------------------------------------------------- bantu biner
+func sndLe(p int, o int, n int) int
+    be v = 0
+    be k = n - 1
+    loop k >= 0
+        be v = v * 256 + peek8(p, o + k)
+        be k -= 1
+    return v
+
+func sndBe(p int, o int) int
+    return peek8(p, o) * 16777216 + peek8(p, o + 1) * 65536 + peek8(p, o + 2) * 256 + peek8(p, o + 3)
+
+func sndTulisBe(p int, o int, v int) int
+    be u = v
+    if u < 0
+        be u = u + 4294967296
+    poke8(p, o, idiv(u, 16777216) % 256)
+    poke8(p, o + 1, idiv(u, 65536) % 256)
+    poke8(p, o + 2, idiv(u, 256) % 256)
+    poke8(p, o + 3, u % 256)
+    return o + 4
+
+func sndAdaFile(fn string, path string) int
+    if not fileExists(path)
+        _lempar(fn + ": sound file " + path + " not found")
+    return 0
+
+# isi seluruh file ke memori: hasil alamat, panjang di o[0]
+func sndBaca(path string, o int) int
+    be fd = sysCall(2, cstr(path), 0, 0, 0, 0, 0)
+    if fd < 0
+        return 0
+    be n = sysCall(8, fd, 0, 2, 0, 0, 0)
+    sysCall(8, fd, 0, 0, 0, 0, 0)
+    be buf = alloc(n + 16)
+    be got = 0
+    loop got < n
+        be r = sysCall(0, fd, buf + got, n - got, 0, 0, 0)
+        if r <= 0
+            break
+        be got += r
+    sysCall(3, fd, 0, 0, 0, 0, 0)
+    poke64(o, 0, got)
+    return buf
+
+# ---------------------------------------------------------------- decode: isi blok suara (pcm, byte, rate, kanal, format)
+func sndMuatWav(path string, blk int) bool
+    be o = alloc(8)
+    be f = sndBaca(path, o)
+    be n = peek64(o, 0)
+    free(o)
+    if f == 0 or n < 44
+        return false
+    if peek8(f, 0) != 82 or peek8(f, 1) != 73 or peek8(f, 8) != 87 or peek8(f, 9) != 65
+        return false
+    be p = 12
+    be tag = 0
+    be kanal = 0
+    be rate = 0
+    be bits = 0
+    be data = 0
+    be dn = 0
+    loop p + 8 <= n and data == 0
+        be id = chr(peek8(f, p)) + chr(peek8(f, p + 1)) + chr(peek8(f, p + 2)) + chr(peek8(f, p + 3))
+        be sz = sndLe(f, p + 4, 4)
+        if id == "fmt "
+            be tag = sndLe(f, p + 8, 2)
+            be kanal = sndLe(f, p + 10, 2)
+            be rate = sndLe(f, p + 12, 4)
+            be bits = sndLe(f, p + 22, 2)
+            if tag == 65534 and sz >= 26
+                be tag = sndLe(f, p + 32, 2)
+        else if id == "data"
+            be data = p + 8
+            be dn = sz
+            if data + dn > n
+                be dn = n - data
+        be p = p + 8 + sz + sz % 2
+    if data == 0 or kanal < 1 or kanal > 2 or rate < 1000
+        return false
+    be fmt = 0 - 1
+    if tag == 1
+        if bits == 8
+            be fmt = 0
+        else if bits == 16
+            be fmt = 3
+        else if bits == 24
+            be fmt = 9
+        else if bits == 32
+            be fmt = 7
+    else if tag == 3 and bits == 32
+        be fmt = 5
+    if fmt < 0
+        return false
+    be pcm = alloc(dn + 16)
+    callp(dllFn("libc.so.6", "memcpy"), pcm, f + data, dn)
+    free(f)
+    poke64(blk, 0, pcm)
+    poke64(blk, 8, dn)
+    poke64(blk, 16, rate)
+    poke64(blk, 32, kanal)
+    poke64(blk, 40, fmt)
+    poke64(blk, 64, 1)
+    return true
+
+func sndMuatMp3(path string, blk int) bool
+    be lib = "libmpg123.so.0"
+    if dllFn(lib, "mpg123_new") == 0
+        return false
+    callp(dllFn(lib, "mpg123_init"))
+    be err = alloc(8)
+    poke64(err, 0, 0)
+    be h = callp(dllFn(lib, "mpg123_new"), 0, err)
+    if h == 0
+        free(err)
+        return false
+    if sx32(callp(dllFn(lib, "mpg123_open"), h, cstr(path))) != 0
+        callp(dllFn(lib, "mpg123_delete"), h)
+        free(err)
+        return false
+    be rate = alloc(8)
+    be kn = alloc(8)
+    be enc = alloc(8)
+    poke64(rate, 0, 0)
+    poke64(kn, 0, 0)
+    poke64(enc, 0, 0)
+    callp(dllFn(lib, "mpg123_format_none"), h)
+    callp(dllFn(lib, "mpg123_format"), h, 44100, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 48000, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 32000, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 22050, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 24000, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 16000, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 11025, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 12000, 3, 208)
+    callp(dllFn(lib, "mpg123_format"), h, 8000, 3, 208)
+    if sx32(callp(dllFn(lib, "mpg123_getformat"), h, rate, kn, enc)) != 0
+        callp(dllFn(lib, "mpg123_delete"), h)
+        free(err)
+        return false
+    be r = peek64(rate, 0)
+    be k = peek(kn, 0, "int")
+    be cap = 4194304
+    be buf = alloc(cap)
+    be tot = 0
+    be done = alloc(8)
+    be lagi = true
+    loop lagi
+        if tot + 65536 > cap
+            be cap2 = cap * 2
+            be nb = alloc(cap2)
+            callp(dllFn("libc.so.6", "memcpy"), nb, buf, tot)
+            free(buf)
+            be buf = nb
+            be cap = cap2
+        poke64(done, 0, 0)
+        be rc = sx32(callp(dllFn(lib, "mpg123_read"), h, buf + tot, 65536, done))
+        be tot += peek64(done, 0)
+        if rc != 0 and rc != 0 - 11
+            be lagi = false
+        if rc == 0 - 11
+            callp(dllFn(lib, "mpg123_getformat"), h, rate, kn, enc)
+    callp(dllFn(lib, "mpg123_close"), h)
+    callp(dllFn(lib, "mpg123_delete"), h)
+    free(err)
+    free(rate)
+    free(kn)
+    free(enc)
+    free(done)
+    if tot == 0 or k < 1 or k > 2
+        free(buf)
+        return false
+    poke64(blk, 0, buf)
+    poke64(blk, 8, tot)
+    poke64(blk, 16, r)
+    poke64(blk, 32, k)
+    poke64(blk, 40, 3)
+    poke64(blk, 64, 1)
+    return true
+
+func sndMuat(fn string, path string, blk int) int
+    sndAdaFile(fn, path)
+    be ok = false
+    if lower(slice(path, -4)) == ".wav"
+        be ok = sndMuatWav(path, blk)
+    else
+        be ok = sndMuatMp3(path, blk)
+        if not ok and lower(slice(path, -4)) != ".mp3"
+            be ok = sndMuatWav(path, blk)
+    if not ok
+        if lower(slice(path, -4)) == ".mp3"
+            _lempar(fn + ": " + path + " cannot be played (MP3 needs libmpg123, install libmpg123-0; or use WAV)")
+        _lempar(fn + ": " + path + " cannot be played (use WAV or MP3)")
+    return 0
+
+# ---------------------------------------------------------------- protokol PulseAudio
+func sndAda(p string) int
+    if sysCall(21, cstr(p), 0, 0, 0, 0, 0) == 0
+        return 1
+    return 0
+
+func sndSoket() int
+    be env = linuxEnv("PULSE_SERVER")
+    be jalur = ""
+    if substr(env, 0, 5) == "unix:"
+        be jalur = slice(env, 5)
+    if jalur == "" or sndAda(jalur) == 0
+        be jalur = linuxEnv("XDG_RUNTIME_DIR") + "/pulse/native"
+    if sndAda(jalur) == 0
+        be jalur = "/run/user/" + str(sysCall(102, 0, 0, 0, 0, 0, 0)) + "/pulse/native"
+    if sndAda(jalur) == 0
+        be jalur = "/mnt/wslg/PulseServer"
+    if sndAda(jalur) == 0 or len(jalur) > 100
+        return 0 - 1
+    be fd = sysCall(41, 1, 1, 0, 0, 0, 0)
+    if fd < 0
+        return 0 - 1
+    be sa = alloc(128)
+    for k in range(16)
+        poke64(sa, k * 8, 0)
+    poke(sa, 0, "int16", 1)
+    for k in range(len(jalur))
+        poke8(sa, 2 + k, ord(jalur, k))
+    be r = sysCall(42, fd, sa, 110, 0, 0, 0)
+    free(sa)
+    if r < 0
+        sysCall(3, fd, 0, 0, 0, 0, 0)
+        return 0 - 1
+    return fd
+
+func sndTulisSemua(fd int, p int, n int) bool
+    be got = 0
+    loop got < n
+        be r = sysCall(1, fd, p + got, n - got, 0, 0, 0)
+        if r <= 0
+            return false
+        be got += r
+    return true
+
+# baca persis n byte; false kalau koneksi putus
+func sndBacaSemua(fd int, p int, n int) bool
+    be got = 0
+    loop got < n
+        be r = sysCall(0, fd, p + got, n - got, 0, 0, 0)
+        if r <= 0
+            return false
+        be got += r
+    return true
+
+# item tagstruct
+func sndU32(b int, o int, v int) int
+    poke8(b, o, 76)
+    sndTulisBe(b, o + 1, v)
+    return o + 5
+
+func sndStr(b int, o int, s string) int
+    poke8(b, o, 116)
+    for k in range(len(s))
+        poke8(b, o + 1 + k, ord(s, k))
+    poke8(b, o + 1 + len(s), 0)
+    return o + len(s) + 2
+
+func sndBool(b int, o int, v bool) int
+    if v
+        poke8(b, o, 66)
+    else
+        poke8(b, o, 48)
+    return o + 1
+
+func sndNull(b int, o int) int
+    poke8(b, o, 78)
+    return o + 1
+
+# proplist dengan satu entri teks
+func sndProp(b int, o int, kunci string, nilai string) int
+    poke8(b, o, 80)
+    be p = sndStr(b, o + 1, kunci)
+    be p = sndU32(b, p, len(nilai) + 1)
+    poke8(b, p, 120)
+    sndTulisBe(b, p + 1, len(nilai) + 1)
+    for k in range(len(nilai))
+        poke8(b, p + 5 + k, ord(nilai, k))
+    poke8(b, p + 5 + len(nilai), 0)
+    be p = p + 6 + len(nilai)
+    poke8(b, p, 78)
+    return p + 1
+
+# kirim paket kendali: payload di b mulai offset 20 sampai o
+func sndKirim(fd int, b int, o int) bool
+    sndTulisBe(b, 0, o - 20)
+    sndTulisBe(b, 4, 4294967295)
+    sndTulisBe(b, 8, 0)
+    sndTulisBe(b, 12, 0)
+    sndTulisBe(b, 16, 0)
+    return sndTulisSemua(fd, b, o)
+
+# baca satu paket (tunggu paling lama ms). Hasil: panjang payload (di buf), -1 koneksi putus, -2 tidak ada data.
+# st: [0] byte yang boleh dikirim (dari REQUEST), [8] tag balasan terakhir, [16] perintah terakhir
+func sndTerima(fd int, st int, hd int, buf int, ms int) int
+    be pf = alloc(16)
+    poke(pf, 0, "int", fd)
+    poke(pf, 4, "int16", 1)
+    be r = sysCall(7, pf, 1, ms, 0, 0, 0)
+    free(pf)
+    if r <= 0
+        return 0 - 2
+    if not sndBacaSemua(fd, hd, 20)
+        return 0 - 1
+    be n = sndBe(hd, 0)
+    be kanal = sndBe(hd, 4)
+    if n > 65536
+        be sisa = n
+        be tmp = alloc(65536)
+        loop sisa > 0
+            be m = sisa
+            if m > 65536
+                be m = 65536
+            if not sndBacaSemua(fd, tmp, m)
+                free(tmp)
+                return 0 - 1
+            be sisa -= m
+        free(tmp)
+        return 0
+    if n > 0 and not sndBacaSemua(fd, buf, n)
+        return 0 - 1
+    if kanal == 4294967295 and n >= 10
+        be cmd = sndBe(buf, 1)
+        poke64(st, 16, cmd)
+        poke64(st, 8, sndBe(buf, 6))
+        if cmd == 61 and n >= 20
+            poke64(st, 0, peek64(st, 0) + sndBe(buf, 16))
+    return n
+
+# tunggu balasan (REPLY / ERROR) untuk tag tertentu; hasil perintah (2 = ok), 0 = galat, -1 putus/waktu habis
+func sndTunggu(fd int, st int, hd int, buf int, tag int, ms int) int
+    be sisa = ms
+    loop sisa > 0
+        be n = sndTerima(fd, st, hd, buf, 50)
+        if n == 0 - 1
+            return 0 - 1
+        if n == 0 - 2
+            be sisa -= 50
+        else if peek64(st, 8) == tag and (peek64(st, 16) == 2 or peek64(st, 16) == 0)
+            be c = peek64(st, 16)
+            poke64(st, 16, 99)
+            return c
+    return 0 - 1
+
+# ---------------------------------------------------------------- thread pemutar
+func sndEntry(blk int) int
+    be fd = sndSoket()
+    if fd >= 0
+        sndMain(blk, fd)
+        sysCall(3, fd, 0, 0, 0, 0, 0)
+    if peek64(blk, 64) != 0
+        free(peek64(blk, 0))
+        poke64(blk, 64, 0)
+    poke64(blk, 24, 0)
+    return 0
+
+func sndMain(blk int, fd int) int
+    be b = alloc(1024)
+    be hd = alloc(32)
+    be buf = alloc(65600)
+    be st = alloc(32)
+    for k in range(4)
+        poke64(st, k * 8, 0)
+    # AUTH
+    be o = sndU32(b, 20, 8)
+    be o = sndU32(b, o, 1)
+    be o = sndU32(b, o, 13)
+    poke8(b, o, 120)
+    sndTulisBe(b, o + 1, 256)
+    for k in range(256)
+        poke8(b, o + 5 + k, 0)
+    be ck = linuxEnv("HOME") + "/.config/pulse/cookie"
+    if fileExists(ck)
+        be lo = alloc(8)
+        be cp = sndBaca(ck, lo)
+        if peek64(lo, 0) >= 256
+            for k in range(256)
+                poke8(b, o + 5 + k, peek8(cp, k))
+        free(lo)
+        free(cp)
+    be o = o + 261
+    be ok = sndKirim(fd, b, o)
+    if ok
+        be ok = sndTunggu(fd, st, hd, buf, 1, 3000) == 2
+    # nama klien
+    if ok
+        be o = sndU32(b, 20, 9)
+        be o = sndU32(b, o, 2)
+        be o = sndProp(b, o, "application.name", "nerx")
+        be ok = sndKirim(fd, b, o)
+        if ok
+            be ok = sndTunggu(fd, st, hd, buf, 2, 3000) == 2
+    # stream pemutaran
+    be kanal = 0
+    if ok
+        be fmt = peek64(blk, 40)
+        be nk = peek64(blk, 32)
+        be o = sndU32(b, 20, 3)
+        be o = sndU32(b, o, 3)
+        poke8(b, o, 97)
+        poke8(b, o + 1, fmt)
+        poke8(b, o + 2, nk)
+        sndTulisBe(b, o + 3, peek64(blk, 16))
+        be o = o + 7
+        poke8(b, o, 109)
+        poke8(b, o + 1, nk)
+        if nk == 1
+            poke8(b, o + 2, 0)
+        else
+            poke8(b, o + 2, 1)
+            poke8(b, o + 3, 2)
+        be o = o + 2 + nk
+        be o = sndU32(b, o, 4294967295)
+        be o = sndNull(b, o)
+        be o = sndU32(b, o, 4294967295)
+        be o = sndBool(b, o, false)
+        be o = sndU32(b, o, 4294967295)
+        be o = sndU32(b, o, 0)
+        be o = sndU32(b, o, 4294967295)
+        be o = sndU32(b, o, 0)
+        poke8(b, o, 118)
+        poke8(b, o + 1, nk)
+        for k in range(nk)
+            sndTulisBe(b, o + 2 + 4 * k, 65536)
+        be o = o + 2 + 4 * nk
+        for k in range(7)
+            be o = sndBool(b, o, false)
+        be o = sndBool(b, o, false)
+        be o = sndBool(b, o, false)
+        be o = sndProp(b, o, "media.name", "nerx")
+        be ok = sndKirim(fd, b, o)
+        if ok
+            be ok = sndTunggu(fd, st, hd, buf, 3, 3000) == 2
+        if ok
+            be kanal = sndBe(buf, 11)
+            poke64(st, 0, peek64(st, 0) + sndBe(buf, 21))
+    if ok
+        be total = peek64(blk, 8)
+        be pcm = peek64(blk, 0)
+        be fr = peek64(blk, 32) * 2
+        be lagi = true
+        loop lagi and peek64(blk, 48) == 0
+            be pos = 0
+            loop pos < total and peek64(blk, 48) == 0 and ok
+                if peek64(st, 0) <= 0
+                    be n = sndTerima(fd, st, hd, buf, 30)
+                    if n == 0 - 1
+                        be ok = false
+                else
+                    be m = peek64(st, 0)
+                    if m > 16384
+                        be m = 16384
+                    if m > total - pos
+                        be m = total - pos
+                    sndTulisBe(hd, 0, m)
+                    sndTulisBe(hd, 4, kanal)
+                    sndTulisBe(hd, 8, 0)
+                    sndTulisBe(hd, 12, 0)
+                    sndTulisBe(hd, 16, 0)
+                    if not sndTulisSemua(fd, hd, 20) or not sndTulisSemua(fd, pcm + pos, m)
+                        be ok = false
+                    be pos += m
+                    poke64(st, 0, peek64(st, 0) - m)
+            if peek64(blk, 56) == 0 or not ok
+                be lagi = false
+        # tunggu sisa audio habis diputar (DRAIN), kecuali dibatalkan
+        if ok and peek64(blk, 48) == 0
+            be o = sndU32(b, 20, 12)
+            be o = sndU32(b, o, 4)
+            be o = sndU32(b, o, kanal)
+            if sndKirim(fd, b, o)
+                be tunggu = 0
+                loop tunggu < 600000 and peek64(blk, 48) == 0
+                    be c = sndTunggu(fd, st, hd, buf, 4, 100)
+                    if c == 2 or c == 0
+                        break
+                    be tunggu += 100
+        be o = sndU32(b, 20, 4)
+        be o = sndU32(b, o, 5)
+        be o = sndU32(b, o, kanal)
+        sndKirim(fd, b, o)
+    free(b)
+    free(hd)
+    free(buf)
+    free(st)
+    return 0
+
+# mulai thread pemutar; hasil = blok suara
+func sndMulai(blk int) int
+    poke64(blk, 24, 1)
+    poke64(blk, 48, 0)
+    be tid = alloc(8)
+    poke64(tid, 0, 0)
+    be rc = callp(dllFn("libc.so.6", "pthread_create"), tid, 0, _callback("sndEntry"), blk)
+    if rc != 0
+        poke64(blk, 24, 0)
+        free(tid)
+        _lempar("playSound: the sound thread cannot be created")
+    callp(dllFn("libc.so.6", "pthread_detach"), peek64(tid, 0))
+    free(tid)
+    return blk
+
+# ---------------------------------------------------------------- fungsi untuk pengguna
+func sndDaftar() list int
+    if _gget(8) == 0
+        be baru list int
+        be cache list int
+        add(baru, asInt(cache))
+        _gset(8, asInt(baru))
+    return asListI(_gget(8))
+
+func sndCache() list int
+    return asListI(sndDaftar()[0])
+# buang blok efek yang sudah selesai
+func sndBersih() int
+    be d = sndDaftar()
+    be i = len(d) - 1
+    loop i >= 1
+        if peek64(d[i], 24) == 0
+            free(d[i])
+            remove(d, i)
+        be i -= 1
+    return 0
+
+func playSound(path string) string
+    sndAdaFile("playSound", path)
+    sndBersih()
+    be c = sndCache()
+    be k = 0
+    be ada = 0 - 1
+    loop k < len(c)
+        if asString(c[k]) == path
+            be ada = k
+        be k += 6
+    if ada < 0
+        be tmp = alloc(80)
+        for q in range(10)
+            poke64(tmp, q * 8, 0)
+        sndMuat("playSound", path, tmp)
+        add(c, asInt(path))
+        add(c, peek64(tmp, 0))
+        add(c, peek64(tmp, 8))
+        add(c, peek64(tmp, 16))
+        add(c, peek64(tmp, 32))
+        add(c, peek64(tmp, 40))
+        free(tmp)
+        be ada = len(c) - 6
+    be blk = alloc(80)
+    for q in range(10)
+        poke64(blk, q * 8, 0)
+    poke64(blk, 0, c[ada + 1])
+    poke64(blk, 8, c[ada + 2])
+    poke64(blk, 16, c[ada + 3])
+    poke64(blk, 32, c[ada + 4])
+    poke64(blk, 40, c[ada + 5])
+    add(sndDaftar(), blk)
+    sndMulai(blk)
+    return ""
+
+func playMusic(path string) string
+    sndAdaFile("playMusic", path)
+    stopMusic()
+    be blk = alloc(80)
+    for q in range(10)
+        poke64(blk, q * 8, 0)
+    sndMuat("playMusic", path, blk)
+    poke64(blk, 56, 1)
+    _gset(3, blk)
+    sndMulai(blk)
+    return ""
+
+func stopMusic() string
+    be blk = _gget(3)
+    if blk != 0
+        poke64(blk, 48, 1)
+        # blok dibebaskan setelah threadnya selesai (maksimal sekitar setengah detik)
+        be n = 0
+        loop peek64(blk, 24) != 0 and n < 100
+            linuxTidur(10)
+            be n += 1
+        if peek64(blk, 24) == 0
+            free(blk)
+        _gset(3, 0)
+    return ""
+
+func stopSound() string
+    be d = sndDaftar()
+    for i in range(1, len(d))
+        poke64(d[i], 48, 1)
+    return ""

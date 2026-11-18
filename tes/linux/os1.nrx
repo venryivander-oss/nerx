@@ -1,0 +1,20 @@
+lib nrx_os
+lib nrx_crudfile
+print mkdir("tmp_dir_lx")
+writeFile("tmp_dir_lx/b.txt", "bb")
+writeFile("tmp_dir_lx/a.txt", "aa")
+print mkdir("tmp_dir_lx/sub")
+print listFiles("tmp_dir_lx")
+print copyFile("tmp_dir_lx/a.txt", "tmp_dir_lx/c.txt")
+print readFile("tmp_dir_lx/c.txt")
+print renameFile("tmp_dir_lx/c.txt", "tmp_dir_lx/d.txt")
+print listFiles("tmp_dir_lx")
+print len(getenv("PATH")) > 0
+print getenv("TIDAK_ADA_XYZ") == ""
+print endsWith(cwd(), "linux")
+print run("true")
+for f in listFiles("tmp_dir_lx")
+    if endsWith(f, ".txt")
+        deleteFile("tmp_dir_lx/" + f)
+print rmdir("tmp_dir_lx/sub")
+print rmdir("tmp_dir_lx")

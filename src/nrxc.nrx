@@ -38,27 +38,113 @@
 
 lib nrx_crudfile
 
-ffi "kernel32.dll" (
-    func CreateFileA(nama string, akses int, bagi int, sa pointer, buat int, atribut int, templ pointer) pointer
-    func WriteFile(h pointer, data pointer, n int, tertulis pointer, ov pointer) int
-    func CloseHandle(h pointer) int
-)
+# menulis file hasil: di Linux open/write/close, 0755 supaya langsung bisa dijalankan
+func CreateFileA(nama string, akses int, bagi int, sa int, buat int, atribut int, templ int) int
+    if _linux() == 1
+        return sysCall(2, cstr(nama), 577, 493, 0, 0, 0)
+    return callp(dllFn("kernel32.dll", "CreateFileA"), cstr(nama), akses, bagi, sa, buat, atribut, templ)
+
+func WriteFile(h int, data int, n int, tertulis int, ov int) int
+    if _linux() == 1
+        return sysCall(1, h, data, n, 0, 0, 0)
+    return callp(dllFn("kernel32.dll", "WriteFile"), h, data, n, tertulis, ov)
+
+func CloseHandle(h int) int
+    if _linux() == 1
+        return sysCall(3, h, 0, 0, 0, 0, 0)
+    return callp(dllFn("kernel32.dll", "CloseHandle"), h)
 
 lock HEX = "0123456789ABCDEF"
-ffi "kernel32.dll" (
-    func lstrcpyA(dst int, src string) int
-    func GetCommandLineA() pointer
-    func GetUserDefaultUILanguage() int
-    func LoadLibraryA(nama string) pointer
-    func GetProcAddress(h pointer, nama string) pointer
-    func GetModuleFileNameA(h pointer, buf pointer, n int) int
-    func GetTempPathA(n int, buf pointer) int
-    func GetCurrentProcessId() int
-    func DeleteFileA(p string) int
-)
-ffi "msvcrt.dll" (
-    func system(perintah string) int
-)
+func LoadLibraryA(nama string) int
+    return callp(dllFn("kernel32.dll", "LoadLibraryA"), cstr(nama))
+
+func GetProcAddress(h int, nama string) int
+    return callp(dllFn("kernel32.dll", "GetProcAddress"), h, cstr(nama))
+
+# bahasa antarmuka: di Linux dari LANG ("id_ID..." = 33 = Indonesia, selain itu Inggris)
+func GetUserDefaultUILanguage() int
+    if _linux() == 1
+        if startsWith(linuxEnv("LANG"), "id")
+            return 33
+        return 9
+    return callp(dllFn("kernel32.dll", "GetUserDefaultUILanguage"))
+
+# ---- pembungkus sistem operasi: di Windows memanggil kernel32 / msvcrt, di Linux memakai syscall (sysCall di pustaka.nrx)
+func lstrcpyA(dst int, src string) int
+    if _linux() == 1
+        for i in range(len(src))
+            poke8(dst, i, ord(src, i))
+        poke8(dst, len(src), 0)
+        return 0
+    return callp(dllFn("kernel32.dll", "lstrcpyA"), dst, cstr(src))
+
+func GetCommandLineA() int
+    if _linux() == 1
+        return cstr(linuxCmd())
+    return callp(dllFn("kernel32.dll", "GetCommandLineA"))
+
+func GetModuleFileNameA(h int, buf int, n int) int
+    if _linux() == 1
+        be r = sysCall(89, cstr("/proc/self/exe"), buf, n, 0, 0, 0)
+        if r > 0
+            poke8(buf, r, 0)
+        return r
+    return callp(dllFn("kernel32.dll", "GetModuleFileNameA"), h, buf, n)
+
+func GetTempPathA(n int, buf int) int
+    if _linux() == 1
+        lstrcpyA(buf, "/tmp/")
+        return 5
+    return callp(dllFn("kernel32.dll", "GetTempPathA"), n, buf)
+
+func GetCurrentProcessId() int
+    if _linux() == 1
+        return sysCall(39, 0, 0, 0, 0, 0, 0)
+    return callp(dllFn("kernel32.dll", "GetCurrentProcessId"))
+
+func DeleteFileA(p string) int
+    if _linux() == 1
+        if sysCall(87, cstr(p), 0, 0, 0, 0, 0) == 0
+            return 1
+        return 0
+    return callp(dllFn("kernel32.dll", "DeleteFileA"), cstr(p))
+
+func system(perintah string) int
+    if _linux() == 1
+        linuxSh(perintah, 0)
+        return _gget(20)
+    return callp(dllFn("msvcrt.dll", "system"), cstr(perintah))
+
+# kutip satu argumen untuk shell: "..." di cmd.exe, '...' di sh; bungkusSh = tanda kutip luar yang dibutuhkan cmd.exe untuk "system"
+func kutipSh(s string) string
+    if _linux() == 1
+        return "'" + replace(s, "'", "'\\''") + "'"
+    return "\"" + s + "\""
+
+func bungkusSh(c string) string
+    if _linux() == 1
+        return c
+    return "\"" + c + "\""
+
+func sufiksExe() string
+    if _linux() == 1
+        return ""
+    return ".exe"
+
+func sepDir() string
+    if _linux() == 1
+        return "/"
+    return "\\"
+
+# posisi pemisah folder terakhir ("\" atau "/"), -1 kalau tidak ada
+func akhirPemisah(s string) int
+    be i = len(s) - 1
+    loop i >= 0
+        be ch = substr(s, i, 1)
+        if ch == "\\" or ch == "/"
+            return i
+        be i -= 1
+    return 0 - 1
 lock ASCII =" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
 lock HURUF = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 lock DIGIT = "0123456789"
@@ -100,6 +186,15 @@ be callFn list int
 be dalamFungsi = false
 be curRet = "int"
 be curFnNama = ""
+be tcPatch list int       # posisi imm32 "sub rsp" tail call yang menunggu ukuran lokal
+be tcMulai = 0
+be awalBadan = 0
+be tgtLinux = false          # target keluaran: true = ELF Linux
+be dinamis = false           # ELF dinamis (libc lewat ld.so): perlu untuk ffi / dlopen / thread
+be adaFfi = false
+be stubStart = 0
+be stubAddr list int         # alamat (offset section) stub Windows-API untuk target Linux, urut seperti OFF_IAT
+be debugMode = false       # nerx debug: sisipkan pemeriksaan breakpoint di tiap pernyataan
 be jejak = false          # nerx run --trace: cetak tiap pemanggilan fungsi program
 be imMuat list string                # file yang sudah dimuat lewat im
 be teksOverride = ""                  # kalau tidak kosong: bacaSumber membaca teks ini, bukan file (fungsi buatan compiler)
@@ -474,7 +569,7 @@ func tabelPesanId() list string
     add(r, "110|option harus berada di dalam blok options|option must be inside an options block")
     add(r, "112|perintah ini butuh library window, tambahkan di atas: lib nrx_window|this command needs the window library, add at the top: lib nrx_window")
     add(r, "113|perintah tidak dikenal: %s|unknown command: %s")
-    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)")
+    add(r, "114|library %s tidak ditemukan (yang ada: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net, nrx_big, nrx_thread)|library %s not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net, nrx_big, nrx_thread)")
     add(r, "118|fungsi %s sudah ada (di %s:%d)|function %s already exists (at %s:%d)")
     add(r, "119|fungsi maksimal punya 8 parameter|a function can have at most 8 parameters")
     add(r, "126|nama %s sudah dipakai fungsi|name %s is already used by a function")
@@ -573,7 +668,7 @@ func galatNamaTakAda(nama string, n int, tipeArg list string)
         galatK(6, nama + " needs 1 arguments, but got " + str(n))
     if n >= 1 and contains("int float abs max min round sqrt pow", nama) and len(nama) > 2
         galatK(350, nama + "() cannot be used on " + kataJenisPendek(tipeArg[0]))
-    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299 nrx_os 351 nrx_db 351 nrx_net 351")
+    be kdLib = split("nrx_window 112 nrx_keyboard 60 nrx_sound 62 nrx_json 63 nrx_console 64 nrx_rand 65 nrx_crudfile 66 nrx_http 292 nrx_3d 299 nrx_os 351 nrx_db 351 nrx_net 351 nrx_big 351 nrx_thread 351")
     for q in range(0, len(kdLib), 2)
         be bt = "lib\\" + kdLib[q] + ".nrx"
         if fileExists(jalurRt(bt))
@@ -1673,14 +1768,24 @@ func panggil(nama string) string
         be cbPos = kur
         hex("53")                         # push rbx
         ripGlobal("48 8B 1D", 11)         # mov rbx, [$stdout]
-        if funcArity[cbFi] >= 1
-            hex("51")                     # push rcx
-        if funcArity[cbFi] >= 2
-            hex("52")                     # push rdx
-        if funcArity[cbFi] >= 3
-            hex("41 50")                  # push r8
-        if funcArity[cbFi] >= 4
-            hex("41 51")                  # push r9
+        if tgtLinux                       # System V: rdi, rsi, rdx, rcx
+            if funcArity[cbFi] >= 1
+                hex("57")
+            if funcArity[cbFi] >= 2
+                hex("56")
+            if funcArity[cbFi] >= 3
+                hex("52")
+            if funcArity[cbFi] >= 4
+                hex("51")
+        else
+            if funcArity[cbFi] >= 1
+                hex("51")                 # push rcx
+            if funcArity[cbFi] >= 2
+                hex("52")                 # push rdx
+            if funcArity[cbFi] >= 3
+                hex("41 50")              # push r8
+            if funcArity[cbFi] >= 4
+                hex("41 51")              # push r9
         hex("E8")
         add(callPos, kur)
         add(callFn, cbFi)
@@ -1912,6 +2017,13 @@ func panggil(nama string) string
         hex("E8")
         relatif(offLempar)
         hex("6A 00")
+        return "int"
+    if nama == "_linux"
+        # _linux(): 1 kalau program ini dikompilasi untuk Linux (ELF), 0 untuk Windows; nilai tetap saat kompilasi
+        be lnx = 0
+        if tgtLinux
+            be lnx = 1
+        dorongInt(lnx)
         return "int"
     if nama == "_gget"
         # _gget(k): baca slot global tersembunyi k (0..7) milik library
@@ -2561,6 +2673,32 @@ func rutinCallp()
     hex("5D")                             # pop rbp
     hex("C3")                             # ret
 
+# callp untuk Linux (System V): a1..a6 ke rdi/rsi/rdx/rcx/r8/r9, a7..a12 ke stack; rsi/rdi disimpan (kode nerx menganggapnya tidak berubah)
+func rutinCallpLinux()
+    hex("55")                             # push rbp
+    hex("48 89 E5")                       # mov rbp, rsp
+    hex("56 57")                          # push rsi; push rdi
+    hex("48 83 E4 F0")                    # and rsp, -16
+    hex("48 83 EC 30")                    # sub rsp, 0x30
+    hex("48 8B 7D 68")                    # mov rdi, [rbp+104]  a1
+    hex("48 8B 75 60")                    # mov rsi, [rbp+96]   a2
+    hex("48 8B 55 58")                    # mov rdx, [rbp+88]   a3
+    hex("48 8B 4D 50")                    # mov rcx, [rbp+80]   a4
+    hex("4C 8B 45 48")                    # mov r8,  [rbp+72]   a5
+    hex("4C 8B 4D 40")                    # mov r9,  [rbp+64]   a6
+    for k in range(6)                     # a7..a12 -> [rsp+8k]; a(7+k) ada di [rbp+56-8k]
+        hex("48 8B 45")
+        hex("00")
+        w8(sek(kur - 1), 56 - 8 * k)
+        hex("48 89 44 24")
+        hex("00")
+        w8(sek(kur - 1), 8 * k)
+    hex("4C 8B 5D 70")                    # mov r11, [rbp+112]  alamat fungsi
+    hex("31 C0")                          # xor eax, eax (jumlah register vektor untuk fungsi variadik)
+    hex("41 FF D3")                       # call r11
+    hex("48 8D 65 F0")                    # lea rsp, [rbp-16]
+    hex("5F 5E 5D C3")                    # pop rdi; pop rsi; pop rbp; ret
+
 # ---------------------------------------------------------------- perintah (lewatan 2)
 # lompatan jz ke depan untuk kondisi; hasil = posisi disp32 yang harus ditambal
 func kondisi(teks string) int
@@ -3183,6 +3321,221 @@ func catatBerkas(b string)
     d32(0)
     ripGlobal("48 89 05", 15)
 
+# spinlock alokator: rcx = 1 ditukar dengan kunci; ulangi sampai kunci semula 0
+func stubKunci()
+    hex("F3 90 B9 01 00 00 00")
+    ripGlobal("48 87 0D", 2 + 45)
+    hex("48 85 C9 75 ED")
+
+func stubLepas()
+    hex("31 C9")
+    ripGlobal("48 89 0D", 2 + 45)
+
+# ---- target Linux: "Windows API" kecil berupa stub syscall. Seluruh runtime memanggil [IAT + 8k] dengan konvensi Windows x64;
+# di ELF slot IAT diisi alamat stub-stub ini, jadi rutin cetak/alloc/api tidak perlu diubah.
+func emitStubLinux()
+    for q in range(50)                    # slot tersembunyi milik runtime Linux (lihat pustaka.nrx: _gget 16..55; 45 = kunci alokator)
+        add(gNama, "$A" + str(q))
+        add(gTipe, "int")
+        add(gKunci, 1)
+    be gxSp = 2 + 18                      # _gget(18): stack awal proses (argc, argv, envp)
+    be sGet = kur                         # GetStdHandle(-10 / -11 / -12) -> fd 0 / 1 / 2
+    hex("89 C8 F7 D8 83 E8 0A C3")
+    be sWrite = kur                       # WriteFile(fd, buf, n, &tertulis): syscall write
+    hex("56 57 48 89 CF 48 89 D6 4C 89 C2 4D 89 CA B8 01 00 00 00 0F 05")
+    hex("4D 85 D2 74 03 49 89 02 48 85 C0 0F 99 C0 0F B6 C0 5F 5E C3")
+    be sRead = kur                        # ReadFile(fd, buf, n, &terbaca): syscall read
+    hex("56 57 48 89 CF 48 89 D6 4C 89 C2 4D 89 CA B8 00 00 00 00 0F 05")
+    hex("4D 85 D2 74 03 49 89 02 48 85 C0 0F 99 C0 0F B6 C0 5F 5E C3")
+    be sExit = kur                        # ExitProcess(kode): exit_group (ELF dinamis: exit() milik libc supaya stdio ikut dibilas)
+    if dinamis
+        hex("48 89 CF 48 83 EC 08 FF 15")
+        relatif(OFF_IAT + 128)
+        hex("F4")
+    else
+        hex("48 89 CF B8 E7 00 00 00 0F 05 F4")
+    be sSatu = kur                        # GetProcessHeap: hasil 1
+    hex("B8 01 00 00 00 C3")
+    be gxKunci = 2 + 45                   # kunci alokator (hanya ELF dinamis: bisa ada banyak thread)
+    be sAlloc = kur                       # HeapAlloc(heap, flags, ukuran) -> nrxMalloc(ukuran)
+    if dinamis
+        stubKunci()
+    hex("41 50")
+    panggilNama("nrxMalloc", 1)
+    hex("58")
+    if dinamis
+        stubLepas()
+    hex("C3")
+    be sFree = kur                        # HeapFree(heap, flags, alamat) -> nrxFree(alamat)
+    if dinamis
+        stubKunci()
+    hex("41 50")
+    panggilNama("nrxFree", 1)
+    hex("58")
+    if dinamis
+        stubLepas()
+    hex("B8 01 00 00 00 C3")
+    be sOpen = kur                        # CreateFileA(nama, akses, ...): open; akses baca / tambah / tulis
+    hex("56 57 48 89 CF 31 F6 81 FA 00 00 00 80 74 0F BE 41 02 00 00 83 FA 04 75 05 BE 41 04 00 00")
+    hex("BA A4 01 00 00 B8 02 00 00 00 0F 05 5F 5E 48 85 C0 79 07 48 C7 C0 FF FF FF FF C3")
+    be sSize = kur                        # GetFileSize(fd): lseek ke akhir lalu kembali ke awal
+    hex("56 57 48 89 CF 31 F6 BA 02 00 00 00 B8 08 00 00 00 0F 05 49 89 C2 31 F6 31 D2 B8 08 00 00 00 0F 05 4C 89 D0 5F 5E C3")
+    be sClose = kur                       # CloseHandle(fd): close
+    hex("48 89 CF B8 03 00 00 00 0F 05 B8 01 00 00 00 C3")
+    be sSys = kur                         # slot 13: syscall mentah, api(13, nomor, a1..a6)
+    hex("56 57 48 89 C8 48 89 D7 4C 89 C6 4C 89 CA 4C 8B 54 24 38 4C 8B 44 24 40 4C 8B 4C 24 48 0F 05 5F 5E C3")
+    be sNol = kur                         # GetCommandLineA (dan LoadLibraryA / GetProcAddress pada ELF statis): hasil 0
+    hex("31 C0 C3")
+    be sDlopen = sNol                     # ELF dinamis: LoadLibraryA(nama) -> dlopen(nama, RTLD_NOW); GetProcAddress(h, nama) -> dlsym
+    be sDlsym = sNol
+    if dinamis
+        be sDlopen = kur
+        hex("56 57 48 83 EC 08 48 89 CF BE 02 00 00 00 FF 15")
+        relatif(OFF_IAT + 112)
+        hex("48 83 C4 08 5F 5E C3")
+        be sDlsym = kur
+        hex("56 57 48 83 EC 08 48 89 CF 48 89 D6 FF 15")
+        relatif(OFF_IAT + 120)
+        hex("48 83 C4 08 5F 5E C3")
+    add(stubAddr, sGet)
+    add(stubAddr, sWrite)
+    add(stubAddr, sExit)
+    add(stubAddr, sSatu)
+    add(stubAddr, sAlloc)
+    add(stubAddr, sFree)
+    add(stubAddr, sOpen)
+    add(stubAddr, sRead)
+    add(stubAddr, sSize)
+    add(stubAddr, sClose)
+    add(stubAddr, sNol)
+    add(stubAddr, sDlopen)
+    add(stubAddr, sDlsym)
+    add(stubAddr, sSys)
+    # _start: simpan stack awal (argc/argv), pindah ke stack besar 256 MB (mmap NORESERVE), sejajarkan
+    be stubStart = kur
+    hex("31 ED")
+    ripGlobal("48 89 25", gxSp)
+    hex("31 FF BE 00 00 00 10 BA 03 00 00 00 41 BA 22 40 00 00 49 C7 C0 FF FF FF FF 45 31 C9 B8 09 00 00 00 0F 05")
+    hex("48 3D 00 F0 FF FF 77 07 48 8D A0 C0 FF FF 0F 48 83 E4 F0")
+# sisipan debugger: kalau nrxDbgCek bilang berhenti, kirim daftar variabel ("nama=nilai" per baris) ke nrxDbgBerhenti
+func dbgHook(baris int, berkas string)
+    dorongInt(baris)
+    panggilNama("nrxDbgCek", 1)
+    hex("58")                             # pop rax
+    hex("48 85 C0 0F 84")                 # test rax, rax; jz lewati
+    be pj = kur
+    d32(0)
+    dorongTeks("")
+    be namaV list string
+    if dalamFungsi
+        for k in range(len(scNama))
+            add(namaV, scNama[k])
+    else
+        for k in range(len(gNama))
+            if substr(gNama[k], 0, 1) != "$"
+                add(namaV, gNama[k])
+    for nv in namaV
+        be idxL = indexOf(scNama, nv)
+        be tv = ""
+        if idxL >= 0
+            be tv = scTipe[idxL]
+        else if indexOf(gNama, nv) >= 0
+            be tv = gTipe[indexOf(gNama, nv)]
+        if tv == "int" or tv == "string" or tv == "bool" or tv == "double"
+            dorongTeks(nv + "=")
+            muatVar(nv)
+            if tv == "string"
+                panggilNama("dbgS", 1)
+            else
+                jadiTeks(tv)
+            panggilNama("strGabung", 2)
+            dorongTeks("\n")
+            panggilNama("strGabung", 2)
+            panggilNama("strGabung", 2)
+    dorongInt(baris)
+    dorongTeks(berkas)
+    panggilNama("nrxDbgBerhenti", 3)
+    hex("58")
+    tambal(pj, kur)
+
+# pernyataan if / else if / loop / return yang hanya berisi nama, angka, + - * dan perbandingan tidak mungkin melempar galat:
+# nomor barisnya tidak perlu ditulis ke memori (hemat dua instruksi per pernyataan)
+func tanpaCatatBaris(j string, a string) bool
+    if j != "i" and j != "ei" and j != "l" and j != "r"
+        return false
+    if indexOf(libMuat, "nrx_json.nrx") >= 0
+        return false
+    be tk = pecah(a)
+    for q in range(len(tk))
+        be t = tk[q]
+        be c = ord(t, 0)
+        if c >= 48 and c <= 57
+            continue
+        if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+            if q + 1 < len(tk) and tk[q + 1] == "("
+                return false
+            continue
+        if not contains("+ - * < > <= >= == != ( )", t)
+            return false
+    return true
+
+# ekspresi int sederhana: hanya parameter/variabel lokal bertipe int, angka bulat, + - * % dan kurung
+func intSederhana(x string) bool
+    be tk = pecah(x)
+    if len(tk) == 0
+        return false
+    for q in range(len(tk))
+        be t = tk[q]
+        be c = ord(t, 0)
+        if c >= 48 and c <= 57
+            if contains(t, ".")
+                return false
+            continue
+        if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 95
+            be ix = indexOf(scNama, t)
+            if ix < 0 or scTipe[ix] != "int" or (q + 1 < len(tk) and tk[q + 1] == "(")
+                return false
+            continue
+        if not contains("+ - * % ( )", t)
+            return false
+    return true
+
+# "f(a, b)" di dalam fungsi f (semua parameter int, semua argumen sederhana) -> daftar argumen; kosong = bukan tail call yang bisa dioptimasi
+func tcArgs(a string) list string
+    be hasil list string
+    be fi2 = indexOf(funcNama, curFnNama)
+    if not dalamFungsi or len(tryAktif) > 0 or curRet != "int" or fi2 < 0 or funcArity[fi2] < 1
+        return hasil
+    if slice(a, 0, len(curFnNama) + 1) != curFnNama + "(" or slice(a, -1) != ")"
+        return hasil
+    for pt in split(funcPT[fi2], ",")
+        if pt != "int"
+            return hasil
+    be isi = slice(a, len(curFnNama) + 1, len(a) - 1)
+    be dalam = 0
+    be mulai = 0
+    be bagian list string
+    for i in range(len(isi))
+        be ch = substr(isi, i, 1)
+        if ch == "\"" or ch == "[" or ch == "{"
+            return hasil
+        if ch == "("
+            be dalam += 1
+        if ch == ")"
+            be dalam -= 1
+            if dalam < 0
+                return hasil
+        if ch == "," and dalam == 0
+            add(bagian, trim(substr(isi, mulai, i - mulai)))
+            be mulai = i + 1
+    add(bagian, trim(slice(isi, mulai)))
+    if dalam != 0 or len(bagian) != funcArity[fi2]
+        return hasil
+    for b in bagian
+        if not intSederhana(b)
+            return hasil
+    return bagian
+
 func blok(batas int)
     loop si < nStmt and inden[si] >= batas
         be noBaris = nomor[si]
@@ -3192,9 +3545,12 @@ func blok(batas int)
         if berkasPengguna(berkNama)
             if banyakBerkas
                 catatBerkas(berkNama)
-            hex("B8")                         # mov eax, baris
-            d32(noBaris)
-            ripGlobal("48 89 05", 13)         # mov [baris], rax  (untuk pesan galat tak tertangkap)
+            if not tanpaCatatBaris(j, arg[si])
+                hex("B8")                     # mov eax, baris
+                d32(noBaris)
+                ripGlobal("48 89 05", 13)     # mov [baris], rax  (untuk pesan galat tak tertangkap)
+            if debugMode and contains("p b d s x r i l F", j)
+                dbgHook(noBaris, berkNama)
         if j == "p"
             # print a b "c": semua nilai ditulis berjejer tanpa spasi, lalu satu baris baru
             be tok list string = pecah(arg[si])
@@ -3327,6 +3683,23 @@ func blok(batas int)
                 hex("58")
             else if arg[si] == ""
                 hex("31 C0")              # return tanpa nilai: rax = 0
+            else if len(tcArgs(arg[si])) > 0
+                # tail call ke diri sendiri (semua int): isi ulang parameter lalu lompat ke awal badan
+                be tcL = tcArgs(arg[si])
+                be tcN = len(tcL)
+                for tcA in tcL
+                    ekspresiDari(tcA)
+                for tcK in range(tcN)
+                    hex("58")             # pop rax  (argumen terakhir dulu)
+                    hex("48 89 85")       # mov [rbp + disp param], rax
+                    d32(16 + 8 * tcK)
+                hex("48 89 EC 48 81 EC")  # mov rsp, rbp; sub rsp, ruang lokal (ditambal di akhir fungsi)
+                add(tcPatch, kur)
+                d32(0)
+                hex("E9")                 # jmp awalBadan
+                relatif(awalBadan)
+                be si += 1
+                continue
             else
                 be tr1 = ekspresiDari(arg[si])
                 if curRet == "?"
@@ -3529,9 +3902,17 @@ func buangKomentar(s string) string
 # semua baris "lib nrx_xxx" di sumber (di mana pun letaknya) -> muat lib\nrx_xxx.nrx sebelum kode program
 # jalur file runtime (prelude, pustaka, lib\...) relatif terhadap folder nrxc.exe; file lain apa adanya
 func jalurRt(nama string) string
+    be hasil = nama
     if rtDir != "" and (nama == "prelude.nrx" or nama == "pustaka.nrx" or substr(nama, 0, 4) == "lib\\")
-        return rtDir + nama
-    return nama
+        be hasil = rtDir + nama
+    if tgtLinux and substr(nama, 0, 4) == "lib\\" and slice(nama, -4) == ".nrx"
+        # library dengan versi khusus Linux: lib\nrx_xxx_linux.nrx
+        be hl = slice(hasil, 0, len(hasil) - 4) + "_linux.nrx"
+        if fileExists(hl)
+            be hasil = hl
+    if _linux() == 1
+        return replace(hasil, "\\", "/")
+    return hasil
 
 # pecah baris perintah Windows menjadi argumen (tanda kutip ganda membungkus spasi)
 func pecahCmd(s string) list string
@@ -3567,7 +3948,7 @@ func muatLibDari(nama string)
             if not fileExists(jalurRt("lib\\" + nmLib))
                 be berkNama = nama
                 be noBaris = nbL
-                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net)")
+                galatK(114, "library " + trim(slice(b, 4)) + " not found (available: nrx_window, nrx_rand, nrx_crudfile, nrx_keyboard, nrx_console, nrx_sound, nrx_json, nrx_http, nrx_3d, nrx_os, nrx_db, nrx_net, nrx_big, nrx_thread)")
             if indexOf(libMuat, nmLib) < 0 and fileExists(jalurRt("lib\\" + nmLib))
                 add(libMuat, nmLib)
                 bacaSumber("lib\\" + nmLib)
@@ -3692,7 +4073,8 @@ func ubahFfi(teks string) string
             if q1 < 0 or q2 < 0
                 galat("ffi harus berbentuk: ffi \"dll\" ( ... )")
             be dll = slice(b, q1 + 1, q1 + 1 + q2)
-            if LoadLibraryA(dll) == 0
+            be adaFfi = true
+            if _linux() == 0 and not tgtLinux and LoadLibraryA(dll) == 0
                 be noBaris = nbF
                 galatK(10, "ffi: file " + dll + " not found")
             be dlm = true
@@ -3717,7 +4099,7 @@ func ubahFfi(teks string) string
                     be ak = indexOf(sisa, " as ")
                     be alias = trim(slice(sisa, ak + 4))
                     be ret = trim(slice(sisa, 0, ak))
-                if GetProcAddress(LoadLibraryA(dll), alias) == 0
+                if _linux() == 0 and not tgtLinux and GetProcAddress(LoadLibraryA(dll), alias) == 0
                     be noBaris = nbF
                     galatK(20, "ffi: function " + alias + " is not in " + dll)
                 if indexOf(funcNama, fnm) < 0
@@ -3742,13 +4124,20 @@ func ubahFfi(teks string) string
                                 galat("ffi: tipe parameter yang didukung hanya int, int64, pointer, dan string, bukan " kp[1])
                     be par = join(parBaru, ", ")
                     be kepalaIsi = par
+                    be ret32 = ret == "int"
                     if ret == "int64" or ret == "pointer"
                         be ret = "int"
                     be kepala = "func " + fnm + "(" + par + ")"
                     if ret != ""
                         be kepala = kepala + " " + ret
                     add(tambahan, kepala)
-                    add(tambahan, "    be rr = callp(dllFn(\"" + dll + "\", \"" + alias + "\")" + pakai + ")")
+                    add(tambahan, "    be ff = dllFn(\"" + dll + "\", \"" + alias + "\")")
+                    add(tambahan, "    if ff == 0")
+                    add(tambahan, "        _lemparK(10, \"ffi: function " + alias + " is not available in " + dll + "\")")
+                    add(tambahan, "    be rr = callp(ff" + pakai + ")")
+                    if ret32
+                        add(tambahan, "    if _linux() == 1")
+                        add(tambahan, "        be rr = sx32(rr)")
                     if ret == "string"
                         add(tambahan, "    return fromC(rr)")
                     else if ret == "bool"
@@ -4211,14 +4600,106 @@ func bacaSumber(nama string)
             galatK(113, "unknown command: " + b)
     be nStmt = len(jenis)
 
+# ---------------------------------------------------------------- ELF dinamis
+func phL(h int, i int, t int, f int, off int, va int, fsz int, al int)
+    be o = 64 + 56 * i
+    poke(h, o, "int", t)
+    poke(h, o + 4, "int", f)
+    poke64(h, o + 8, off)
+    poke64(h, o + 16, va)
+    poke64(h, o + 24, va)
+    poke64(h, o + 32, fsz)
+    poke64(h, o + 40, fsz)
+    poke64(h, o + 48, al)
+
+func dynL(h int, i int, tag int, v int)
+    poke64(h, 584 + 16 * i, tag)
+    poke64(h, 592 + 16 * i, v)
+
+# header ELF dinamis: ELF + 5 phdr, PT_INTERP (ld.so), PT_DYNAMIC dengan DT_NEEDED libc.so.6 / libdl.so.2 dan relokasi GLOB_DAT
+# untuk dlopen / dlsym / exit ke slot IAT 14 / 15 / 16 (OFF_IAT + 8k). Segmen teks dimulai dari file offset 0 (header ikut termuat), RWX.
+func elfDinamis(keluar string, gb int, ukSection int, kurKode int, entL int)
+    be V0 = 5368709120
+    be vaTeks = V0 + BASE_RVA
+    be vaData = vaTeks + gb
+    be ukDataL = ukSection - gb
+    for k in range(14)
+        w64(sek(OFF_IAT + 8 * k), vaTeks + stubAddr[k])
+    be HD = newBuffer(4096)
+    poke8(HD, 0, 127)
+    poke8(HD, 1, 69)
+    poke8(HD, 2, 76)
+    poke8(HD, 3, 70)
+    poke8(HD, 4, 2)
+    poke8(HD, 5, 1)
+    poke8(HD, 6, 1)
+    poke(HD, 16, "int16", 2)
+    poke(HD, 18, "int16", 62)
+    poke(HD, 20, "int", 1)
+    poke64(HD, 24, vaTeks + entL)
+    poke64(HD, 32, 64)
+    poke(HD, 52, "int16", 64)
+    poke(HD, 54, "int16", 56)
+    poke(HD, 56, "int16", 5)
+    poke(HD, 58, "int16", 64)
+    phL(HD, 0, 3, 4, 344, V0 + 344, 28, 1)
+    phL(HD, 1, 1, 7, 0, V0, 4096 + kurKode, 4096)
+    phL(HD, 2, 1, 6, 0, vaData, 0, 4096)
+    poke64(HD, 64 + 56 * 2 + 40, ukDataL)
+    phL(HD, 3, 2, 6, 584, V0 + 584, 176, 8)
+    phL(HD, 4, 1685382481, 6, 0, 0, 0, 16)
+    lstrcpyA(HD + 344, "/lib64/ld-linux-x86-64.so.2")
+    lstrcpyA(HD + 377, "libc.so.6")
+    lstrcpyA(HD + 387, "libdl.so.2")
+    lstrcpyA(HD + 398, "dlopen")
+    lstrcpyA(HD + 405, "dlsym")
+    lstrcpyA(HD + 411, "exit")
+    for s in range(3)                     # dynsym 1..3: GLOBAL FUNC tanpa definisi
+        be so = 416 + 24 * (s + 1)
+        be nmIdx = 22
+        if s == 1
+            be nmIdx = 29
+        if s == 2
+            be nmIdx = 35
+        poke(HD, so, "int", nmIdx)
+        poke8(HD, so + 4, 18)
+    for s in range(3)                     # rela: GLOB_DAT ke slot IAT 14 + s
+        be ro = 512 + 24 * s
+        poke64(HD, ro, vaTeks + OFF_IAT + 8 * (14 + s))
+        poke64(HD, ro + 8, (s + 1) * 4294967296 + 6)
+    dynL(HD, 0, 1, 1)
+    dynL(HD, 1, 1, 11)
+    dynL(HD, 2, 5, V0 + 376)
+    dynL(HD, 3, 6, V0 + 416)
+    dynL(HD, 4, 10, 40)
+    dynL(HD, 5, 11, 24)
+    dynL(HD, 6, 7, V0 + 512)
+    dynL(HD, 7, 8, 72)
+    dynL(HD, 8, 9, 24)
+    dynL(HD, 9, 30, 8)
+    be hL = CreateFileA(keluar, 1073741824, 0, 0, 2, 128, 0)
+    be tulisL = newBuffer(8)
+    WriteFile(hL, HD, 4096, tulisL, 0)
+    WriteFile(hL, B + RAW, kurKode, tulisL, 0)
+    CloseHandle(hL)
+
 # ---------------------------------------------------------------- compiler
 func kompilasi(sumber string, keluar string)
+    # seperti gcc: keluaran berakhiran .exe = Windows (PE), selain itu = Linux (ELF)
+    be tgtLinux = slice(lower(keluar), -4) != ".exe"
     bacaSumber("prelude.nrx")
     if fileExists(jalurRt("pustaka.nrx"))
         bacaSumber("pustaka.nrx")
     muatLibDari(sumber)
     muatImDari(sumber)
     bacaSumber(sumber)
+    # ELF dinamis (libc lewat ld.so) hanya kalau perlu: ffi, atau library selain yang murni syscall
+    be dinamis = false
+    if tgtLinux
+        be dinamis = adaFfi
+        for lm in libMuat
+            if indexOf(split("nrx_os.nrx nrx_crudfile.nrx nrx_rand.nrx nrx_big.nrx nrx_json.nrx"), lm) < 0
+                be dinamis = true
     for nm in split("listBaru listTambah listHapus strGabung strSama boolStr")
         if indexOf(funcNama, nm) < 0
             print "prelude.nrx tidak lengkap: fungsi " nm " tidak ada"
@@ -4273,7 +4754,10 @@ func kompilasi(sumber string, keluar string)
     be offApi = kur
     rutinApi()
     be offCallp = kur
-    rutinCallp()
+    if tgtLinux
+        rutinCallpLinux()
+    else
+        rutinCallp()
     add(gNama, "$H")                      # slot global tersembunyi 0: catat try aktif
     add(gTipe, "int")
     add(gKunci, 1)
@@ -4288,6 +4772,10 @@ func kompilasi(sumber string, keluar string)
     rutinLempar()
 
     # program utama
+    be entLinux = kur
+    if tgtLinux
+        emitStubLinux()
+        be entLinux = stubStart
     be entri = kur
     hex("55")                             # push rbp
     hex("48 89 E5")                       # mov rbp, rsp
@@ -4316,7 +4804,7 @@ func kompilasi(sumber string, keluar string)
     be dalamFungsi = false
     be globalOK = true
     blok(0)
-    for hk in split("winSelesai nrxAtExit")
+    for hk in split("winSelesai nrxAtExit kbSelesai")
         if indexOf(funcNama, hk) >= 0
             panggilBuang(hk, 0)
     hex("31 C9")                          # xor ecx, ecx
@@ -4372,6 +4860,23 @@ func kompilasi(sumber string, keluar string)
         be posR2 = kur
         d32(0)
         be wajibRet = indexOf(exlStmt, funcStmt[fk]) >= 0
+        if wajibRet
+            # pernyataan terakhir di tingkat atas badan adalah return bernilai: aliran tidak mungkin jatuh keluar, tak perlu simpan baris pemanggil
+            be pAkh = funcStmt[fk] + 1
+            be indAkh = 0 - 1
+            be akhirTop = 0 - 1
+            loop pAkh < nStmt and inden[pAkh] > inden[funcStmt[fk]]
+                if indAkh < 0
+                    be indAkh = inden[pAkh]
+                if inden[pAkh] == indAkh
+                    be akhirTop = pAkh
+                be pAkh += 1
+            if akhirTop >= 0 and jenis[akhirTop] == "r" and arg[akhirTop] != ""
+                be wajibRet = false
+        be awalBadan = kur                # sasaran lompatan untuk tail call (rekursi ekor jadi loop)
+        be barrierKur = kur
+        be lastPush = -1
+        be tcMulai = len(tcPatch)
         if jejak and globalOK
             add(litTeks, "[trace] " + curFnNama + "()  " + berk[funcStmt[fk]] + ":" + str(nomor[funcStmt[fk]]))
             hex("48 8D 05")               # lea rax, [teks jejak]
@@ -4398,6 +4903,8 @@ func kompilasi(sumber string, keluar string)
         hex("31 C0")                      # xor eax, eax  (return 0 kalau tidak ada return)
         hex("48 89 EC 5D C3")             # mov rsp, rbp; pop rbp; ret
         w32(sek(posR2), ratakan(8 * nLokal, 16))
+        for ptc in range(tcMulai, len(tcPatch))
+            w32(sek(tcPatch[ptc]), ratakan(8 * nLokal, 16))
     # tambal semua pemanggilan fungsi
     for k in range(len(callPos))
         tambal(callPos[k], funcAddr[callFn[k]])
@@ -4424,6 +4931,60 @@ func kompilasi(sumber string, keluar string)
     # --- header DOS dan PE (setelah ukuran kode diketahui)
     be ukSection = kur
     w32(sek(posFreeLim), ukSection)       # batas image untuk free()
+    if tgtLinux and dinamis
+        elfDinamis(keluar, gBase, ukSection, kurKode, entLinux)
+        if not diam
+            print "Done: " keluar " (" + str(4096 + kurKode) + " bytes, linux, dynamic)"
+        return
+    if tgtLinux
+        # ELF64 statis: teks di 0x140001000 (sama dengan PE, jadi semua alamat tetap), data nol (bss) di atasnya
+        be vaTeks = 5368709120 + BASE_RVA
+        be vaData = vaTeks + gBase
+        be ukDataL = ukSection - gBase
+        for k in range(14)
+            w64(sek(OFF_IAT + 8 * k), vaTeks + stubAddr[k])
+        w8(0, 127)
+        w8(1, 69)
+        w8(2, 76)
+        w8(3, 70)
+        w8(4, 2)
+        w8(5, 1)
+        w8(6, 1)
+        w16(16, 2)
+        w16(18, 62)
+        w32(20, 1)
+        w64(24, vaTeks + entLinux)
+        w64(32, 64)
+        w16(52, 64)
+        w16(54, 56)
+        w16(56, 2)
+        w16(58, 64)
+        w32(64, 1)
+        w32(68, 5)
+        w64(72, 4096)
+        w64(80, vaTeks)
+        w64(88, vaTeks)
+        w64(96, kurKode)
+        w64(104, kurKode)
+        w64(112, 4096)
+        w32(120, 1)
+        w32(124, 6)
+        w64(128, 0)
+        w64(136, vaData)
+        w64(144, vaData)
+        w64(152, 0)
+        w64(160, ukDataL)
+        w64(168, 4096)
+        be hL = CreateFileA(keluar, 1073741824, 0, 0, 2, 128, 0)
+        be tulisL = newBuffer(8)
+        be nolL = newBuffer(4096)
+        WriteFile(hL, B, 176, tulisL, 0)
+        WriteFile(hL, nolL, 4096 - 176, tulisL, 0)
+        WriteFile(hL, B + RAW, kurKode, tulisL, 0)
+        CloseHandle(hL)
+        if not diam
+            print "Done: " keluar " (" + str(4096 + kurKode) + " bytes, linux)"
+        return
     be rawSection = ratakan(kurKode, 512)
     be ukData = ukSection - gBase
     be rawData = ratakan(ukData, 512)
@@ -4452,7 +5013,7 @@ func kompilasi(sumber string, keluar string)
     w32(o + 60, RAW)                      # SizeOfHeaders
     w16(o + 68, 3)                        # Subsystem = console
     w16(o + 70, 33024)                    # DllCharacteristics = NX_COMPAT | TERMINAL_SERVER_AWARE (0x8100)
-    w64(o + 72, 1048576)                  # stack reserve (1 MB)
+    w64(o + 72, 268435456)                # stack reserve (256 MB, dipakai bertahap): rekursi dalam tidak cepat habis
     w64(o + 80, 4096)                     # stack commit
     w64(o + 88, 1048576)                  # heap reserve
     w64(o + 96, 4096)                     # heap commit
@@ -4513,20 +5074,20 @@ func replNomor(teks string, geser int) string
 
 func replBangun(prog string, tmp string, exe string, diri string, geser int) string
     writeFile(tmp, prog)
-    be o = shText("\"\"" + diri + "\" build \"" + tmp + "\" -o \"" + exe + "\"\"")
+    be o = shText(bungkusSh(kutipSh(diri) + " build " + kutipSh(tmp) + " -o " + kutipSh(exe)))
     if substr(o, 0, 5) == "Done:"
         return ""
     return replNomor(trim(replace(replace(o, "\r", ""), tmp, "<repl>")), geser)
 
 func replJalan(exe string, tmp string, geser int) string
-    return replNomor(trim(replace(replace(shText("\"" + exe + "\""), "\r", ""), tmp, "<repl>")), geser)
+    return replNomor(trim(replace(replace(shText(kutipSh(exe)), "\r", ""), tmp, "<repl>")), geser)
 func replMain(diri string)
     print "Nerx REPL. :help for help, :quit to exit."
     be defs list string
     be bufT = newBuffer(520)
     GetTempPathA(500, bufT)
     be tmp = peekText(bufT) + "nerx_repl_" + str(GetCurrentProcessId()) + ".nrx"
-    be exe = peekText(bufT) + "nerx_repl_" + str(GetCurrentProcessId()) + ".exe"
+    be exe = peekText(bufT) + "nerx_repl_" + str(GetCurrentProcessId()) + sufiksExe()
     be kosong = 0
     be selesai = false
     loop not selesai
@@ -4604,7 +5165,7 @@ be namaEx = peekText(bufEx)
 be adaNerx = indexOf(lower(namaEx), "nrxlang_c.exe") >= 0
 if not adaNerx
     # nrxc.exe terpasang: file runtime ada di sebelah nrxc.exe
-    be ke = len(namaEx) - 1 - indexOf(reverse(namaEx), "\\")
+    be ke = akhirPemisah(namaEx)
     if ke >= 0
         be rtDir = slice(namaEx, 0, ke + 1)
 be sisaArg list string
@@ -4616,6 +5177,9 @@ if adaNerx
             be mulaiArg = k + 1
 for k in range(mulaiArg, len(argv))
     add(sisaArg, argv[k])
+if len(sisaArg) >= 2 and sisaArg[0] == "debug"
+    be debugMode = true
+    be sisaArg[0] = "run"
 if len(sisaArg) >= 3 and sisaArg[1] == "--trace" and contains("run build check", sisaArg[0])
     be jejak = true
     be sisaTanpa list string
@@ -4632,14 +5196,14 @@ if len(sisaArg) >= 2 and sisaArg[0] == "run"
         exit(1)
     be bufTmp = newBuffer(520)
     GetTempPathA(500, bufTmp)
-    be exeTmp = peekText(bufTmp) + "nrxrun_" + str(GetCurrentProcessId()) + ".exe"
+    be exeTmp = peekText(bufTmp) + "nrxrun_" + str(GetCurrentProcessId()) + sufiksExe()
     be diam = true
     tentukanBahasa(sumber)
     kompilasi(sumber, exeTmp)
-    be cmdRun = "\"\"" + exeTmp + "\""
+    be cmdRun = kutipSh(exeTmp)
     for k in range(2, len(sisaArg))
-        be cmdRun = cmdRun + " \"" + sisaArg[k] + "\""
-    be kode = system(cmdRun + "\"")
+        be cmdRun = cmdRun + " " + kutipSh(sisaArg[k])
+    be kode = system(bungkusSh(cmdRun))
     DeleteFileA(exeTmp)
     exit(kode)
 if len(sisaArg) == 1 and sisaArg[0] == "repl"
@@ -4652,7 +5216,7 @@ if len(sisaArg) == 2 and sisaArg[0] == "check"
         exit(1)
     be bufCk = newBuffer(520)
     GetTempPathA(500, bufCk)
-    be exeCk = peekText(bufCk) + "nrxchk_" + str(GetCurrentProcessId()) + ".exe"
+    be exeCk = peekText(bufCk) + "nrxchk_" + str(GetCurrentProcessId()) + sufiksExe()
     be diam = true
     tentukanBahasa(sisaArg[1])
     kompilasi(sisaArg[1], exeCk)
@@ -4675,11 +5239,11 @@ if len(sisaArg) >= 1 and sisaArg[0] == "test"
             sort(isiDir)
             for nmT in isiDir
                 if slice(nmT, -4) == ".nrx" and (startsWith(nmT, "test_") or slice(nmT, -9) == "_test.nrx")
-                    add(daftarTes, sas + "\\" + nmT)
+                    add(daftarTes, sas + sepDir() + nmT)
     be lulusT = 0
     be gagalT = 0
     for fT in daftarTes
-        be kodeT = system("\"\"" + namaEx + "\" run \"" + fT + "\"\"")
+        be kodeT = system(bungkusSh(kutipSh(namaEx) + " run " + kutipSh(fT)))
         if kodeT == 0
             print "PASS  " fT
             be lulusT += 1
@@ -4700,13 +5264,15 @@ if len(sisaArg) >= 2 and sisaArg[0] == "build"
     be sisaArg = sisaBaru
 if len(sisaArg) >= 1
     be sumber = sisaArg[0]
-    be keluar = sumber + ".exe"
+    be keluar = sumber + sufiksExe()
     if slice(sumber, -5) == ".nrxl"
-        be keluar = slice(sumber, 0, len(sumber) - 5) + ".exe"
+        be keluar = slice(sumber, 0, len(sumber) - 5) + sufiksExe()
     if slice(sumber, -4) == ".nrx"
-        be keluar = slice(sumber, 0, len(sumber) - 4) + ".exe"
+        be keluar = slice(sumber, 0, len(sumber) - 4) + sufiksExe()
     if len(sisaArg) >= 2
         be keluar = sisaArg[1]
+    if keluar == sumber
+        be keluar = sumber + ".out"
     if not fileExists(sumber)
         print "nerx: file " sumber " not found"
         exit(1)

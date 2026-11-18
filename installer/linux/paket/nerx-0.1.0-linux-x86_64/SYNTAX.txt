@@ -1,0 +1,1295 @@
+==============================================================================
+                          SYNTAX NERXELITY (nerx)
+==============================================================================
+
+Daftar lengkap syntax nerx: bahasa inti, fungsi bawaan, dan semua library.
+Versi bahasa Inggris: SYNTAX.en.txt.
+
+Isi:
+   1. Menjalankan dan build
+   2. Dasar
+   3. Variabel
+   4. Operator
+   5. Input dan output
+   6. Alur program
+   7. Fungsi
+   8. Struct
+   9. File lain, export, library, dan ffi
+  10. Fungsi bawaan (tanpa lib)
+  11. Library
+  12. Batasan
+  13. Extension VS Code
+  14. nrxc: compiler dalam nerx (tanpa VM)
+
+
+==============================================================================
+1. MENJALANKAN DAN BUILD
+==============================================================================
+
+Jalankan script (dikompilasi ke .exe sementara, dijalankan, lalu dihapus):
+
+    nerx run contoh_fitur.nrx
+
+Jadikan .exe (tidak butuh apa-apa lagi; yang membuatnya adalah compiler nerx
+(nrxc) yang sudah ada di dalam nerx.exe, lihat bagian 14):
+
+    nerx build contoh_fitur.nrx       -> contoh_fitur.exe
+    nerx build game.nrx -o hasil\game.exe
+    nerx contoh_fitur.nrx             (sama dengan build)
+
+- Hasil .exe berdiri sendiri: isi file .nrx (dan file yang di-im) ikut
+  ditanam, jadi file .nrx tidak perlu ikut dibagikan.
+- Error tipe sudah ketahuan saat build, jadi .exe tidak dibuat.
+- Hasil dan pesan error .exe sama persis dengan menjalankan langsung.
+- .exe berisi kode mesin x64 yang dibuat nrxc langsung (tanpa VM dan tanpa
+  interpreter), jadi hitungan jauh lebih cepat daripada run. Syntax-nya
+  tidak berubah.
+- lib nrx_window dan ffi juga bisa di-build.
+- Installer memasang nerx.exe, prelude.nrx, pustaka.nrx, dan folder lib\
+  di satu folder; tidak butuh apa-apa lagi.
+- Implementasi yang lama dipindah ke folder history\
+  di repositori; tidak dibutuhkan untuk memakai atau membangun Nerx.
+
+nerx mencari file yang dibaca script (readFile, playSound, newImage, dll.) di
+folder tempat perintah dijalankan, bukan di folder script. Pengecualiannya im:
+file untuk im dicari dari folder script.
+
+
+==============================================================================
+2. DASAR
+==============================================================================
+
+  # komentar        Komentar sampai akhir baris. # di dalam tanda kutip
+                    bukan komentar.
+  indentasi         Spasi/tab di awal baris menentukan isi blok (if, loop,
+                    for, func, try, options).
+  satu baris        Satu perintah harus muat di satu baris.
+
+Jenis nilai:
+
+  angka     5   -3  (int)      2.5   5.0   1e3  (double)
+  teks      "Halo"
+  bool      true   false
+  list      [1, 2, 3]   ["apel", "jeruk"]   (isinya satu jenis)
+  map       {"Budi": 20, "Sari": 21}   (semua nilainya satu jenis)
+  array     array(1000)   array([1, 2.5])  (deretan angka desimal, lihat di bawah)
+  type      Player("Budi", 100)            (lihat bagian 8)
+
+Escape di dalam teks:
+
+  \n    baris baru
+  \t    tab
+  \r    kembali ke awal baris (untuk menimpa tulisan, mis. progress)
+  \"    tanda kutip
+  \\    garis miring terbalik
+
+Tulis path file dengan / (contoh "C:/data/a.txt"), karena \n di "C:\new"
+terbaca sebagai baris baru.
+
+Bahasa pesan error:
+
+    errlang = en                 # error dalam bahasa Inggris
+    errlang = id                 # error dalam bahasa Indonesia
+
+- Tanpa errlang, bahasanya mengikuti bahasa Windows: Windows berbahasa
+  Indonesia mendapat error bahasa Indonesia, bahasa lain mendapat Inggris.
+- errlang hanya boleh di file utama, paling kiri. Berlaku untuk seluruh
+  program, termasuk file yang di-im.
+- Setiap error punya kode yang sama di semua bahasa, contoh:
+      error E0003 di game.nrx:5: variabel skor belum dibuat
+      error E0003 in game.nrx:5: variable skor has not been created
+  Kode ini bisa dicari di internet walau pesannya beda bahasa.
+
+
+==============================================================================
+3. VARIABEL
+==============================================================================
+
+    be x = 5
+    be nama = "Budi"
+    be x int = 5                 # dengan tipe: int, float, double, bool,
+                                 # string, list, map
+    be aktif bool                # tanpa nilai: int/float/double = 0,
+                                 # bool = false, string = "",
+                                 # list = [], map = {}
+    be skor list int             # list kosong berisi int
+    be umur map int              # map kosong, nilainya int
+    be x += 1                    # juga -=  *=  /=  %=
+    be daftar[0] = "a"           # isi list
+    be umur["Budi"] = 21         # isi map (key baru dibuat, nilai awal 0)
+    be p.hp -= 10                # isi field type / map
+    be data.pemain[0].hp = 50    # bertingkat
+
+- Variabel harus dibuat dulu sebelum dibaca; kalau tidak, muncul error.
+- Di dalam fungsi, variabel baru bersifat lokal. Variabel global yang sudah
+  ada tetap bisa diubah dari dalam fungsi.
+- Variabel for di dalam fungsi selalu lokal: for i di fungsi tidak mengubah
+  i milik program utama.
+- Semua be dan for di luar fungsi membuat variabel global, termasuk yang ada
+  di dalam loop atau if. Kalau fungsi memakai nama yang sama dengan jenis
+  lain, error muncul sebelum program jalan, dengan nomor baris global itu:
+
+    loop running3d()
+        be t = trim(ketik)       # t global, teks
+    func rak()
+        be t = 0.5               # ERROR: t sudah jadi variabel global bertipe string
+
+Tipe ketat:
+
+    be x = 5                     # sama dengan be x int = 5
+    be x = "halo"                # ERROR: x bertipe int
+    be x = 2.5                   # ERROR: desimal ke int, pakai int(2.5)
+    be h = 2.5                   # tanpa tipe, desimal jadi double
+    be h float = 2.5             # float ditulis sendiri
+    be h = 3                     # boleh: int masuk ke double, jadi 3.0
+
+- Jenis variabel ditentukan saat dibuat (dari tipe yang ditulis, atau dari
+  nilai pertamanya) dan tidak bisa berubah. Tebakannya: 5 -> int,
+  2.5 / 5.0 -> double, "a" -> string, true -> bool.
+- Isi list dan map harus satu jenis: [1, "dua"] dan add(skorList, "x")
+  error. [1, 2.5] boleh dan semuanya jadi double.
+- Data campur (nama dan umur sekaligus) memakai type, bukan map.
+- be x = [] dan be x = {} error karena jenis isinya tidak diketahui;
+  tulis be x list int atau be x map string.
+- Field type tetap berjenis sesuai yang ditulis di type.
+- Desimal yang nilainya bulat dicetak dengan .0 (4 / 2 -> 2.0) supaya
+  terlihat bedanya dengan int.
+- Hasil fromJson boleh campur, karena JSON memang campur. Tipenya json:
+  be data json = fromJson(teks). be data json saja = json kosong {}.
+  typeOf tetap menyebut bentuk isinya (map, list, ...).
+- be m[k] += nilai: kalau key k belum ada, mulai dari nilai kosong jenis isi
+  map (0, 0.0, "", false). Jadi be hitung[kata] += 1 langsung jalan.
+- Parameter fungsi mengikuti jenis argumen yang diberikan.
+
+Cek sebelum jalan: sebelum baris pertama dijalankan, nerx memeriksa seluruh
+file (termasuk isi fungsi yang belum dipanggil). Kalau ada yang pasti salah,
+program tidak jalan sama sekali dan errornya langsung tampil:
+
+    be skor = 10
+    be skor += 0.5               # error sebelum jalan: skor bertipe int
+    tambah(1, "dua")             # error: parameter b bertipe int
+    func hasil() int
+        return "teks"            # error walaupun hasil() belum dipanggil
+
+- Yang dicek: isi variabel yang jenisnya sudah pasti, argumen dan jumlah
+  argumen fungsi, nilai return, field type, dan variabel lock.
+- Operator yang pasti salah juga dicek: "17" * 2, 10 == "10", list + 1.
+- Fungsi dengan parameter tanpa tipe dicek untuk tiap jenis argumen yang
+  dipakai: func kurang(a, b) dipanggil kurang("lima", 2) langsung error.
+- Kalau jenis sebuah nilai baru diketahui saat jalan (misalnya isi json),
+  baris itu dicek saat jalan seperti biasa.
+- Isi blok try tidak dicek sebelum jalan, karena try memang untuk
+  menangkap error.
+
+lock (variabel yang tidak bisa diubah):
+
+    lock PI = 3.14159
+    lock MAX_HP int = 100
+    lock WARNA = ["merah", "biru"]
+
+- be PI = 3, be PI += 1, dan for PI in ... akan error.
+- Isi list/map yang di-lock juga terkunci: be WARNA[0] = ..., add(),
+  takeLast(), dan remove() ditolak.
+- lock hanya untuk membuat variabel baru.
+
+delete (hapus variabel yang sudah tidak dipakai, seperti membebaskan memori manual):
+
+    be data = [1, 2, 3]
+    delete data                  # memorinya dilepas
+    delete a, b                  # beberapa sekaligus
+
+- Setelah di-delete, membaca variabel itu error seperti variabel yang belum
+  dibuat. Namanya boleh dipakai lagi dengan be.
+- Di dalam fungsi, delete menghapus variabel lokal dulu, lalu global.
+- Variabel lock dan variabel milik file lain tidak bisa di-delete.
+
+Memori dibereskan otomatis (reference counting):
+
+    be a = [1, 2, 3]
+    be b = a                     # a dan b memegang list yang SAMA
+    add(b, 4)                    # a juga jadi [1, 2, 3, 4]
+    be a = [9]                   # b masih memegang list lama, jadi tidak dibuang
+
+- List, map, dan objek type dibuang begitu tidak ada lagi variabel, list,
+  atau map yang memegangnya. delete hanya perlu kalau ingin melepas lebih
+  cepat (misalnya data besar di tengah program).
+- Teks selalu disalin, jadi mengubah satu teks tidak mengubah yang lain.
+- Jangan masukkan list ke dalam dirinya sendiri (add(a, a)): memorinya tidak
+  pernah dibuang.
+
+
+==============================================================================
+4. OPERATOR
+==============================================================================
+
+  + - * / %            Hitungan. % = sisa bagi. Pakai ( ) untuk urutan.
+                       / selalu menghasilkan desimal: 7 / 2 -> 3.5,
+                       4 / 2 -> 2.0. Untuk hasil bulat: int(7 / 2) -> 3.
+                       Hitungan int dengan int tetap int; kalau salah satu
+                       desimal, hasilnya desimal.
+  +                    Menjumlah kalau keduanya angka. Selain itu menggabung
+                       teks: "Umur: " + 5 -> "Umur: 5", "5" + 3 -> "53".
+  == != < > <= >=      Angka dengan angka, atau teks dengan teks. Hasilnya
+                       true / false. Angka dengan teks error: 5 == "5".
+
+Teks yang isinya angka (misalnya hasil ask) tetap teks. Untuk dihitung,
+ubah dulu: int("5") + 3 -> 8, float("2.5") * 2 -> 5.0, atau pakai ask.int.
+"5" * 2, sqrt("16"), dan -"5" error.
+  and  or  not         Logika.
+  in   not in          Ada di dalam list / teks / key map:
+                       "jeruk" in buah
+  x[i]                 Isi list atau huruf di teks (index mulai 0).
+  x["key"]  x.field    Isi map atau field type.
+
+Menggabung tanpa +:
+Teks dan nilai yang ditulis berjejer langsung digabung, di print, be, dan
+argumen fungsi.
+
+    print "Halo " nama "!"
+    be salam = "Skor: " skor
+    writeFile("a.txt", "isi " x)
+
+Minus setelah teks dibaca sebagai pengurangan, jadi bungkus dengan kurung:
+
+    print "hasil " (-x)
+
+
+==============================================================================
+5. INPUT DAN OUTPUT
+==============================================================================
+
+    print "Halo " nama
+    print                               # baris kosong
+    write("Loading", "...")             # seperti print, tanpa pindah baris
+    write("\rLoading 50%")              # \r: kembali ke awal baris, menimpa
+    be nama = ask "Nama? "
+    be umur = ask.int "Umur? "          # hanya menerima bilangan bulat
+    be umur int = ask "Umur? "          # sama dengan ask.int
+    be x = ask "Halo " nama ", umur? "  # prompt boleh berisi variabel
+    ask "Tekan Enter..."                # input dibuang
+    wait(1)                             # tunggu (detik)
+    wait(0.5)                           # boleh desimal
+    wait.float(0.5)                     # sama dengan wait(0.5)
+    wait.double(0.5)
+
+
+==============================================================================
+6. ALUR PROGRAM
+==============================================================================
+
+if / else if / else:
+
+    if x > 10
+        print "besar"
+    else if x > 5
+        print "sedang"
+    else
+        print "kecil"
+
+loop (selama kondisi benar):
+
+    be i = 0
+    loop i < 10
+        print i
+        be i += 1
+
+for ... in:
+
+    for b in ["apel", "jeruk"]     # isi list
+    for h in "abc"                 # per huruf
+    for k in orang                 # per key map
+    for i in range(5)              # 0, 1, 2, 3, 4
+
+break / continue:
+
+    for i in range(10)
+        if i == 2
+            continue               # lanjut ke putaran berikutnya
+        if i == 5
+            break                  # keluar dari loop
+
+  break dan continue juga bekerja dari dalam if, try, dan options.
+
+options (pilih salah satu):
+
+    options pilihan
+        option "1"
+            print "Main"
+        option "2", "3"            # beberapa nilai sekaligus
+            print "Keluar"
+        else                       # boleh tidak ada
+            print "Tidak ada"
+
+  Hanya option pertama yang cocok yang dijalankan. Cocok atau tidaknya sama
+  dengan == (option 4 cocok dengan "4").
+
+try / catch / throw:
+
+    try
+        be isi = readFile("data.txt")
+    catch err                      # "catch" saja juga boleh
+        print "gagal: " err
+
+    throw "pesan error"            # buat error sendiri
+
+  Semua error nerx (termasuk dari library dan fungsi) bisa ditangkap.
+
+exit:
+
+    exit()                         # hentikan program
+    exit(3)                        # dengan kode keluar 3
+
+
+==============================================================================
+7. FUNGSI
+==============================================================================
+
+    func luas(p, l)
+        return p * l
+
+    print luas(4, 5)               # dipakai di ekspresi
+    sapa()                         # dipanggil sebagai perintah
+
+Nilai bawaan parameter:
+
+    func sapa(nama, salam = "Halo")
+        return salam ", " nama
+
+    sapa("Budi")                   # Halo, Budi
+    sapa("Budi", "Hai")            # Hai, Budi
+    func kali(a, b = a * 2)        # nilai bawaan boleh memakai parameter
+                                   # sebelumnya
+
+- Parameter tanpa nilai bawaan harus ditulis duluan.
+- Maksimal 8 parameter. Fungsi boleh memanggil dirinya sendiri (rekursi).
+- return tanpa nilai mengembalikan teks kosong.
+
+Tipe parameter dan hasil (boleh ditulis, disarankan):
+
+    func tambah(a int, b int) int
+        return a + b
+
+    func luasLingkaran(r double) double
+        return 3.14 * r * r
+
+    func sapa(nama string, salam string = "Halo") string
+    func sembuh(p Player, n int = 10) Player      # nama type juga tipe
+
+- Tipe ditulis setelah nama parameter, tipe hasil setelah tanda ).
+- Argumen yang tidak cocok langsung error: tambah(1, "dua"), tambah(1, 2.5).
+  int boleh masuk ke parameter double.
+- Kalau tipe hasil ditulis, fungsi wajib memakai return dengan nilai yang
+  cocok. return 7 / 2 di fungsi int error; pakai int(7 / 2).
+- Parameter tanpa tipe mengikuti jenis argumen yang diberikan.
+
+
+==============================================================================
+8. TYPE (TIPE BARU, SEPERTI CLASS)
+==============================================================================
+
+    type Player
+        nama string
+        hp int = 100                       # nilai bawaan boleh
+        level int = 1
+
+        init nama, level                   # tanpa kurung, boleh tidak ada
+            be own.nama = nama
+            be own.level = level
+
+        func serang(n int)                 # method; own = objek ini
+            be own.hp -= n
+
+        func info() string
+            return own.nama " hp=" own.hp
+
+    be p = Player("Budi", 3)               # memanggil init
+    p.serang(30)
+    print p.info()                         # Budi hp=70
+    print typeOf(p)                        # Player
+
+Tanpa init, nilai diisi sesuai urutan field:
+
+    type Titik
+        x int
+        y int
+    be t = Titik(1, 2)                     # jumlah nilai = jumlah field
+
+- Tiap field wajib punya tipe; jenisnya tidak bisa diganti.
+- own hanya ada di dalam init dan method.
+- Nama type juga bisa jadi tipe parameter, hasil, dan isi list:
+  be tim list Player, func sembuh(p Player) Player.
+- Maksimal 16 field. Salah ketik field atau method langsung error.
+- struct sudah dihapus; pakai type.
+
+
+==============================================================================
+9. FILE LAIN, EXPORT, LIBRARY, DAN FFI
+==============================================================================
+
+im (memakai file .nrx buatan sendiri):
+
+    im hitung                      # = hitung.nrx
+    im "hitung.nrx"
+    im alat/hitung                 # = alat/hitung.nrx
+    im "alat/hitung"
+
+- nerx mencari file itu dari folder file yang menulis im.
+- File yang sama hanya dimuat sekali.
+- im harus ditulis paling kiri (tidak menjorok).
+- im adalah kata khusus: tidak boleh jadi nama fungsi atau type, dan im()
+  selalu error. Variabel bernama im (be im = 5) masih boleh.
+
+im ... from (hanya mengambil nama tertentu):
+
+    im luas, Titik from "alat"     # dari alat.nrx, hanya luas dan Titik
+    im luas from alat              # tanpa tanda kutip juga boleh
+
+- Nama lain yang di-ex di alat.nrx tidak bisa dipakai dari file ini.
+  Errornya memberi tahu nama mana yang perlu ditambahkan ke im.
+- Setiap nama yang ditulis harus di-ex di file itu; kalau tidak, error
+  sebelum program jalan.
+- im "alat" tanpa from tetap boleh, dan membuka semua yang di-ex.
+
+ex (export):
+Di file yang dipakai lewat im, hanya yang diberi ex yang bisa dipakai file lain.
+
+    ex func luasLingkaran(r)
+        return bulatkan(PI * r * r)
+    ex type Titik
+        x int
+        y int
+    ex be NAMA = "hitung"
+    ex lock PI = 3.14159
+
+    func bulatkan(x)               # tanpa ex: hanya untuk file ini
+        return round(x, 2)
+
+- File utama (yang dijalankan langsung) tidak perlu ex.
+- Nama yang sama di file berbeda tidak bentrok selama tidak di-ex.
+- ex harus ditulis paling kiri, di luar fungsi.
+
+lib (library bawaan):
+
+    lib nrx_window
+    lib nrx_rand
+    lib nrx_crudfile
+    lib nrx_keyboard
+    lib nrx_console
+    lib nrx_sound
+    lib nrx_json
+    lib nrx_http
+    lib nrx_3d
+
+Fitur library hanya bisa dipakai setelah lib-nya ditulis.
+
+ffi (memanggil fungsi DLL langsung):
+
+    ffi "user32.dll" (
+        func MessageBoxA(hwnd int, teks string, judul string, tipe int) int
+        func SetCursorPos(x int, y int) int
+    )
+    ffi "kernel32.dll" (
+        func GetTickCount() int
+        func Sleep(milidetik int)          # tanpa jenis hasil = tidak
+    )                                      # mengembalikan apa-apa
+
+    MessageBoxA(0, "Halo dari nerx!", "Pesan", 0)
+    SetCursorPos(100, 200)
+
+  Jenis argumen dan jenis hasil:
+    int        bilangan bulat 32-bit (juga BOOL, UINT, DWORD)
+    int64      bilangan bulat 64-bit
+    float      angka desimal 32-bit
+    double     angka desimal 64-bit
+    string     teks (char*)
+    pointer    alamat / handle (HWND, HANDLE, H..., *); 0 = NULL
+
+- Tulis "nama jenis" untuk tiap argumen (nama boleh tidak ditulis, cukup
+  jenisnya). Jenis hasil ditulis setelah tanda kurung tutup.
+- Maksimal 12 argumen. Hanya untuk Windows 64-bit.
+- nerx mengecek file DLL dan nama fungsinya saat membaca program, jadi salah
+  tulis langsung error sebelum program jalan.
+- Fungsi ffi didahulukan dari fungsi bawaan yang namanya sama (mis. sqrt).
+- Nama fungsi ffi tidak boleh sama dengan fungsi/type nerx buatan sendiri.
+- Fungsi ffi bisa dipanggil dari semua file (tidak perlu ex).
+- Nama lain untuk fungsi DLL: tulis "as NamaAsli" setelah jenis hasil.
+
+    ffi "msvcrt.dll" (
+        func panjang(s string) int as strlen
+    )
+
+Buffer (memori mentah untuk struct, array, dan teks keluaran):
+
+  newBuffer(n)                 n byte berisi 0, hasilnya alamat (pointer)
+  poke(p, offset, jenis, nilai)  tulis nilai di p + offset
+  peek(p, offset, jenis)       baca nilai di p + offset
+  peekText(p)                  teks yang diakhiri 0 di p (peekText(p, offset))
+  freeBuffer(p)                kembalikan memorinya
+  jenis: "int8", "int16", "int", "int64", "float", "double", "pointer"
+
+    # struct { int x; double y; } = 16 byte (y mulai di byte 8)
+    be s = newBuffer(16)
+    poke(s, 0, "int", 5)
+    poke(s, 8, "double", 2.5)
+    fungsiC(s)                   # kirim sebagai pointer
+    print peek(s, 8, "double")
+    freeBuffer(s)
+
+- Struct yang dikirim sebagai nilai (bukan pointer) dan ukurannya 8 byte atau
+  kurang: baca dulu dengan peek(s, 0, "int64"), lalu kirim sebagai int64.
+- Alamat yang salah membuat program crash; nerx tidak bisa mengeceknya.
+
+Callback (fungsi nerx yang dipanggil kode native):
+
+    func banding(a int, b int) int
+        return peek(a, 0, "int") - peek(b, 0, "int")
+
+    qsort(data, jumlah, 4, callback("banding"))
+
+- callback("nama") menghasilkan pointer ke fungsi itu. Maksimal 16 fungsi,
+  masing-masing sampai 4 parameter bilangan bulat/pointer; hasilnya bilangan
+  bulat. Callback harus dipanggil di thread yang sama (seperti qsort,
+  EnumWindows).
+
+
+==============================================================================
+10. FUNGSI BAWAAN (TANPA LIB)
+==============================================================================
+
+Nama fungsi peka huruf besar-kecil: getKey() benar, getkey() salah.
+
+--- List ---
+
+  len(x)                   jumlah isi list (juga panjang teks / jumlah key map)
+                           len([1, 2]) -> 2
+  add(list, nilai)         tambah di akhir list
+                           add(buah, "mangga")
+  takeLast(list)           ambil dan keluarkan isi terakhir
+                           takeLast([1, 2, 3]) -> 3
+  remove(list, i)          keluarkan isi index i
+                           remove(buah, 0)
+  sort(list)               list baru yang terurut
+                           sort([3, 1, 2]) -> [1, 2, 3]
+  filled(n, nilai)         list berisi n nilai yang sama, dibuat sekaligus
+                           filled(3, 0) -> [0, 0, 0]
+
+--- Array (angka saja, paling cepat) ---
+
+  array(n)                 n angka 0.0           array(3) -> [0.0, 0.0, 0.0]
+  array(n, nilai)          n angka yang sama     array(2, 7) -> [7.0, 7.0]
+  array(list)              list angka jadi array array([1, 2]) -> [1.0, 2.0]
+
+    be posisi array = array(1000)
+    be posisi[0] = 2.5
+    be posisi[1] += 1
+    print posisi[0] + posisi[1]
+
+- Isinya selalu angka desimal (double), seperti array double biasa: a[i] hasilnya
+  double, jadi untuk int pakai int(a[i]).
+- len, add, in, for x in a, lock, print, dan toJson bisa dipakai seperti list.
+- Lebih hemat memori dari list, dan di .exe hasil build hitungan dengan a[i]
+  jadi double langsung (bisa beberapa kali lebih cepat dari list).
+- Di ffi, array bisa dikirim ke parameter pointer sebagai double*.
+  reverse(x)               balik urutan (juga untuk teks)
+                           reverse([1, 2, 3]) -> [3, 2, 1]
+  indexOf(x, nilai)        posisi pertama, atau -1 kalau tidak ada
+                           indexOf(["a", "b"], "b") -> 1
+  slice(x, awal, akhir)    ambil dari awal sampai sebelum akhir
+                           (akhir opsional, negatif = dari belakang)
+                           slice([1, 2, 3, 4], 1, 3) -> [2, 3]
+  contains(x, nilai)       true / false (sama dengan in)
+
+--- Map ---
+
+  keys(m)                  list semua key
+  values(m)                list semua nilai
+  remove(m, key)           keluarkan key, kembalikan nilainya
+  contains(m, key)         ada key itu atau tidak
+  len(m)                   jumlah key
+
+--- Teks ---
+
+  trim(t)                  buang spasi di awal dan akhir
+                           trim("  Budi  ") -> "Budi"
+  upper(t)  lower(t)       huruf besar / kecil
+                           upper("halo") -> "HALO"
+  split(t)                 pecah per spasi
+                           split("a  b") -> ["a", "b"]
+  split(t, pemisah)        pecah per pemisah ("" = per huruf)
+                           split("a,b", ",") -> ["a", "b"]
+  join(list, pemisah)      gabung isi list (pemisah opsional)
+                           join(["a", "b"], "-") -> "a-b"
+  replace(t, cari, ganti)  ganti semua yang ketemu
+                           replace("kopi kopi", "kopi", "teh") -> "teh teh"
+  contains(t, bagian)      contains("halo", "al") -> true
+  indexOf(t, bagian)       indexOf("halo", "lo") -> 2
+  substr(t, mulai, panjang)
+                           substr("Halo Dunia", 0, 4) -> "Halo"
+                           (panjang opsional)
+  slice(t, awal, akhir)    slice("Nerx", -4) -> "lang"
+  reverse(t)               reverse("halo") -> "olah"
+
+--- Konversi ---
+
+  str(x)                   jadi teks
+  int(x)                   jadi bilangan bulat (error kalau bukan angka)
+  float(x)                 jadi angka desimal
+  typeOf(x)                "int", "double", "string", "bool", "list", "map",
+                           atau nama type (float juga tampil "double")
+
+--- Angka dan matematika ---
+
+  range(akhir)                   range(3) -> [0, 1, 2]
+  range(awal, akhir)             range(2, 5) -> [2, 3, 4]
+  range(awal, akhir, langkah)    range(10, 0, -3) -> [10, 7, 4, 1]
+  abs(x)                         abs(-5) -> 5
+  round(x)  round(x, digit)      round(2.567, 2) -> 2.57
+  floor(x)  ceil(x)              floor(2.9) -> 2
+  sqrt(x)                        sqrt(16) -> 4
+  sin(x), cos(x), tan(x)         sudut dalam radian: sin(pi() / 2) -> 1
+  atan2(y, x)                    sudut (radian) dari titik (x, y), -pi..pi
+  pi()                           3.14159...; derajat ke radian: d * pi() / 180
+  pow(a, b)                      pow(2, 10) -> 1024
+  min(...)  max(...)             max(3, 9, 2) -> 9   max([3, 9, 2]) -> 9
+
+--- Waktu dan program ---
+
+  time()                   "HH:MM:SS"
+  date()                   "YYYY-MM-DD"
+  timer()                  detik sejak program mulai
+  exit()  exit(kode)       hentikan program
+
+
+==============================================================================
+11. LIBRARY
+==============================================================================
+
+------------------------------------------------------------------------------
+lib nrx_window  -  window, tombol, canvas
+------------------------------------------------------------------------------
+
+templateStyle (gaya tampilan):
+
+    templateStyle judul(
+        size: 28
+        bold: true
+        color: "biru"
+    )
+
+  Properti:
+    size: 20                  ukuran huruf (piksel)
+    font: "Consolas"          jenis huruf
+    bold: true                tebal
+    italic: true              miring
+    color: "biru"             warna teks
+    background: "#1e1e2e"     warna latar
+    width: 120                lebar elemen (tanpa ini otomatis)
+    height: 40                tinggi elemen (tanpa ini otomatis)
+    hover: "#b4befe"          latar tombol saat kursor di atasnya
+    hoverColor: "putih"       teks tombol saat kursor di atasnya
+
+- Dipakai dengan menyebut namanya: newText("Halo", 20, 20, judul).
+  Satu elemen maksimal memakai 4 style.
+- Di newWindow: background = latar window; size, font, bold, italic jadi
+  bawaan semua isinya; color jadi bawaan teks.
+- Urutan yang menang: style window -> style elemen -> argumen ukuran/warna.
+
+windowTemplate (isi window):
+
+    windowTemplate menu(
+        newText(teks, x, y, ukuranHuruf, warna, style)
+        newButton(onclick(fungsi()), teks, x, y, ukuranHuruf, style)
+        newInput(variabel, x, y, lebar, ukuranHuruf, style)
+        newCheck(variabel, "teks", x, y, ukuranHuruf, style)
+        newSelect(variabel, pilihan, x, y, lebar, ukuranHuruf, style)
+        newList(variabel, pilihan, x, y, lebar, tinggi, ukuranHuruf, style)
+        newCanvas(nama, x, y, lebar, tinggi, style)
+        newImage("file.png", x, y, lebar, tinggi, style)
+        onKey(fungsi())
+        onMouse(fungsi())
+        onTimer(fungsi(), detik)
+    )
+
+- Argumen setelah posisi x, y boleh tidak ditulis. Nama style boleh ditaruh
+  di mana saja di bagian akhir.
+- Teks boleh berisi variabel ("Skor: " skor) dan otomatis diperbarui.
+- newInput, newCheck, newSelect, newList terhubung dua arah dengan
+  variabelnya. newCheck berisi true/false; newSelect/newList berisi teks yang
+  dipilih; pilihan adalah list.
+- newCanvas(layar, ...) juga membuat variabel layar untuk fungsi gambar.
+- Maksimal 32 isi per template.
+
+Event:
+
+  onclick(f()) di newButton   f()                    tombol diklik
+  onKey(f())                  f(tombol)              tombol keyboard ditekan
+  onMouse(f())                f(x, y, aksi, canvas)  mouse di canvas
+                                                     aksi: "left", "right",
+                                                     "release", "move"
+  onTimer(f(), detik)         f()                    dipanggil terus setiap
+                                                     sekian detik (maks. 4)
+
+- Parameter fungsi boleh lebih sedikit dari yang dikirim, misalnya
+  func klik(x, y).
+- Di window yang punya onKey, tombol keyboard hanya masuk ke onKey (kecuali
+  Tab, dan saat mengetik di newInput).
+
+Membuka dan menutup window:
+
+    newWindow("Judul", panjang, lebar)
+    newWindow("Judul", panjang, lebar, menu)          # dengan template
+    newWindow("Judul", panjang, lebar, menu, gelap)   # template dan style
+    closeWindow("Judul")                              # tutup satu window
+    closeWindow()                                     # tutup semua
+
+- Event dijalankan saat script sedang wait, atau setelah script selesai.
+- Program baru keluar setelah semua window ditutup.
+
+Menggambar di canvas:
+
+    clearCanvas(layar)                                # atau dengan warna
+    clearCanvas(layar, "#1e1e2e")
+    drawRect(layar, x, y, lebar, tinggi, warna)
+    drawCircle(layar, x, y, jariJari, warna)          # x, y = titik tengah
+    drawLine(layar, x1, y1, x2, y2, warna, tebal)     # tebal opsional
+    drawText(layar, teks, x, y, warna, ukuranHuruf)   # ukuran opsional (16)
+    drawImage(layar, "file.png", x, y)                # atau + lebar, tinggi
+
+  drawImage dan newImage bisa membuka PNG, JPG, dan BMP. Gambar baru muncul
+  di layar di akhir setiap event atau wait.
+
+Warna window:
+  hitam, putih, merah, hijau, biru, kuning, oranye, ungu, abu
+  (atau black, white, red, green, blue, yellow, orange, purple, gray),
+  atau "#RRGGBB".
+
+------------------------------------------------------------------------------
+lib nrx_rand  -  angka acak
+------------------------------------------------------------------------------
+
+  random()              desimal acak 0 sampai di bawah 1
+  random(min, max)      bilangan bulat acak min..max
+  choice(list)          satu isi list secara acak
+  randomSeed(n)         atur seed supaya urutan acak bisa diulang
+
+------------------------------------------------------------------------------
+lib nrx_crudfile  -  file
+------------------------------------------------------------------------------
+
+  createFile(path)          buat file kosong; false kalau sudah ada
+  readFile(path)            seluruh isi file sebagai teks
+  readLines(path)           isi file sebagai list, satu baris per isi
+  writeFile(path, teks)     timpa isi file
+  writeLines(path, list)    timpa isi file, satu isi list per baris
+  appendFile(path, teks)    tambah teks di akhir file
+  appendLine(path, teks)    tambah teks sebagai baris baru
+  deleteFile(path)          hapus file; false kalau gagal
+  fileExists(path)          true kalau file ada
+  listFiles(folder)         list nama file dan folder (folder berakhiran /)
+  readRange(path, mulai, n) list n baris mulai baris ke-mulai (baris pertama 1)
+  findInFile(path, teks)    list nomor baris yang berisi teks
+  replaceInFile(path, lama, baru)  ganti semua, hasilnya jumlah yang diganti;
+                            akhir baris file (CRLF/LF) tetap
+
+------------------------------------------------------------------------------
+Teks berformat, argumen program, dan REPL
+------------------------------------------------------------------------------
+
+  f"..." teks dengan nilai di dalam { }:
+      be nama = "Budi"
+      be umur = 20
+      print f"halo {nama}, tahun depan umurmu {umur + 1}"     # halo Budi, tahun depan umurmu 21
+  - Ekspresi apa pun boleh di dalam { }: variabel, hitungan, pemanggilan fungsi, d.field.
+    Angka, true/false, list, dan sebagainya otomatis diubah jadi teks.
+  - {{ dan }} menghasilkan { dan } biasa. Isi { } tidak boleh memuat tanda kutip.
+  - Hasilnya nilai teks biasa: be s = f"{a}-{b}", atau diberikan ke fungsi.
+
+  args()                    argumen yang diberikan ke program, sebagai list teks
+      nerx run alat.nrx satu "dua kata" 3     ->   args() = ["satu", "dua kata", "3"]
+      alat.exe satu "dua kata" 3              ->   sama, kalau menjalankan .exe hasil build
+
+  nerx repl  (atau cukup nerx) prompt tempat mengetik kode dan langsung melihat hasilnya:
+      > 1 + 2
+      3
+      > be x = 5
+      > x * 2
+      10
+      > func dua(n int) int            blok (func, type, if, for, loop, try)
+      .     return n * 2               berlanjut di baris berikutnya
+      .                                baris kosong mengakhiri blok
+      > dua(21)
+      42
+  - Ekspresi dicetak nilainya. Baris be, func, type, lock, lib, dan im diingat.
+    :defs menampilkannya, :reset melupakannya, :quit keluar.
+  - Tiap baris dibangun dan dijalankan sebagai program kecil, jadi galat tidak
+    menutup REPL. Baris be yang lama dijalankan ulang (diam); baris lain hanya sekali.
+------------------------------------------------------------------------------
+sh  -  menjalankan perintah shell (bawaan, tanpa lib)
+------------------------------------------------------------------------------
+
+  sh dir /b                 jalankan perintah seperti di cmd; hasilnya tampil di layar
+  sh "echo halo " nama      teks dalam kutip plus variabel, digabung seperti print
+  sh cd src                 cd dikerjakan nerx sendiri, jadi pindah foldernya menetap
+  shCode(perintah)          jalankan dan kembalikan kode keluar (0 berarti berhasil)
+  shText(perintah)          jalankan dan kembalikan keluarannya sebagai teks (galat ikut)
+
+  Contoh:
+      sh cd src
+      sh nerx build game.nrx
+      be isi = shText("dir /b")
+      print len(split(trim(isi), "\n")) " file"
+      if shCode("git status") != 0
+          print "bukan repositori git"
+  sh menjalankan apa pun yang bisa dijalankan cmd, jadi jangan menyusun perintah dari
+  teks yang tidak dipercaya (input pengguna, file unduhan). Di dalam sh, pakai
+  .\nerx.exe kalau nerx tidak ada di PATH.
+------------------------------------------------------------------------------
+lib nrx_db  -  database SQLite (memakai winsqlite3.dll bawaan Windows)
+------------------------------------------------------------------------------
+
+  be db = Db()                      buat pegangan database (belum membuka apa pun)
+  db.open(path)                     buka atau buat file .db
+  db.close()                        tutup
+  db.exec(sql)                      CREATE / INSERT / UPDATE / DELETE; mengembalikan
+                                    jumlah baris yang berubah
+  db.execWith(sql, nilai)           sama, nilai (list teks) mengisi tanda ?
+  db.query(sql)                     SELECT; mengembalikan baris yang dibaca dengan next()
+  db.queryWith(sql, nilai)          sama, dengan nilai untuk ?
+  db.value(sql)                     nilai pertama dari baris pertama, sebagai teks
+  db.lastId()                       nomor baris dari INSERT terakhir
+  db.error()                        pesan galat SQL terakhir
+
+  Membaca baris (hasil query):
+  r.next()                          pindah ke baris berikutnya; false kalau sudah habis
+  r.text(i)  r.int(i)  r.float(i)   kolom ke-i (yang pertama 0) sebagai teks / int / desimal
+  r.isNull(i)                       true kalau kolomnya NULL
+  r.count()  r.name(i)              jumlah kolom, nama kolom ke-i
+  r.close()                         berhenti membaca lebih awal (tidak perlu setelah baris terakhir)
+
+  Teks SQL-nya SQL biasa, dikirim apa adanya. Galat SQL (tabel tidak ada, sintaks
+  salah) dilempar, jadi bisa ditangkap dengan try / catch.
+  Selalu taruh nilai di ? dan pakai execWith / queryWith. Jangan menempel teks dari
+  pengguna ke dalam teks SQL, itu membuka SQL injection.
+
+  Contoh:
+      lib nrx_db
+      be db = Db()
+      db.open("data.db")
+      db.exec("CREATE TABLE IF NOT EXISTS orang (nama TEXT, umur INT)")
+      db.execWith("INSERT INTO orang VALUES (?, ?)", ["Budi", "20"])
+      be r = db.query("SELECT nama, umur FROM orang")
+      loop r.next()
+          print r.text(0) " umur " r.int(1)
+      db.close()
+------------------------------------------------------------------------------
+lib nrx_os  -  folder kerja, folder, dan menjalankan perintah
+------------------------------------------------------------------------------
+
+  cwd()                     folder kerja sekarang
+  cd(path)                  pindah folder kerja; false kalau folder tidak ada
+  mkdir(path)               buat folder; false kalau gagal
+  rmdir(path)               hapus folder kosong; false kalau gagal
+  copyFile(dari, ke)        salin file (menimpa kalau tujuan sudah ada)
+  renameFile(dari, ke)      ganti nama atau pindahkan file/folder
+  getenv(nama)              isi environment variable ("" kalau tidak ada)
+  run(perintah)             jalankan perintah seperti di cmd, hasilnya tampil di
+                            layar; mengembalikan kode keluar (0 berarti berhasil)
+  Untuk melihat isi folder pakai listFiles dari nrx_crudfile. Contoh, seperti
+  mengetik "cd src" lalu sebuah perintah di terminal (lihat contoh\bangun.nrx):
+      lib nrx_os
+      cd("src")
+      run(".\\nerx.exe nrxc.nrx nerx_baru.exe")
+------------------------------------------------------------------------------
+lib nrx_keyboard  -  keyboard di console
+------------------------------------------------------------------------------
+
+  keyPressed("left")    true/false tanpa menunggu: tombol ditekan sejak
+                        dicek terakhir
+  getKey()              tunggu satu tombol, kembalikan namanya
+
+Nama tombol:
+  "a" sampai "z", "0" sampai "9", "left", "right", "up", "down", "space",
+  "enter", "escape" atau "esc", "tab", "backspace", "delete", "shift", "ctrl",
+  "alt", "home", "end", "pageup", "pagedown", "f1" sampai "f12".
+  Nama yang sama dipakai onKey di window.
+
+------------------------------------------------------------------------------
+lib nrx_console  -  tampilan console
+------------------------------------------------------------------------------
+
+  clear()                   bersihkan layar
+  cursor(x, y)              pindah kursor ke kolom x, baris y (mulai 0)
+  color("merah")            warna teks untuk print berikutnya
+  color("putih", "biru")    warna teks + latar
+  color()                   kembali ke warna normal
+  runCommand(perintah)      jalankan perintah cmd, hasilnya output (stdout dan
+                            stderr) sebagai teks: runCommand("dir")
+  commandStatus()           kode keluar perintah terakhir (0 = berhasil)
+
+Warna console:
+  hitam, merah, hijau, kuning, biru, ungu, cyan atau tosca, putih, abu
+  (atau versi Inggrisnya), atau "#RRGGBB".
+
+------------------------------------------------------------------------------
+lib nrx_sound  -  suara
+------------------------------------------------------------------------------
+
+  playSound("koin.wav")     putar efek sekali (beberapa bisa bersamaan)
+  playMusic("lagu.mp3")     putar musik berulang (menggantikan yang lama)
+  stopMusic()               hentikan musik
+  stopSound()               hentikan semua efek
+
+  Format: WAV dan MP3.
+
+------------------------------------------------------------------------------
+lib nrx_json  -  JSON
+------------------------------------------------------------------------------
+
+  toJson(data)          data nerx -> teks JSON satu baris
+  toJson(data, true)    sama, tapi rapi (berbaris dan menjorok)
+  fromJson(teks)        teks JSON -> data nerx
+
+- Objek JSON <-> map, array <-> list, true/false <-> bool,
+  null -> teks kosong. Struct disimpan sebagai objek.
+- Untuk menyimpan dan membaca data dari file, pasangkan dengan nrx_crudfile:
+
+    writeFile("data.json", toJson(data, true))
+    be hasil json = fromJson(readFile("data.json"))   # isinya boleh campur
+
+------------------------------------------------------------------------------
+lib nrx_http  -  internet (HTTP dan HTTPS)
+------------------------------------------------------------------------------
+
+  httpGet(url)                  isi halaman/data sebagai teks
+  httpPost(url, isi)            kirim teks, hasilnya teks balasan
+  httpPost(url, isi, jenis)     dengan jenis isi, mis. "application/json"
+  httpPost(url, isi, jenis, header)  header tambahan berupa map teks
+  httpGet(url, header)          sama, untuk GET
+  httpStatus()                  kode status permintaan terakhir (200, 404, ...)
+
+    lib nrx_http
+    lib nrx_json
+    be data json = fromJson(httpGet("https://api.contoh.com/data"))
+    if httpStatus() != 200
+        print "gagal: " httpStatus()
+
+    be header = {"Authorization": "Bearer " + kunci}
+    be balas = httpPost(url, isiJson, "application/json", header)
+
+- Status selain 2xx bukan error; cek dengan httpStatus(). Tidak bisa
+  terhubung (alamat salah, tidak ada internet) baru error.
+
+Di belakang layar (program tetap jalan selama menunggu, mis. window game):
+
+  httpStart(url, isi, jenis, header)   mulai kirim, langsung kembali
+  httpDone()                    true kalau sudah selesai (atau tidak ada)
+  httpResult()                  balasannya; status di httpStatus()
+  httpPartial()                 teks yang datang sejak httpPartial terakhir
+                                (untuk jawaban streaming, mis. "stream": true di
+                                API AI); httpResult tetap berisi seluruh balasan
+
+    httpStart(url, isiJson, "application/json", header)
+    loop running3d()
+        if httpDone()
+            be balas = httpResult()
+        ...gambar seperti biasa...
+
+- Satu permintaan sekaligus: httpStart berikutnya baru boleh sesudah
+  httpResult. Error koneksi muncul saat httpResult.
+
+------------------------------------------------------------------------------
+lib nrx_3d  -  game 3D sederhana (raylib)
+------------------------------------------------------------------------------
+
+  open3d(judul, lebar, tinggi)          buka window 3D
+  running3d()                           true selama window belum ditutup
+  camera3d(x, y, z, lihatX, lihatY, lihatZ)   kamera dan titik yang dilihat
+  begin3d(warna)  ...  end3d()          satu frame: latar, gambar, tampilkan
+  begin3d(atas, bawah)                  latar bergradasi dari atas ke bawah
+  cube(x, y, z, lebar, tinggi, dalam, warna)  kotak (sisinya diarsir otomatis
+                                        supaya bentuknya terlihat); cubeWire(...)
+                                        hanya garisnya
+  cylinder(x, y, z, jariAtas, jariBawah, tinggi, warna)
+                                        tabung; jari 0 di atas = kerucut;
+                                        y = dasar tabung
+  sphere(x, y, z, jari, warna)          bola
+  plane(x, y, z, lebar, dalam, warna)   lantai datar
+  grid(jumlah, jarak)                   garis bantu di lantai
+  text2d(teks, x, y, ukuran, warna)     tulisan di layar (piksel)
+  rect2d(x, y, lebar, tinggi, warna)    kotak di layar (piksel)
+  rectGrad2d(x, y, lebar, tinggi, atas, bawah)   kotak 2D bergradasi
+  textWidth2d(teks, ukuran)             lebar tulisan dalam piksel
+  key3d("w")                            true selama tombol ditekan (huruf,
+                                        angka, space, enter, escape, shift,
+                                        up, down, left, right, backspace,
+                                        tab, ctrl)
+  pressed3d("enter")                    true sekali saat ditekan, berulang
+                                        kalau ditahan (untuk mengetik)
+  typed3d()                             huruf yang diketik sejak frame lalu
+  clipboard3d()                         teks di clipboard (untuk Ctrl+V)
+  clipboard3d(teks)                     isi clipboard dengan teks (untuk salin)
+  screenshot3d("layar.png")             simpan isi window ke .png
+  mouse3d()                             posisi mouse [x, y] dalam piksel
+  click3d()                             true sekali saat klik kiri
+  wheel3d()                             putaran roda mouse frame ini (+ ke atas)
+  ground3d()                            titik lantai (y = 0) di bawah mouse:
+                                        [x, z], atau [] kalau menunjuk langit
+  toScreen3d(x, y, z)                   posisi piksel [x, y] dari titik 3D,
+                                        untuk label di atas benda
+  exitKey3d("")                         tombol yang menutup window (awal
+                                        escape; "" = hanya tombol X)
+  fps3d(n)                              batas frame per detik (awal 60)
+  frameTime()                           detik sejak frame sebelumnya
+  close3d()                             tutup window
+
+  warna: "red", "green", "blue", "white", "black", "gray", "darkgray",
+         "yellow", "orange", "purple", "pink", "brown", "skyblue", "#rrggbb",
+         "#rrggbbaa" (aa = transparansi, 00 tembus sampai ff penuh)
+
+    lib nrx_3d
+    open3d("Game", 800, 600)
+    be x = 0.0
+    loop running3d()
+        if key3d("d")
+            be x += 3 * frameTime()
+        begin3d("skyblue")
+        grid(10, 1)
+        cube(x, 0.5, 0, 1, 1, 1, "orange")
+        text2d("WASD", 10, 10, 20, "black")
+        end3d()
+    close3d()
+
+Memutar dan menggeser (seperti transform di program 3D lain):
+
+    push3d()                    # simpan posisi dan arah sekarang
+    move3d(x, 0, z)             # semua gambar berikutnya pindah ke titik ini
+    turn3d("y", arah)           # lalu diputar (derajat) pada sumbu "x", "y", "z"
+    cube(0, 1, 0, 1, 2, 0.5, "orange")   # koordinat sekarang relatif ke titik itu
+    push3d()                    # boleh bertingkat (maksimal 16), mis. lengan:
+    move3d(0.6, 1.8, 0)         #   pindah ke bahu
+    turn3d("x", ayunan)         #   ayun dari bahu
+    cube(0, -0.4, 0, 0.3, 0.8, 0.3, "orange")
+    pop3d()
+    pop3d()                     # kembali seperti sebelum push3d
+
+- Setiap push3d harus ditutup pop3d sebelum end3d. text2d/rect2d hanya di
+  luar push3d.
+
+- Gambar hanya di antara begin3d dan end3d (screenshot3d sesudah end3d).
+- Variabel lingkungan NRX3D_HIDDEN=1 membuat window tidak tampil (untuk tes
+  otomatis); gambar dan screenshot3d tetap jalan.
+- Contoh lengkap dengan kotak ketik: agen/kantor.nrx.
+- .exe hasil build program 3D sekitar 1.7 MB (raylib ikut di dalamnya);
+  program lain tidak ikut membawa raylib.
+
+
+==============================================================================
+12. BATASAN
+==============================================================================
+
+- Satu baris maksimal 511 karakter.
+- Satu program (termasuk file yang di-im) maksimal 4096 baris.
+- Maksimal 128 fungsi, 64 type, 1024 variabel global, dan 64 variabel
+  lokal per fungsi.
+- lock di dalam loop di luar fungsi error di putaran kedua (variabelnya
+  sudah ada).
+
+
+==============================================================================
+13. EXTENSION VS CODE
+==============================================================================
+
+Folder vscode-nerx berisi extension untuk warna sintaks dan cuplikan kode.
+Cara memasang, dan nanti cara merilisnya, ada di vscode-nerx/README.md.
+
+==============================================================================
+14. NRXC: COMPILER DALAM nerx (TANPA VM)
+==============================================================================
+
+nrxc adalah compiler nerx yang ditulis dengan nerx sendiri (src\nrxc.nrx).
+Ia membaca file .nrx dan menulis file .exe Windows 64-bit langsung (kode mesin
+x64 + header PE), tanpa VM dan tanpa toolchain luar.
+
+Memakai:
+
+    nerx game.nrx                          # -> game.exe
+    nerx game.nrx hasil\game.exe           # pilih nama .exe
+    nerx                                 # tanpa argumen: REPL (lihat bagian REPL)
+    nerx build game.nrx -o game.exe        # sama, dengan pilihan nama .exe
+    nerx run game.nrx                      # kompilasi ke .exe sementara, jalankan, hapus
+
+- nerx.exe (berisi nrxc) ikut di installer. File runtime-nya (prelude.nrx, pustaka.nrx, dan
+  folder lib\nrx_*.nrx) dibaca dari folder tempat nerx.exe berada, jadi Nerx
+  bisa dijalankan dari folder mana saja.
+- Kalau mau membangunnya sendiri: dari folder src jalankan
+  nrxc.exe nrxc.nrx nerx_baru.exe (nrxc membangun dirinya sendiri dari benih; tanpa interpreter lama).
+- nrxc mengompilasi dirinya sendiri: nrxc2.exe dan nrxc3.exe hasilnya sama
+  persis (byte demi byte).
+- Hanya fungsi yang benar-benar dipanggil yang masuk ke .exe, jadi hasilnya kecil.
+- .exe punya dua section: .text (kode, hanya baca/eksekusi) dan .data (variabel).
+- Semua library (nrx_crudfile, rand, console, keyboard, json, http, sound, os, db,
+  window, 3d) ditulis ulang dalam nerx di src\lib\nrx_*.nrx. Cara
+  memakainya sama: lib nrx_window.
+- nrx_3d di nrxc adalah renderer perangkat lunak (GDI), bukan raylib: bentuk
+  dan fungsinya sama, tetapi warna #rrggbbaa hanya dibedakan tembus (alpha 00)
+  atau tidak, dan hurufnya memakai Segoe UI.
+- Pesan error saat jalan sama dengan interpreter lama:
+      error E0026 in game.nrx:3: index 5 is outside the list (the list has 1 items)
+  Pesan error saat kompilasi (sebelum .exe dibuat) masih berbeda bentuknya.
+  Setelah selesai nrxc mencetak Done: game.exe (N bytes).
+
+Beda dengan interpreter lama yang belum disamakan:
+
+- Bilangan bulat yang melewati batas 64-bit melingkar (interpreter lama mengubahnya
+  jadi desimal).
+- min(2.5, 1) mengembalikan desimal (interpreter lama: bilangan bulat 1).
+- Nama type tidak dipisah per file (fungsi dan variabel biasa sudah dipisah).
+
+------------------------------------------------------------------------------
+Fungsi intrinsik nrxc  -  untuk menulis library dalam nerx
+------------------------------------------------------------------------------
+
+Sebagian besar fungsi ini hanya ada di nrxc (peek, poke, dan newBuffer juga jalan di Nerx), dipakai oleh library src\lib\nrx_*.nrx
+dan runtime (prelude.nrx, pustaka.nrx). Program biasa tidak membutuhkannya.
+Semua nilai berupa bilangan bulat 64-bit (alamat memori atau bit).
+
+Memanggil DLL Windows:
+
+  dllFn("user32.dll", "MessageBoxA")   alamat fungsi di DLL (LoadLibraryA +
+                                       GetProcAddress); 0 kalau tidak ada
+  callp(alamat, a1, ..., a12)          panggil fungsi lewat alamatnya (aturan
+                                       Windows x64); hasil = nilai RAX;
+                                       argumen yang kurang diisi 0
+  cstr("teks")                         alamat teks (diakhiri 0) untuk dikirim
+                                       sebagai char*
+  fromC(alamat)                        baca teks (diakhiri 0) di alamat jadi string
+  api(i, a1, ..., a7)                  panggil salah satu dari 13 fungsi
+                                       kernel32 bawaan lewat nomornya
+                                       (WriteFile, ReadFile, HeapAlloc, ...)
+
+    be f = dllFn("user32.dll", "MessageBoxA")
+    callp(f, 0, cstr("Halo"), cstr("Judul"), 0)
+
+Memori mentah:
+
+  alloc(n)  free(p)                    sama dengan newBuffer / freeBuffer
+  peek(p, off, "int8"|"int16"|"int"|"int64"|"pointer"|"float"|"double")
+  poke(p, off, jenis, nilai)           baca / tulis nilai bertipe di p + off
+  peek8(p, off)  peek64(p, off)        baca 1 byte / 8 byte
+  poke8(p, off, v)  poke64(p, off, v)  tulis 1 byte / 8 byte
+  idiv(a, b)                           pembagian bilangan bulat (hasil int)
+
+Mengubah nilai nerx jadi alamat dan sebaliknya:
+
+  asInt(x)       alamat string / list / map / json (atau bit double)
+  asString(p)    string dari alamat       asListI(p)  list int
+  asListS(p)     list string              asListD(p)  list double
+  asListJ(p)     list json                asJson(p)   json
+  asDouble(bit)  double dari bit-nya
+
+Callback dan pemanggilan lewat alamat:
+
+  _callback("fungsi")   alamat fungsi nerx yang bisa dipanggil Windows (thread,
+                        WndProc, qsort); sama dengan callback("fungsi"); sampai
+                        4 argumen bilangan bulat
+  _callfn(alamat, a1, ..., ak)   panggil fungsi nerx lewat alamatnya
+
+Error dan state:
+
+  _lempar("pesan")          lempar error yang bisa ditangkap try/catch
+  _lemparK(kode, "pesan")   sama, dengan nomor E#### untuk error yang tidak
+                            tertangkap
+  _gget(k)  _gset(k, v)     slot global tersembunyi k (0..14) milik library:
+                            0 rand, 1 status http, 2 http latar, 3 sound,
+                            4-6 console, 7 keyboard, 8 daftar sound,
+                            9 handle stdout, 10 window, 14 nrx_3d
+
+Matematika desimal (dipakai pustaka.nrx): _sqrt(x) _sin(x) _cos(x) _tan(x)
+_atan2(y, x) _fpow(x, y).
+
+Contoh library kecil (user32 + kernel32):
+
+    func pesan(teks string, judul string) int
+        return callp(dllFn("user32.dll", "MessageBoxA"), 0, cstr(teks), cstr(judul), 0)
+
+    func waktuMs() int
+        return callp(dllFn("kernel32.dll", "GetTickCount"))
+
+------------------------------------------------------------------------------
+Fungsi teks tambahan, assert, test, check, trace, dan socket
+------------------------------------------------------------------------------
+
+  startsWith(s, t)  endsWith(s, t)       true / false
+  repeat(s, n)                           repeat("ab", 3) = "ababab"
+  padLeft(s, lebar [, isi])              padLeft("7", 3, "0") = "007"   (padRight sama, di sisi kanan)
+  count(s, t)                            berapa kali t muncul di s ("banana", "an" -> 2)
+  capitalize(s)                          "nERX" -> "Nerx"
+
+  assert(kondisi [, "pesan"])            hentikan program dengan "assertion failed: pesan" kalau salah
+  nerx test [file|folder ...]            jalankan file test_*.nrx dan *_test.nrx; lulus kalau keluar dengan 0
+                                         (tanpa argumen = folder sekarang). Cetak PASS/FAIL dan ringkasan,
+                                         kode keluar 1 kalau ada yang gagal.
+  nerx check file.nrx                    hanya kompilasi untuk mencari galat; tidak ada .exe tersisa
+  nerx run --trace file.nrx              cetak "[trace] nama()  file:baris" tiap fungsi buatanmu dipanggil
+
+  lib nrx_net     soket TCP (-1 = gagal)
+      tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
+      tcpSend(sock, teks)      tcpRecv(sock, maks)  ("" kalau koneksi ditutup)
+      tcpClose(sock)           tcpRequest(host, port, teks)  kirim, lalu baca sampai ditutup
+
+  Rekursi: fungsi yang diakhiri `return dirinya(...)` dengan nilai int saja (misalnya `return gcd(b, a % b)`)
+  diubah menjadi loop, jadi boleh dipanggil berapa kali pun. Rekursi lain memakai stack, sekarang 256 MB
+  (sekitar 5 juta tingkat untuk fungsi kecil); lebih dari itu program berhenti karena stack overflow.
+
+  nerx debug file.nrx                    jalankan program satu pernyataan demi satu. Di tiap pemberhentian ketik:
+      s (atau Enter) langkah     c lanjut     b N / d N pasang / hapus breakpoint di baris N     bl daftar
+      v semua variabel       p NAMA satu variabel     l sumber di sekitar sini     q keluar
+  Variabel bertipe int, string, bool, double ditampilkan; langkah masuk ke fungsi buatanmu.
+
+  lib nrx_big     bilangan bulat sebesar apa pun (bilangan besar berupa teks seperti "123456789012345678901234567890";
+                  int biasa juga diterima, hasilnya selalu teks)
+      bigAdd(a, b)  bigSub(a, b)  bigMul(a, b)  bigDiv(a, b)  bigMod(a, b)   (pembagian membulat ke arah nol)
+      bigPow(a, n)  bigFact(n)  bigGcd(a, b)  bigNeg(a)  bigAbs(a)  bigDigits(a)
+      bigCmp(a, b)  -1, 0 atau 1
+      print bigFact(30)      # 265252859812191058636308480000000
+
+  lib nrx_thread  async / await, mutex, dan sel bersama (thread Windows)
+      func kuadrat(n int) int         fungsinya menerima satu int dan mengembalikan int
+          return n * n
+      be f = async(callback("kuadrat"), 7)    mulai di thread lain
+      print await(f)                           tunggu selesai, ambil hasilnya: 49   (isDone(f) mengecek tanpa menunggu)
+      sleep(ms)                                tidur sebentar
+      mutexNew()  mutexLock(m)  mutexUnlock(m)    hanya satu thread di antara lock dan unlock
+      cellNew(v)  cellGet(c)  cellSet(c, v)  cellAdd(c, n)    angka yang aman diubah banyak thread
+  - Untuk mengirim teks ke thread pakai asInt(teks) dan asString(p) di dalam fungsi.
+  - Jangan memakai try/catch di beberapa thread sekaligus, dan pakai sel atau mutex untuk data bersama.
+
+  Linux (pratinjau awal): nama keluaran menentukan sasaran, seperti gcc.
+      nerx build prog.nrx -o prog.exe        program Windows
+      nerx build prog.nrx -o prog            program Linux (ELF), jalankan di Linux atau WSL
+  Baru tahap 1: print, angka, teks, list, map, type, fungsi, dan galat sudah jalan. File, argumen, library,
+  dan menjalankan nerx sendiri di Linux menyusul di tahap berikutnya.
+
+  Linux, tahap 2: file (readFile, writeFile, appendLine, listFiles, deleteFile), args(), timer(), wait(), time(), date()
+  (UTC), askLine / askInt dari stdin, sh / shText / shCode, nrx_os, nrx_crudfile, nrx_rand, nrx_big, nrx_json, dan memori yang
+  dikembalikan (delete) sudah jalan. Stack utama 256 MB seperti di Windows. Masih khusus Windows: nrx_console,
+  nrx_keyboard, nrx_thread, nrx_net, nrx_http, nrx_db, nrx_window, nrx_3d, nrx_sound.
+
+  Linux, tahap 3: nerx sendiri jalan di Linux (bangun dari Windows: nerx build nrxc.nrx -o nerx, lalu taruh prelude.nrx,
+  pustaka.nrx, dan folder lib di sebelahnya). run, build, check, test, dan repl jalan, dan nerx Linux mengompilasi dirinya
+  sendiri menjadi salinan yang identik byte demi byte. Sasaran Windows dari Linux: nerx build prog.nrx -o prog.exe.
+
+  Linux, tahap 4: library dan ffi. Program yang memakai ffi atau library selain nrx_os, nrx_crudfile, nrx_rand, nrx_big,
+  dan nrx_json menjadi ELF dinamis (butuh glibc: libc.so.6 dan /lib64/ld-linux-x86-64.so.2); program lain tetap statis tanpa
+  dependensi. ffi di Linux: ffi "libc.so.6" ( func getpid() int ). Sudah jalan: nrx_thread (pthread), nrx_net (soket),
+  nrx_db (butuh libsqlite3.so.0), nrx_http (butuh libcurl.so.4; sekaligus https), nrx_console dan nrx_keyboard (terminal;
+  tombol dibaca mentah, tanpa kejadian tombol dilepas). Masih khusus Windows: nrx_3d.
+
+  Linux, window: nrx_window jalan di Linux lewat X11 (juga Wayland lewat XWayland). Butuh libX11.so.6 dan libfreetype.so.6,
+  satu font TrueType (DejaVu Sans, Liberation Sans, Noto Sans, atau Ubuntu; atau isi NERX_FONT=/jalur/font.ttf), dan untuk gambar
+  gdk-pixbuf (PNG, JPG, BMP) atau libpng (hanya PNG). Kontrolnya (tombol, kolom isian, check, select, list) digambar nerx sendiri,
+  jadi tampilannya sama di semua desktop. Properti gaya font, bold, dan italic tidak didukung di Linux (sama seperti Windows).
+
+  Linux, sound: nrx_sound jalan di Linux lewat protokol PulseAudio asli (PulseAudio, PipeWire, dan WSLg; tanpa library tambahan).
+  WAV (PCM 8/16/24/32 bit atau float, mono/stereo) dibaca sendiri; MP3 butuh libmpg123.so.0 (paket libmpg123-0). Tiap suara
+  diputar di thread sendiri; playMusic mengulang tanpa henti sampai stopMusic. Tanpa server suara, suara diam saja (tanpa galat).

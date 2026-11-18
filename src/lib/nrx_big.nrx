@@ -1,0 +1,269 @@
+# nrx_big.nrx - bilangan bulat tanpa batas ukuran. Pakai: lib nrx_big
+# Bilangan besar adalah string desimal ("123456789012345678901234567890", boleh diawali -).
+# Argumen int biasa juga diterima. Hasil selalu string. Pembagian membulat ke arah nol (seperti % pada int).
+
+# ---- potongan 6 digit, urutan kecil ke besar (basis 1000000)
+func bgLimbs(s string) list int
+    be r list int
+    be i = len(s)
+    loop i > 0
+        be j = i - 6
+        if j < 0
+            be j = 0
+        add(r, int(substr(s, j, i - j)))
+        be i = j
+    bgPangkas(r)
+    return r
+
+func bgPangkas(r list int)
+    loop len(r) > 0 and r[len(r) - 1] == 0
+        takeLast(r)
+
+func bgTeks(r list int) string
+    if len(r) == 0
+        return "0"
+    be s = str(r[len(r) - 1])
+    be i = len(r) - 2
+    loop i >= 0
+        be s = s + padLeft(str(r[i]), 6, "0")
+        be i -= 1
+    return s
+
+# periksa bentuk bilangan; kembalikan teks bersih (tanpa spasi dan tanda +)
+func bgBersih(s string) string
+    be t = trim(s)
+    if startsWith(t, "+")
+        be t = slice(t, 1)
+    be d = t
+    if startsWith(d, "-")
+        be d = slice(d, 1)
+    if len(d) == 0
+        _lemparK(372, "big: \"" + s + "\" is not a whole number")
+    for i in range(len(d))
+        if ord(d, i) < 48 or ord(d, i) > 57
+            _lemparK(372, "big: \"" + s + "\" is not a whole number")
+    return t
+
+func bgNeg(s string) bool
+    return startsWith(s, "-")
+
+func bgMagnitudo(s string) list int
+    if startsWith(s, "-")
+        return bgLimbs(slice(s, 1))
+    return bgLimbs(s)
+
+func bgKeluar(r list int, neg bool) string
+    be t = bgTeks(r)
+    if neg and t != "0"
+        return "-" + t
+    return t
+
+func bgBandingMag(a list int, b list int) int
+    if len(a) != len(b)
+        if len(a) < len(b)
+            return 0 - 1
+        return 1
+    be i = len(a) - 1
+    loop i >= 0
+        if a[i] != b[i]
+            if a[i] < b[i]
+                return 0 - 1
+            return 1
+        be i -= 1
+    return 0
+
+func bgTambahMag(a list int, b list int) list int
+    be r list int
+    be n = len(a)
+    if len(b) > n
+        be n = len(b)
+    be carry = 0
+    for i in range(n)
+        be cur = carry
+        if i < len(a)
+            be cur += a[i]
+        if i < len(b)
+            be cur += b[i]
+        add(r, cur % 1000000)
+        be carry = idiv(cur, 1000000)
+    if carry > 0
+        add(r, carry)
+    return r
+
+# a >= b
+func bgKurangMag(a list int, b list int) list int
+    be r list int
+    be pinjam = 0
+    for i in range(len(a))
+        be cur = a[i] - pinjam
+        if i < len(b)
+            be cur -= b[i]
+        if cur < 0
+            be cur += 1000000
+            be pinjam = 1
+        else
+            be pinjam = 0
+        add(r, cur)
+    bgPangkas(r)
+    return r
+
+func bgKaliKecil(a list int, m int) list int
+    be r list int
+    be carry = 0
+    for i in range(len(a))
+        be cur = a[i] * m + carry
+        add(r, cur % 1000000)
+        be carry = idiv(cur, 1000000)
+    loop carry > 0
+        add(r, carry % 1000000)
+        be carry = idiv(carry, 1000000)
+    bgPangkas(r)
+    return r
+
+func bgKaliMag(a list int, b list int) list int
+    be r list int
+    if len(a) == 0 or len(b) == 0
+        return r
+    for i in range(len(a) + len(b))
+        add(r, 0)
+    for i in range(len(a))
+        be carry = 0
+        for j in range(len(b))
+            be cur = r[i + j] + a[i] * b[j] + carry
+            be r[i + j] = cur % 1000000
+            be carry = idiv(cur, 1000000)
+        be k = i + len(b)
+        loop carry > 0
+            be cur = r[k] + carry
+            be r[k] = cur % 1000000
+            be carry = idiv(cur, 1000000)
+            be k += 1
+    bgPangkas(r)
+    return r
+
+# bagi: hasil = hasil bagi (jika sisa = false) atau sisa (jika sisa = true)
+func bgBagiMag(a list int, b list int, sisa bool) list int
+    be q list int
+    for i in range(len(a))
+        add(q, 0)
+    be rem list int
+    be i = len(a) - 1
+    loop i >= 0
+        be baru list int
+        add(baru, a[i])
+        for x in rem
+            add(baru, x)
+        bgPangkas(baru)
+        be rem = baru
+        be lo = 0
+        be hi = 999999
+        loop lo < hi
+            be mid = idiv(lo + hi + 1, 2)
+            if bgBandingMag(bgKaliKecil(b, mid), rem) <= 0
+                be lo = mid
+            else
+                be hi = mid - 1
+        be q[i] = lo
+        if lo > 0
+            be rem = bgKurangMag(rem, bgKaliKecil(b, lo))
+        be i -= 1
+    bgPangkas(q)
+    if sisa
+        return rem
+    return q
+
+# ---- fungsi untuk pengguna
+func bigAdd(a string, b string) string
+    be x = bgBersih(a)
+    be y = bgBersih(b)
+    be mx = bgMagnitudo(x)
+    be my = bgMagnitudo(y)
+    if bgNeg(x) == bgNeg(y)
+        return bgKeluar(bgTambahMag(mx, my), bgNeg(x))
+    if bgBandingMag(mx, my) >= 0
+        return bgKeluar(bgKurangMag(mx, my), bgNeg(x))
+    return bgKeluar(bgKurangMag(my, mx), bgNeg(y))
+
+func bigNeg(a string) string
+    be x = bgBersih(a)
+    return bgKeluar(bgMagnitudo(x), not bgNeg(x))
+
+func bigAbs(a string) string
+    return bgKeluar(bgMagnitudo(bgBersih(a)), false)
+
+func bigSub(a string, b string) string
+    return bigAdd(a, bigNeg(b))
+
+func bigMul(a string, b string) string
+    be x = bgBersih(a)
+    be y = bgBersih(b)
+    return bgKeluar(bgKaliMag(bgMagnitudo(x), bgMagnitudo(y)), bgNeg(x) != bgNeg(y))
+
+func bigDiv(a string, b string) string
+    be x = bgBersih(a)
+    be y = bgBersih(b)
+    be my = bgMagnitudo(y)
+    if len(my) == 0
+        _lemparK(373, "big: cannot divide by zero")
+    return bgKeluar(bgBagiMag(bgMagnitudo(x), my, false), bgNeg(x) != bgNeg(y))
+
+# sisa pembagian, bertanda sama dengan a
+func bigMod(a string, b string) string
+    be x = bgBersih(a)
+    be y = bgBersih(b)
+    be my = bgMagnitudo(y)
+    if len(my) == 0
+        _lemparK(373, "big: cannot divide by zero")
+    return bgKeluar(bgBagiMag(bgMagnitudo(x), my, true), bgNeg(x))
+
+# -1, 0, atau 1
+func bigCmp(a string, b string) int
+    be x = bgBersih(a)
+    be y = bgBersih(b)
+    be mx = bgMagnitudo(x)
+    be my = bgMagnitudo(y)
+    be nx = bgNeg(x) and len(mx) > 0
+    be ny = bgNeg(y) and len(my) > 0
+    if nx != ny
+        if nx
+            return 0 - 1
+        return 1
+    be c = bgBandingMag(mx, my)
+    if nx
+        return 0 - c
+    return c
+
+func bigPow(a string, n int) string
+    if n < 0
+        _lemparK(372, "big: the exponent cannot be negative")
+    be hasil = "1"
+    be dasar = bgBersih(a)
+    be e = n
+    loop e > 0
+        if e % 2 == 1
+            be hasil = bigMul(hasil, dasar)
+        be e = idiv(e, 2)
+        if e > 0
+            be dasar = bigMul(dasar, dasar)
+    return hasil
+
+func bigFact(n int) string
+    if n < 0
+        _lemparK(372, "big: factorial needs a number that is 0 or more")
+    be hasil = "1"
+    for i in range(2, n + 1)
+        be hasil = bigMul(hasil, str(i))
+    return hasil
+
+func bigGcd(a string, b string) string
+    be x = bigAbs(a)
+    be y = bigAbs(b)
+    loop y != "0"
+        be t = bigMod(x, y)
+        be x = y
+        be y = t
+    return x
+
+# jumlah digit (tanpa tanda)
+func bigDigits(a string) int
+    return len(bgTeks(bgMagnitudo(bgBersih(a))))

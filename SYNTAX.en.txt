@@ -1249,3 +1249,60 @@ More text functions, assert, test, check, trace and sockets
       tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
       tcpSend(sock, text)      tcpRecv(sock, max)  ("" when the connection is closed)
       tcpClose(sock)           tcpRequest(host, port, text)  send, then read until closed
+
+  Recursion: a function that ends with `return itself(...)` using only int values (like `return gcd(b, a % b)`)
+  is turned into a loop, so it can run any number of times. Other recursion uses the stack, now 256 MB
+  (about 5 million levels for a small function); beyond that the program stops with a stack overflow.
+
+  nerx debug file.nrx                    run the program one statement at a time. At each stop type:
+      s (or Enter) step     c continue     b N / d N add / remove a breakpoint at line N     bl list them
+      v all variables       p NAME one variable     l source around here     q quit
+  Variables of type int, string, bool and double are shown; steps go into your own functions.
+
+  lib nrx_big     whole numbers of any size (big numbers are text like "123456789012345678901234567890";
+                  plain ints are accepted too, results are always text)
+      bigAdd(a, b)  bigSub(a, b)  bigMul(a, b)  bigDiv(a, b)  bigMod(a, b)   (division rounds toward zero)
+      bigPow(a, n)  bigFact(n)  bigGcd(a, b)  bigNeg(a)  bigAbs(a)  bigDigits(a)
+      bigCmp(a, b)  -1, 0 or 1
+      print bigFact(30)      # 265252859812191058636308480000000
+
+  lib nrx_thread  async / await, mutexes and shared cells (Windows threads)
+      func square(n int) int          the function takes one int and returns an int
+          return n * n
+      be f = async(callback("square"), 7)     start it on another thread
+      print await(f)                           wait for it, get the result: 49   (isDone(f) checks without waiting)
+      sleep(ms)                                pause this thread
+      mutexNew()  mutexLock(m)  mutexUnlock(m)    only one thread at a time between lock and unlock
+      cellNew(v)  cellGet(c)  cellSet(c, v)  cellAdd(c, n)    a number that many threads can change safely
+  - To pass text to a thread use asInt(text) and asString(p) inside the function.
+  - Do not use try/catch in several threads at the same time, and use a cell or mutex for shared data.
+
+  Linux (early preview): the output name decides the target, like gcc.
+      nerx build prog.nrx -o prog.exe        Windows program
+      nerx build prog.nrx -o prog            Linux program (ELF), run it on Linux or in WSL
+  Stage 1 only: printing, numbers, text, lists, maps, types, functions and errors work. Files, arguments, the
+  libraries and running nerx itself on Linux come in later stages.
+
+  Linux, stage 2: files (readFile, writeFile, appendLine, listFiles, deleteFile), args(), timer(), wait(), time(), date()
+  (UTC), askLine / askInt from stdin, sh / shText / shCode, nrx_os, nrx_crudfile, nrx_rand, nrx_big, nrx_json and memory that is given back
+  (delete) all work. The main stack is 256 MB like on Windows. Still Windows only: nrx_console, nrx_keyboard,
+  nrx_thread, nrx_net, nrx_http, nrx_db, nrx_window, nrx_3d, nrx_sound.
+
+  Linux, stage 3: nerx itself runs on Linux (build it from Windows: nerx build nrxc.nrx -o nerx, then put prelude.nrx,
+  pustaka.nrx and the lib folder next to it). run, build, check, test and repl work, and the Linux nerx compiles itself
+  to a byte-identical copy. Windows target from Linux: nerx build prog.nrx -o prog.exe.
+
+  Linux, stage 4: libraries and ffi. A program that uses ffi or a library other than nrx_os, nrx_crudfile, nrx_rand,
+  nrx_big and nrx_json becomes a dynamic ELF (needs glibc: libc.so.6 and /lib64/ld-linux-x86-64.so.2); other programs stay
+  static with no dependencies. ffi on Linux: ffi "libc.so.6" ( func getpid() int ). Working now: nrx_thread (pthread),
+  nrx_net (sockets), nrx_db (needs libsqlite3.so.0), nrx_http (needs libcurl.so.4; also gives https), nrx_console and
+  nrx_keyboard (terminal; keys are read raw, no key-release events). Still Windows only: nrx_3d.
+
+  Linux, window: nrx_window works on Linux through X11 (also Wayland via XWayland). It needs libX11.so.6 and libfreetype.so.6,
+  a TrueType font (DejaVu Sans, Liberation Sans, Noto Sans or Ubuntu; or set NERX_FONT=/path/font.ttf), and for images
+  gdk-pixbuf (PNG, JPG, BMP) or libpng (PNG only). The controls (button, input, check, select, list) are drawn by nerx itself,
+  so they look the same on every desktop. Not supported on Linux: the font, bold and italic style properties (same as Windows).
+
+  Linux, sound: nrx_sound works on Linux through the native PulseAudio protocol (PulseAudio, PipeWire and WSLg; no extra library).
+  WAV (PCM 8/16/24/32 bit or float, mono/stereo) is decoded by nerx itself; MP3 needs libmpg123.so.0 (package libmpg123-0). Each sound
+  plays on its own thread; playMusic loops until stopMusic. With no sound server, sound is silent (no error).

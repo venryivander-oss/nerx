@@ -11,6 +11,8 @@
 # Galat SQL (tabel tidak ada, sintaks salah) dilempar sebagai galat yang bisa di-try/catch.
 
 func db_fn(nama string) int
+    if _linux() == 1
+        return dllFn("libsqlite3.so.0", nama)
     return dllFn("winsqlite3.dll", nama)
 
 type Rows

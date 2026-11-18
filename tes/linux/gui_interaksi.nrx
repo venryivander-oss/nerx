@@ -1,0 +1,66 @@
+lib nrx_window
+be aktif = false
+be pil = ""
+be buah = ""
+be nama = ""
+be daftar list string
+add(daftar, "apel")
+add(daftar, "jeruk")
+add(daftar, "mangga")
+be warna list string
+add(warna, "merah")
+add(warna, "hijau")
+be hit = 0
+be tahap = 0
+
+func klik()
+    be hit += 1
+    print "klik tombol"
+
+func tombolKey(k)
+    print "key " k
+
+func mouse(x, y, aksi, cv)
+    print "mouse " x " " y " " aksi
+
+func tik()
+    be tahap += 1
+    if tahap == 1
+        winTesKlik(30, 130)
+    if tahap == 2
+        winTesKlik(30, 60)
+    if tahap == 3
+        winTesKlik(30, 90)
+        winTesKlik(30, 150)
+    if tahap == 4
+        winTesKlik(300, 60)
+        winTesKlik(120, 215)
+    if tahap == 5
+        winTesKlik(250, 30)
+        winTesGerak(240, 40)
+    if tahap == 6
+        winTesKlik(300, 130)
+        winTesKey(97)
+        winTesKey(98)
+        winTesKey(65288)
+        winTesKey(99)
+        winTesKey(65361)
+        winTesKey(100)
+    if tahap == 8
+        winDumpPng("/tmp/gi.png")
+        print aktif " " pil " " buah " " nama " " hit
+        closeWindow()
+
+windowTemplate menu(
+    newButton(klik(), "Klik", 20, 120, 16)
+    newCheck(aktif, "Aktif", 20, 50, 16)
+    newSelect(pil, warna, 20, 90, 120, 16)
+    newList(buah, daftar, 20, 160, 140, 80, 16)
+    newInput(nama, 200, 120, 160, 16)
+    newCanvas(cv, 200, 10, 150, 80)
+    onMouse(mouse())
+    onKey(tombolKey())
+    onTimer(tik(), 0.1)
+)
+newWindow("Interaksi", 400, 280, menu)
+print "mulai"

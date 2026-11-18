@@ -1236,3 +1236,60 @@ Fungsi teks tambahan, assert, test, check, trace, dan socket
       tcpConnect(host, port)   tcpListen(port)   tcpAccept(server)
       tcpSend(sock, teks)      tcpRecv(sock, maks)  ("" kalau koneksi ditutup)
       tcpClose(sock)           tcpRequest(host, port, teks)  kirim, lalu baca sampai ditutup
+
+  Rekursi: fungsi yang diakhiri `return dirinya(...)` dengan nilai int saja (misalnya `return gcd(b, a % b)`)
+  diubah menjadi loop, jadi boleh dipanggil berapa kali pun. Rekursi lain memakai stack, sekarang 256 MB
+  (sekitar 5 juta tingkat untuk fungsi kecil); lebih dari itu program berhenti karena stack overflow.
+
+  nerx debug file.nrx                    jalankan program satu pernyataan demi satu. Di tiap pemberhentian ketik:
+      s (atau Enter) langkah     c lanjut     b N / d N pasang / hapus breakpoint di baris N     bl daftar
+      v semua variabel       p NAMA satu variabel     l sumber di sekitar sini     q keluar
+  Variabel bertipe int, string, bool, double ditampilkan; langkah masuk ke fungsi buatanmu.
+
+  lib nrx_big     bilangan bulat sebesar apa pun (bilangan besar berupa teks seperti "123456789012345678901234567890";
+                  int biasa juga diterima, hasilnya selalu teks)
+      bigAdd(a, b)  bigSub(a, b)  bigMul(a, b)  bigDiv(a, b)  bigMod(a, b)   (pembagian membulat ke arah nol)
+      bigPow(a, n)  bigFact(n)  bigGcd(a, b)  bigNeg(a)  bigAbs(a)  bigDigits(a)
+      bigCmp(a, b)  -1, 0 atau 1
+      print bigFact(30)      # 265252859812191058636308480000000
+
+  lib nrx_thread  async / await, mutex, dan sel bersama (thread Windows)
+      func kuadrat(n int) int         fungsinya menerima satu int dan mengembalikan int
+          return n * n
+      be f = async(callback("kuadrat"), 7)    mulai di thread lain
+      print await(f)                           tunggu selesai, ambil hasilnya: 49   (isDone(f) mengecek tanpa menunggu)
+      sleep(ms)                                tidur sebentar
+      mutexNew()  mutexLock(m)  mutexUnlock(m)    hanya satu thread di antara lock dan unlock
+      cellNew(v)  cellGet(c)  cellSet(c, v)  cellAdd(c, n)    angka yang aman diubah banyak thread
+  - Untuk mengirim teks ke thread pakai asInt(teks) dan asString(p) di dalam fungsi.
+  - Jangan memakai try/catch di beberapa thread sekaligus, dan pakai sel atau mutex untuk data bersama.
+
+  Linux (pratinjau awal): nama keluaran menentukan sasaran, seperti gcc.
+      nerx build prog.nrx -o prog.exe        program Windows
+      nerx build prog.nrx -o prog            program Linux (ELF), jalankan di Linux atau WSL
+  Baru tahap 1: print, angka, teks, list, map, type, fungsi, dan galat sudah jalan. File, argumen, library,
+  dan menjalankan nerx sendiri di Linux menyusul di tahap berikutnya.
+
+  Linux, tahap 2: file (readFile, writeFile, appendLine, listFiles, deleteFile), args(), timer(), wait(), time(), date()
+  (UTC), askLine / askInt dari stdin, sh / shText / shCode, nrx_os, nrx_crudfile, nrx_rand, nrx_big, nrx_json, dan memori yang
+  dikembalikan (delete) sudah jalan. Stack utama 256 MB seperti di Windows. Masih khusus Windows: nrx_console,
+  nrx_keyboard, nrx_thread, nrx_net, nrx_http, nrx_db, nrx_window, nrx_3d, nrx_sound.
+
+  Linux, tahap 3: nerx sendiri jalan di Linux (bangun dari Windows: nerx build nrxc.nrx -o nerx, lalu taruh prelude.nrx,
+  pustaka.nrx, dan folder lib di sebelahnya). run, build, check, test, dan repl jalan, dan nerx Linux mengompilasi dirinya
+  sendiri menjadi salinan yang identik byte demi byte. Sasaran Windows dari Linux: nerx build prog.nrx -o prog.exe.
+
+  Linux, tahap 4: library dan ffi. Program yang memakai ffi atau library selain nrx_os, nrx_crudfile, nrx_rand, nrx_big,
+  dan nrx_json menjadi ELF dinamis (butuh glibc: libc.so.6 dan /lib64/ld-linux-x86-64.so.2); program lain tetap statis tanpa
+  dependensi. ffi di Linux: ffi "libc.so.6" ( func getpid() int ). Sudah jalan: nrx_thread (pthread), nrx_net (soket),
+  nrx_db (butuh libsqlite3.so.0), nrx_http (butuh libcurl.so.4; sekaligus https), nrx_console dan nrx_keyboard (terminal;
+  tombol dibaca mentah, tanpa kejadian tombol dilepas). Masih khusus Windows: nrx_3d.
+
+  Linux, window: nrx_window jalan di Linux lewat X11 (juga Wayland lewat XWayland). Butuh libX11.so.6 dan libfreetype.so.6,
+  satu font TrueType (DejaVu Sans, Liberation Sans, Noto Sans, atau Ubuntu; atau isi NERX_FONT=/jalur/font.ttf), dan untuk gambar
+  gdk-pixbuf (PNG, JPG, BMP) atau libpng (hanya PNG). Kontrolnya (tombol, kolom isian, check, select, list) digambar nerx sendiri,
+  jadi tampilannya sama di semua desktop. Properti gaya font, bold, dan italic tidak didukung di Linux (sama seperti Windows).
+
+  Linux, sound: nrx_sound jalan di Linux lewat protokol PulseAudio asli (PulseAudio, PipeWire, dan WSLg; tanpa library tambahan).
+  WAV (PCM 8/16/24/32 bit atau float, mono/stereo) dibaca sendiri; MP3 butuh libmpg123.so.0 (paket libmpg123-0). Tiap suara
+  diputar di thread sendiri; playMusic mengulang tanpa henti sampai stopMusic. Tanpa server suara, suara diam saja (tanpa galat).

@@ -1,0 +1,24 @@
+lib nrx_crudfile
+writeFile("tmp_sis.txt", "satu\ndua\n")
+print readFile("tmp_sis.txt")
+print fileExists("tmp_sis.txt")
+print fileExists("tmp_tidak.txt")
+appendLine("tmp_sis.txt", "tiga")
+print readLines("tmp_sis.txt")
+deleteFile("tmp_sis.txt")
+print fileExists("tmp_sis.txt")
+be x = shText("echo halo")
+print "[" + trim(x) + "]"
+print shCode("exit 3")
+print shCode("true")
+sh echo lewat-sh
+print len(date())
+be besar list int
+for i in range(300000)
+    add(besar, i)
+print len(besar)
+for r in range(20000)
+    be t = "abcdefghij" + str(r)
+    delete t
+print "ok"
+print readFile("tidak_ada.txt")

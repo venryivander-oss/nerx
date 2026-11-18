@@ -1,0 +1,36 @@
+func fib(n int) int
+    if n < 2
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+func gcd(a int, b int) int
+    if b == 0
+        return a
+    return gcd(b, a % b)
+
+type P
+    x int
+    name string
+
+be xs list int
+for i in range(10)
+    add(xs, i * i)
+print xs
+print fib(25)
+print gcd(48, 18)
+be m = {"a": 1, "b": 2}
+print m["b"]
+be p = P(3, "titik")
+print f"{p.name} di {p.x}"
+print upper("halo") + " " + str(len(xs))
+be big = ""
+for i in range(2000)
+    be big = big + "ab"
+print len(big)
+try
+    print 1 / 0
+catch e
+    print "galat: " e
+print split("a,b,c", ",")
+print round(3.14159, 2)
+print 10 / 4

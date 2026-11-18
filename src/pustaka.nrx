@@ -228,6 +228,15 @@ func capitalize(s string) string
     return upper(substr(s, 0, 1)) + lower(substr(s, 1, len(s) - 1))
 
 func fileExists(nama string) bool
+    if _linux() == 1
+        be fd = sysCall(2, asInt(nama) + 8, 0, 0, 0, 0, 0)
+        if fd < 0
+            return false
+        be bf = alloc(16)
+        be rd = sysCall(0, fd, bf, 1, 0, 0, 0)
+        free(bf)
+        sysCall(3, fd, 0, 0, 0, 0, 0)
+        return rd != 0 - 21
     be h = api(6, asInt(nama) + 8, 2147483648, 1, 0, 3, 128, 0)
     if h == 0 - 1
         return false
@@ -812,19 +821,27 @@ func sysWord(b int, o int) int
 
 func time() string
     be b = alloc(32)
-    callp(dllFn("kernel32.dll", "GetLocalTime"), b)
+    if _linux() == 1
+        linuxWaktu(b)
+    else
+        callp(dllFn("kernel32.dll", "GetLocalTime"), b)
     be r = wkt2(sysWord(b, 8)) + ":" + wkt2(sysWord(b, 10)) + ":" + wkt2(sysWord(b, 12))
     free(b)
     return r
 
 func date() string
     be b = alloc(32)
-    callp(dllFn("kernel32.dll", "GetLocalTime"), b)
+    if _linux() == 1
+        linuxWaktu(b)
+    else
+        callp(dllFn("kernel32.dll", "GetLocalTime"), b)
     be r = str(sysWord(b, 0)) + "-" + wkt2(sysWord(b, 2)) + "-" + wkt2(sysWord(b, 6))
     free(b)
     return r
 
 func timer() double
+    if _linux() == 1
+        return linuxTimer()
     be b = alloc(64)
     callp(dllFn("kernel32.dll", "GetProcessTimes"), 0 - 1, b, b + 8, b + 16, b + 24)
     callp(dllFn("kernel32.dll", "GetSystemTimeAsFileTime"), b + 40)
@@ -1018,10 +1035,16 @@ func koleksiStr__map_bool(m map bool) string
     return r + "}"
 # wait(detik): tidur
 func wait__int(s int) int
+    if _linux() == 1
+        linuxTidur(s * 1000)
+        return 0
     callp(dllFn("kernel32.dll", "Sleep"), s * 1000)
     return 0
 
 func wait__double(s double) int
+    if _linux() == 1
+        linuxTidur(int(s * 1000))
+        return 0
     callp(dllFn("kernel32.dll", "Sleep"), int(s * 1000))
     return 0
 # str(x) untuk tipe selain int
@@ -1143,7 +1166,10 @@ func nrxBahasaId() bool
         return true
     if m == 2
         return false
-    return callp(dllFn("kernel32.dll", "GetUserDefaultUILanguage")) % 1024 == 33
+    be fb = dllFn("kernel32.dll", "GetUserDefaultUILanguage")
+    if fb == 0
+        return false                      # bukan Windows: pesan bahasa Inggris
+    return callp(fb) % 1024 == 33
 
 func nrxTerjemah(pesan string, kode int) string
     if kode <= 0 or not nrxBahasaId()
@@ -1152,6 +1178,103 @@ func nrxTerjemah(pesan string, kode int) string
 
 func nrxTrace(pesan string)
     print pesan
+
+# ---- debugger (nerx debug file.nrx): compiler menyisipkan nrxDbgCek di tiap pernyataan program
+# Keadaan disimpan di blok memori beralamat tetap: [0] mode (0 = langkah, 1 = jalan terus), [8] jumlah breakpoint, [16..] nomor baris
+func dbgAlamat() int
+    return 274877906944
+
+func dbgAda() bool
+    return callp(dllFn("kernel32.dll", "IsBadReadPtr"), dbgAlamat(), 8) == 0
+
+# nilai string yang aman dibaca (variabel yang belum diisi bisa berisi sampah)
+func dbgS(s string) string
+    be p = asInt(s)
+    if p == 0 or callp(dllFn("kernel32.dll", "IsBadReadPtr"), p, 8) != 0
+        return "<unset>"
+    be n = peek64(p, 0)
+    if n < 0 or n > 1000000 or callp(dllFn("kernel32.dll", "IsBadReadPtr"), p, n + 9) != 0
+        return "<unset>"
+    return "\"" + s + "\""
+
+# 1 = berhenti di baris ini
+func nrxDbgCek(baris int) int
+    be st = dbgAlamat()
+    if not dbgAda()
+        callp(dllFn("kernel32.dll", "VirtualAlloc"), st, 4096, 12288, 4)
+        return 1
+    if peek64(st, 0) == 0
+        return 1
+    for i in range(peek64(st, 8))
+        if peek64(st, 16 + 8 * i) == baris
+            return 1
+    return 0
+
+func dbgBantuan()
+    print "  s / Enter     step to the next statement"
+    print "  c             continue until a breakpoint (or the end)"
+    print "  b N / d N     add / remove a breakpoint at line N     bl  list breakpoints"
+    print "  v             show variables      p NAME   show one variable"
+    print "  l             show the source around the current line"
+    print "  q             quit the program"
+
+func dbgTampilSumber(berkas string, baris int, lebar int)
+    if not fileExists(berkas)
+        return
+    be bs = split(replace(readFile(berkas), "\r", ""), "\n")
+    for i in range(len(bs))
+        if i + 1 >= baris - lebar and i + 1 <= baris + lebar
+            be tanda = "   "
+            if i + 1 == baris
+                be tanda = "-> "
+            print tanda + padLeft(str(i + 1), 4) + "  " + bs[i]
+
+func nrxDbgBerhenti(vars string, baris int, berkas string)
+    be st = dbgAlamat()
+    print ""
+    dbgTampilSumber(berkas, baris, 0)
+    be selesai = false
+    loop not selesai
+        be cmd = trim(askLine("(nerx-debug) "))
+        be kata = split(cmd)
+        be c = ""
+        if len(kata) > 0
+            be c = kata[0]
+        if c == "" or c == "s"
+            poke64(st, 0, 0)
+            be selesai = true
+        else if c == "c"
+            poke64(st, 0, 1)
+            be selesai = true
+        else if c == "q"
+            exit(0)
+        else if c == "v"
+            print trim(vars)
+        else if c == "p" and len(kata) > 1
+            be nilai = "no such variable: " + kata[1]
+            for ln in split(vars, "\n")
+                if startsWith(ln, kata[1] + "=")
+                    be nilai = ln
+            print nilai
+        else if c == "l"
+            dbgTampilSumber(berkas, baris, 4)
+        else if c == "b" and len(kata) > 1
+            be n = peek64(st, 8)
+            if n < 400
+                poke64(st, 16 + 8 * n, int(kata[1]))
+                poke64(st, 8, n + 1)
+                print "breakpoint at line " + kata[1]
+        else if c == "d" and len(kata) > 1
+            for i in range(peek64(st, 8))
+                if peek64(st, 16 + 8 * i) == int(kata[1])
+                    poke64(st, 16 + 8 * i, 0 - 1)
+            print "removed"
+        else if c == "bl"
+            for i in range(peek64(st, 8))
+                if peek64(st, 16 + 8 * i) >= 0
+                    print "  line " + str(peek64(st, 16 + 8 * i))
+        else
+            dbgBantuan()
 
 func nrxGalat(pesan string, kode int, baris int, berkas string)
     be s = "error"
@@ -1179,6 +1302,182 @@ func arrayDariD(l list double) list double
         be r[i] = l[i]
     return r
 
+# ---- Linux (target ELF): syscall mentah lewat stub di IAT slot 13. Slot tersembunyi _gget: 16 = penunjuk alokasi,
+# 17 = batas potongan, 18 = stack awal (argc, argv, envp), 19 = awal timer, 20 = kode keluar sh, 25..40 = daftar blok bebas per kelas
+func sysCall(nr int, a int, b int, c int, d int, e int, f int) int
+    return api(13, nr, a, b, c, d, e, f)
+
+# alloc untuk Linux: blok berukuran 2^kelas (16 byte pertama = kepala [kelas][berikutnya]); isi selalu nol
+func nrxMalloc(size int) int
+    be need = size + 16
+    be c = 5
+    be cap = 32
+    loop cap < need
+        be cap = cap * 2
+        be c += 1
+    if c > 20
+        be ln = idiv(need + 4095, 4096) * 4096
+        be b = sysCall(9, 0, ln, 3, 34, 0 - 1, 0)
+        if b < 0 and b > 0 - 4096
+            return 0
+        poke64(b, 0, 100)
+        poke64(b, 8, ln)
+        return b + 16
+    be h = _gget(20 + c)
+    if h != 0
+        _gset(20 + c, peek64(h, 8))
+        be n = idiv(cap - 16, 8)
+        be i = 0
+        loop i < n
+            poke64(h, 16 + 8 * i, 0)
+            be i += 1
+        return h + 16
+    be cur = _gget(16)
+    if cur == 0 or cur + cap > _gget(17)
+        be ch = 1048576
+        be b2 = sysCall(9, 0, ch, 3, 34, 0 - 1, 0)
+        if b2 < 0 and b2 > 0 - 4096
+            return 0
+        be cur = b2
+        _gset(17, b2 + ch)
+    poke64(cur, 0, c)
+    _gset(16, cur + cap)
+    return cur + 16
+
+func nrxFree(p int) int
+    be c = peek64(p - 16, 0)
+    if c >= 100
+        sysCall(11, p - 16, peek64(p - 16, 8), 0, 0, 0, 0)
+    else if c >= 5 and c <= 20
+        poke64(p - 16, 8, _gget(20 + c))
+        _gset(20 + c, p - 16)
+    return 0
+
+# argumen program disusun seperti command line Windows (yang berspasi diberi tanda kutip)
+func linuxCmd() string
+    be sp = _gget(18)
+    be r = ""
+    for i in range(peek64(sp, 0))
+        be a = fromC(peek64(sp, 8 + 8 * i))
+        if i > 0
+            be r = r + " "
+        if a == "" or contains(a, " ") or contains(a, "\t")
+            be r = r + "\"" + a + "\""
+        else
+            be r = r + a
+    return r
+
+func linuxMs() int
+    be ts = alloc(16)
+    sysCall(228, 1, ts, 0, 0, 0, 0)
+    be ms = peek64(ts, 0) * 1000 + idiv(peek64(ts, 8), 1000000)
+    free(ts)
+    return ms
+
+# nilai environment variable (Linux): cari "NAMA=" di envp
+func linuxEnv(nama string) string
+    be sp = _gget(18)
+    be p = sp + 8 * (peek64(sp, 0) + 2)
+    be i = 0
+    loop peek64(p, 8 * i) != 0
+        be e = fromC(peek64(p, 8 * i))
+        if startsWith(e, nama + "=")
+            return slice(e, len(nama) + 1)
+        be i += 1
+    return ""
+
+func linuxTidur(ms int)
+    be ts = alloc(16)
+    poke64(ts, 0, idiv(ms, 1000))
+    poke64(ts, 8, (ms % 1000) * 1000000)
+    sysCall(35, ts, 0, 0, 0, 0, 0)
+    free(ts)
+
+# detik sejak panggilan timer() pertama (jam monoton)
+func linuxTimer() double
+    be ts = alloc(16)
+    sysCall(228, 1, ts, 0, 0, 0, 0)
+    be ns = peek64(ts, 0) * 1000000000 + peek64(ts, 8)
+    free(ts)
+    be b0 = _gget(19)
+    if b0 == 0
+        _gset(19, ns)
+        be b0 = ns
+    be r double = ns - b0
+    return r / 1000000000.0
+
+func linuxKata(b int, o int, v int)
+    poke8(b, o, v % 256)
+    poke8(b, o + 1, idiv(v, 256))
+
+# isi struktur SYSTEMTIME dengan waktu sekarang (UTC)
+func linuxWaktu(b int)
+    be ts = alloc(16)
+    sysCall(228, 0, ts, 0, 0, 0, 0)
+    be s = peek64(ts, 0)
+    free(ts)
+    be hari = idiv(s, 86400)
+    be sisa = s - hari * 86400
+    be z = hari + 719468
+    be era = idiv(z, 146097)
+    be doe = z - era * 146097
+    be yoe = idiv(doe - idiv(doe, 1460) + idiv(doe, 36524) - idiv(doe, 146096), 365)
+    be y = yoe + era * 400
+    be doy = doe - (365 * yoe + idiv(yoe, 4) - idiv(yoe, 100))
+    be mp = idiv(5 * doy + 2, 153)
+    be d = doy - idiv(153 * mp + 2, 5) + 1
+    be m = mp + 3
+    if mp >= 10
+        be m = mp - 9
+    if m <= 2
+        be y += 1
+    linuxKata(b, 0, y)
+    linuxKata(b, 2, m)
+    linuxKata(b, 4, (hari + 4) % 7)
+    linuxKata(b, 6, d)
+    linuxKata(b, 8, idiv(sisa, 3600))
+    linuxKata(b, 10, idiv(sisa % 3600, 60))
+    linuxKata(b, 12, sisa % 60)
+
+# jalankan lewat /bin/sh -c; hasil teks keluaran kalau tangkap = 1; kode keluar di _gget(20)
+func linuxSh(perintah string, tangkap int) string
+    be fds = alloc(16)
+    if tangkap == 1
+        sysCall(22, fds, 0, 0, 0, 0, 0)
+    be rfd = peek8(fds, 0) + 256 * peek8(fds, 1)
+    be wfd = peek8(fds, 4) + 256 * peek8(fds, 5)
+    be pid = sysCall(57, 0, 0, 0, 0, 0, 0)
+    if pid == 0
+        if tangkap == 1
+            sysCall(33, wfd, 1, 0, 0, 0, 0)
+            sysCall(3, rfd, 0, 0, 0, 0, 0)
+            sysCall(3, wfd, 0, 0, 0, 0, 0)
+        be av = alloc(32)
+        poke64(av, 0, cstr("/bin/sh"))
+        poke64(av, 8, cstr("-c"))
+        poke64(av, 16, cstr(perintah))
+        be sp = _gget(18)
+        sysCall(59, cstr("/bin/sh"), av, sp + 8 * (peek64(sp, 0) + 2), 0, 0, 0)
+        sysCall(231, 127, 0, 0, 0, 0, 0)
+    be hasil = ""
+    if tangkap == 1
+        sysCall(3, wfd, 0, 0, 0, 0, 0)
+        be buf = alloc(4200)
+        be lagi = true
+        loop lagi
+            be n = sysCall(0, rfd, buf, 4096, 0, 0, 0)
+            if n <= 0
+                be lagi = false
+            else
+                be hasil = hasil + fromCn(buf, n)
+        sysCall(3, rfd, 0, 0, 0, 0, 0)
+        free(buf)
+    be st = alloc(8)
+    sysCall(61, pid, st, 0, 0, 0, 0)
+    _gset(20, idiv(peek64(st, 0), 256) % 256)
+    free(st)
+    free(fds)
+    return hasil
 # ---- sh: menjalankan perintah shell (dipakai kata kunci "sh" dan fungsi shText / shCode)
 # cd dikerjakan sendiri supaya pindah foldernya menetap; mengembalikan -1 kalau bukan perintah cd
 func shCd(perintah string) int
@@ -1192,9 +1491,17 @@ func shCd(perintah string) int
         be p = substr(p, 1, len(p) - 2)
     if p == ""
         be buf = alloc(1100)
-        be n = callp(dllFn("kernel32.dll", "GetCurrentDirectoryA"), 1024, buf)
+        if _linux() == 1
+            be n = sysCall(79, buf, 1024, 0, 0, 0, 0) - 1
+        else
+            be n = callp(dllFn("kernel32.dll", "GetCurrentDirectoryA"), 1024, buf)
         print fromCn(buf, n)
         free(buf)
+        return 0
+    if _linux() == 1
+        if sysCall(80, cstr(p), 0, 0, 0, 0, 0) != 0
+            print "cd: no such directory: " + p
+            return 1
         return 0
     if callp(dllFn("kernel32.dll", "SetCurrentDirectoryA"), cstr(p)) == 0
         print "The system cannot find the path specified."
@@ -1206,6 +1513,9 @@ func shCode(perintah string) int
     be k = shCd(perintah)
     if k >= 0
         return k
+    if _linux() == 1
+        linuxSh(perintah, 0)
+        return _gget(20)
     return callp(dllFn("msvcrt.dll", "system"), cstr(perintah))
 
 # jalankan perintah dan kembalikan keluarannya sebagai teks (galat ikut, tanpa \r)
@@ -1213,6 +1523,8 @@ func shText(perintah string) string
     be k = shCd(perintah)
     if k >= 0
         return ""
+    if _linux() == 1
+        return replace(linuxSh(perintah + " 2>&1", 1), "\r", "")
     be f = callp(dllFn("msvcrt.dll", "_popen"), cstr(perintah + " 2>&1"), cstr("r"))
     if f == 0
         return ""
@@ -1236,7 +1548,7 @@ func fmtTeks(s string) string
 # argumen perintah program: nerx run skrip.nrx a b  ->  args() = ["a", "b"]
 func args() list string
     be semua list string
-    be cmd = fromC(api(10, 0, 0, 0, 0, 0, 0, 0))
+    be cmd = cmdLine()
     be n = len(cmd)
     be i = 0
     be pos = 0
@@ -1257,3 +1569,11 @@ func args() list string
                 add(semua, tok)
             be pos += 1
     return semua
+# int 32-bit hasil fungsi C (Linux: bagian atas rax tidak terjamin) menjadi int bertanda
+func sx32(v int) int
+    be x = v % 4294967296
+    if x < 0
+        be x += 4294967296
+    if x >= 2147483648
+        be x -= 4294967296
+    return x

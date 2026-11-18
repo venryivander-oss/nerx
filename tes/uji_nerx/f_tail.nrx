@@ -1,0 +1,35 @@
+func fibt(n int, a int, b int) int
+    if n == 0
+        return a
+    return fibt(n - 1, b, a + b)
+
+func gcd(a int, b int) int
+    if b == 0
+        return a
+    return gcd(b, a % b)
+
+func sw(n int, x int, y int) int
+    if n == 0
+        return x * 10 + y
+    return sw(n - 1, y, x)
+
+func cnt(n int) int
+    be s = 0
+    for i in range(3)
+        be s += i
+    if n == 0
+        return s
+    return cnt(n - 1)
+
+func deep(n int) int
+    if n == 0
+        return 0
+    return 1 + deep(n - 1)
+
+print fibt(50, 0, 1)
+print gcd(48, 18)
+print sw(3, 1, 2)
+print sw(4, 1, 2)
+print cnt(5)
+print deep(200000)
+

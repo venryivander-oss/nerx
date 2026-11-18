@@ -1,0 +1,42 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fixed-point (nerx membangun dirinya sendiri dua kali, hasil harus sama)
+        shell: pwsh
+        working-directory: src
+        run: |
+          ./nerx.exe build nrxc.nrx -o nrxa.exe
+          ./nrxa.exe build nrxc.nrx -o nrxb.exe
+          if ((Get-FileHash nrxa.exe).Hash -ne (Get-FileHash nrxb.exe).Hash) { throw "bukan fixed-point" }
+          if ((Get-FileHash nrxa.exe).Hash -ne (Get-FileHash nerx.exe).Hash) { throw "nerx.exe di repo tidak sesuai nrxc.nrx" }
+      - name: Tes fitur nerx
+        shell: pwsh
+        run: ./tes/nerx.ps1
+      - name: Bangun nerx untuk Linux
+        shell: pwsh
+        working-directory: src
+        run: ./nerx.exe build nrxc.nrx -o nerx_linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nerx_linux
+          path: src/nerx_linux
+  linux:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nerx_linux
+          path: src
+      - name: Tes nerx di Linux (termasuk self-host)
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-0 libcurl4
+          chmod +x src/nerx_linux
+          sed -i 's#/mnt/c/nrxl-project#'"$GITHUB_WORKSPACE"'#g' tes/linux_nerx.sh
+          bash tes/linux_nerx.sh | tee out.txt
+          grep -q 'gagal=0' out.txt

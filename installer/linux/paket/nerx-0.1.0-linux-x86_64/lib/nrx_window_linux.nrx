@@ -1,0 +1,1526 @@
+# nrx_window_linux.nrx - window GUI untuk Linux (X11 lewat libX11.so.6, teks lewat libfreetype.so.6, gambar lewat gdk-pixbuf / libpng).
+# Dipakai compiler sebagai pengganti nrx_window.nrx kalau sasarannya Linux; fungsinya sama persis (winBuka, winCanvas, winInput, ...).
+# Semua digambar sendiri ke buffer piksel (BGRA) lalu dikirim dengan XPutImage; tombol, kotak isian, dll. juga digambar sendiri.
+# Slot tersembunyi 10 = alamat blok jendela. Blok: [0] display [8] daftar elemen [232] window X [16] onKey [24] arity [32] onMouse [40] arity
+#   [48] latar [56] warna teks [64] ukuran [72] tertutup [80] daftar timer [88] antrean [96] buffer piksel [104] XImage [112] cache font
+#   [120] kotor [128] canvas tertangkap mouse (id+1) [136] GC [144] atom WM_DELETE_WINDOW [152] lebar [160] tinggi [168] -
+#   [176] FT_Library [184] FT_Face [192] jendela terbuka [200] - [208] cache gambar [216] fokus (id+1) [224] select terbuka (id+1)
+#   [232] - [240] tombol ditekan (id+1) [248] buffer XEvent [256] pollfd [264] wmemset [272] memcpy [280] terakhir mouse x [288] y
+# Elemen (20 slot): 0 jenis (1 canvas, 2 input, 3 teks, 4 tombol, 5 check, 6 select, 7 list, 8 gambar) 1 x 2 y 3 lebar 4 tinggi 5 -
+#   6 buffer piksel canvas 8 slot variabel 9 handler 10 arity 11 latar(-1) 12 warna(-1) 13 nama/teks/daftar 14 isi terakhir
+#   15 ukuran huruf 16 posisi kursor (input) 17 gulungan (list)
+
+func winB() int
+    be b = _gget(10)
+    if b == 0
+        be b = alloc(512)
+        _gset(10, b)
+        be e list int
+        poke64(b, 8, asInt(e))
+        be tm list int
+        poke64(b, 80, asInt(tm))
+        be q list int
+        poke64(b, 88, asInt(q))
+        be fc list int
+        poke64(b, 112, asInt(fc))
+        poke64(b, 48, 16777215)
+        poke64(b, 56, 0)
+        poke64(b, 64, 16)
+        poke64(b, 248, alloc(256))
+        poke64(b, 256, alloc(16))
+        poke64(b, 264, dllFn("libc.so.6", "wmemset"))
+        poke64(b, 272, dllFn("libc.so.6", "memcpy"))
+    return b
+
+func winX(f string) int
+    return dllFn("libX11.so.6", f)
+
+func winFT(f string) int
+    return dllFn("libfreetype.so.6", f)
+
+# ---------------------------------------------------------------- warna
+func wRgb(r int, g int, bl int) int
+    return r + g * 256 + bl * 65536
+
+# COLORREF (0x00BBGGRR) -> piksel 0x00RRGGBB
+func wPix(c int) int
+    return (c % 256) * 65536 + (idiv(c, 256) % 256) * 256 + idiv(c, 65536) % 256
+
+func wMix(dst int, src int, a int) int
+    be dr = idiv(dst, 65536) % 256
+    be dg = idiv(dst, 256) % 256
+    be db = dst % 256
+    be sr = idiv(src, 65536) % 256
+    be sg = idiv(src, 256) % 256
+    be sb = src % 256
+    return (dr + idiv((sr - dr) * a, 255)) * 65536 + (dg + idiv((sg - dg) * a, 255)) * 256 + db + idiv((sb - db) * a, 255)
+
+func winHexD(c string) int
+    be p = indexOf("0123456789abcdef", lower(c))
+    if p < 0
+        return 0
+    return p
+
+func winWarna(s string) int
+    be t = lower(trim(s))
+    if len(t) == 7 and substr(t, 0, 1) == "#"
+        be r = winHexD(substr(t, 1, 1)) * 16 + winHexD(substr(t, 2, 1))
+        be g = winHexD(substr(t, 3, 1)) * 16 + winHexD(substr(t, 4, 1))
+        be bl = winHexD(substr(t, 5, 1)) * 16 + winHexD(substr(t, 6, 1))
+        return r + g * 256 + bl * 65536
+    if t == "hitam" or t == "black"
+        return 0
+    if t == "putih" or t == "white"
+        return 16777215
+    if t == "merah" or t == "red"
+        return 255
+    if t == "hijau" or t == "green"
+        return 65280
+    if t == "biru" or t == "blue"
+        return 16711680
+    if t == "kuning" or t == "yellow"
+        return 65535
+    if t == "oranye" or t == "orange"
+        return 42495
+    if t == "ungu" or t == "purple"
+        return 8388736
+    if t == "abu" or t == "gray" or t == "grey"
+        return 8421504
+    _lempar("color: unknown color \"" + s + "\", use black, red, green, yellow, blue, purple, cyan, white, gray, or #RRGGBB")
+    return 0
+
+# ---------------------------------------------------------------- piksel
+# isi persegi di buffer BGRA (bw x bh) dengan piksel px, dipotong ke tepi buffer
+func wIsi(buf int, bw int, bh int, x int, y int, w int, h int, px int) int
+    be x0 = x
+    be y0 = y
+    be x1 = x + w
+    be y1 = y + h
+    if x0 < 0
+        be x0 = 0
+    if y0 < 0
+        be y0 = 0
+    if x1 > bw
+        be x1 = bw
+    if y1 > bh
+        be y1 = bh
+    if x1 <= x0 or y1 <= y0
+        return 0
+    be fn = peek64(winB(), 264)
+    be n = x1 - x0
+    for yy in range(y0, y1)
+        callp(fn, buf + (yy * bw + x0) * 4, px, n)
+    return 0
+
+func wTitik(buf int, bw int, bh int, x int, y int, px int) int
+    if x >= 0 and y >= 0 and x < bw and y < bh
+        poke(buf, (y * bw + x) * 4, "int", px)
+    return 0
+
+# salin src (sw x sh) ke dst di (x, y), dipotong
+func wSalin(dst int, dw int, dh int, src int, sw int, sh int, x int, y int) int
+    be fn = peek64(winB(), 272)
+    be x0 = x
+    be sx0 = 0
+    if x0 < 0
+        be sx0 = 0 - x0
+        be x0 = 0
+    be n = sw - sx0
+    if x0 + n > dw
+        be n = dw - x0
+    if n <= 0
+        return 0
+    for r in range(sh)
+        be yy = y + r
+        if yy >= 0 and yy < dh
+            callp(fn, dst + (yy * dw + x0) * 4, src + (r * sw + sx0) * 4, n * 4)
+    return 0
+
+# gambar src diskalakan (tetangga terdekat) ke persegi tujuan tw x th
+func wSkala(dst int, dw int, dh int, src int, sw int, sh int, x int, y int, tw int, th int) int
+    if tw == sw and th == sh
+        return wSalin(dst, dw, dh, src, sw, sh, x, y)
+    if tw <= 0 or th <= 0
+        return 0
+    for r in range(th)
+        be yy = y + r
+        if yy >= 0 and yy < dh
+            be sy = idiv(r * sh, th)
+            for c in range(tw)
+                be xx = x + c
+                if xx >= 0 and xx < dw
+                    poke(dst, (yy * dw + xx) * 4, "int", peek(src, (sy * sw + idiv(c * sw, tw)) * 4, "int"))
+    return 0
+
+func wBingkai(buf int, bw int, bh int, x int, y int, w int, h int, px int) int
+    wIsi(buf, bw, bh, x, y, w, 1, px)
+    wIsi(buf, bw, bh, x, y + h - 1, w, 1, px)
+    wIsi(buf, bw, bh, x, y, 1, h, px)
+    wIsi(buf, bw, bh, x + w - 1, y, 1, h, px)
+    return 0
+
+# lingkaran penuh
+func wLingkaran(buf int, bw int, bh int, cx int, cy int, r int, px int) int
+    for dy in range(0 - r, r + 1)
+        be half = int(_sqrt(r * r - dy * dy) + 0.5)
+        wIsi(buf, bw, bh, cx - half, cy + dy, 2 * half + 1, 1, px)
+    return 0
+
+# garis Bresenham; tebal > 1 menggambar persegi tebal x tebal di tiap titik
+func wGaris(buf int, bw int, bh int, x1 int, y1 int, x2 int, y2 int, px int, tebal int) int
+    be dx = x2 - x1
+    if dx < 0
+        be dx = 0 - dx
+    be dy = y2 - y1
+    if dy < 0
+        be dy = 0 - dy
+    be sx = 1
+    if x1 > x2
+        be sx = 0 - 1
+    be sy = 1
+    if y1 > y2
+        be sy = 0 - 1
+    be err = dx - dy
+    be x = x1
+    be y = y1
+    be t = tebal
+    if t < 1
+        be t = 1
+    be lagi = true
+    loop lagi
+        if t == 1
+            wTitik(buf, bw, bh, x, y, px)
+        else
+            wIsi(buf, bw, bh, x - idiv(t, 2), y - idiv(t, 2), t, t, px)
+        if x == x2 and y == y2
+            be lagi = false
+        else
+            be e2 = 2 * err
+            if e2 > 0 - dy
+                be err = err - dy
+                be x = x + sx
+            if e2 < dx
+                be err = err + dx
+                be y = y + sy
+    return 0
+
+# ---------------------------------------------------------------- huruf (FreeType)
+func winFace() int
+    be b = winB()
+    if peek64(b, 184) != 0
+        return peek64(b, 184)
+    if peek64(b, 176) == 0 - 1
+        return 0
+    be lib = alloc(16)
+    if dllFn("libfreetype.so.6", "FT_Init_FreeType") == 0 or sx32(callp(winFT("FT_Init_FreeType"), lib)) != 0
+        poke64(b, 176, 0 - 1)
+        _lempar("window: libfreetype.so.6 is needed to draw text (install the freetype package)")
+    poke64(b, 176, peek64(lib, 0))
+    be cand = split("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf /usr/share/fonts/dejavu/DejaVuSans.ttf /usr/share/fonts/TTF/DejaVuSans.ttf /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf /usr/share/fonts/liberation/LiberationSans-Regular.ttf /usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf /usr/share/fonts/noto/NotoSans-Regular.ttf /usr/share/fonts/google-noto/NotoSans-Regular.ttf /usr/share/fonts/TTF/NotoSans-Regular.ttf /usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf /usr/share/fonts/truetype/freefont/FreeSans.ttf")
+    be env = linuxEnv("NERX_FONT")
+    if env != ""
+        be cand = split(env)
+    be face = alloc(16)
+    for p in cand
+        if peek64(b, 184) == 0 and fileExists(p)
+            if sx32(callp(winFT("FT_New_Face"), peek64(b, 176), cstr(p), 0, face)) == 0
+                poke64(b, 184, peek64(face, 0))
+    if peek64(b, 184) == 0
+        be fc = trim(linuxSh("fc-match -f '%{file}' sans", 1))
+        if fc != "" and fileExists(fc)
+            if sx32(callp(winFT("FT_New_Face"), peek64(b, 176), cstr(fc), 0, face)) == 0
+                poke64(b, 184, peek64(face, 0))
+    free(lib)
+    free(face)
+    if peek64(b, 184) == 0
+        _lempar("window: no font found (install DejaVu Sans or Liberation Sans, or set NERX_FONT=/path/font.ttf)")
+    return peek64(b, 184)
+
+# pilih ukuran huruf (piksel); hasil = face
+func wUkuran(ukuran int) int
+    be f = winFace()
+    be u = ukuran
+    if u < 4
+        be u = 4
+    callp(winFT("FT_Set_Pixel_Sizes"), f, 0, u)
+    return f
+
+# lebar teks dalam piksel
+func wLebar(teks string, ukuran int) int
+    be f = wUkuran(ukuran)
+    be total = 0
+    be i = 0
+    be n = len(teks)
+    loop i < n
+        be c = ord(teks, i)
+        be cp = c
+        be k = 1
+        if c >= 240
+            be cp = (c % 8) * 262144 + (ord(teks, i + 1) % 64) * 4096 + (ord(teks, i + 2) % 64) * 64 + ord(teks, i + 3) % 64
+            be k = 4
+        else if c >= 224
+            be cp = (c % 16) * 4096 + (ord(teks, i + 1) % 64) * 64 + ord(teks, i + 2) % 64
+            be k = 3
+        else if c >= 192
+            be cp = (c % 32) * 64 + ord(teks, i + 1) % 64
+            be k = 2
+        callp(winFT("FT_Load_Char"), f, cp, 0)
+        be total += idiv(peek64(peek64(f, 152), 128) + 32, 64)
+        be i += k
+    return total
+
+# gambar teks (UTF-8) dengan sudut kiri atas di (x, y); warna = COLORREF
+func wTulis(buf int, bw int, bh int, teks string, x int, y int, warna int, ukuran int) int
+    be f = wUkuran(ukuran)
+    be asc = idiv(peek64(peek64(f, 160), 48) + 63, 64)
+    be src = wPix(warna)
+    be pen = x
+    be i = 0
+    be n = len(teks)
+    loop i < n
+        be c = ord(teks, i)
+        be cp = c
+        be k = 1
+        if c >= 240
+            be cp = (c % 8) * 262144 + (ord(teks, i + 1) % 64) * 4096 + (ord(teks, i + 2) % 64) * 64 + ord(teks, i + 3) % 64
+            be k = 4
+        else if c >= 224
+            be cp = (c % 16) * 4096 + (ord(teks, i + 1) % 64) * 64 + ord(teks, i + 2) % 64
+            be k = 3
+        else if c >= 192
+            be cp = (c % 32) * 64 + ord(teks, i + 1) % 64
+            be k = 2
+        callp(winFT("FT_Load_Char"), f, cp, 4)
+        be g = peek64(f, 152)
+        be rows = peek(g, 152, "int")
+        be wd = peek(g, 156, "int")
+        be pitch = peek(g, 160, "int")
+        be bp = peek64(g, 168)
+        be gx = pen + peek(g, 192, "int")
+        be gy = y + asc - peek(g, 196, "int")
+        if peek8(g, 178) == 2
+            for r in range(rows)
+                be yy = gy + r
+                if yy >= 0 and yy < bh
+                    for q in range(wd)
+                        be xx = gx + q
+                        if xx >= 0 and xx < bw
+                            be a = peek8(bp, r * pitch + q)
+                            if a > 0
+                                be o = (yy * bw + xx) * 4
+                                if a == 255
+                                    poke(buf, o, "int", src)
+                                else
+                                    poke(buf, o, "int", wMix(peek(buf, o, "int") % 16777216, src, a))
+        be pen += idiv(peek64(g, 128) + 32, 64)
+        be i += k
+    return 0
+
+# ---------------------------------------------------------------- elemen
+func winElemen(kind int, x int, y int, w int, h int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be id = len(e)
+    for k in range(20)
+        add(e, 0)
+    be e[id] = kind
+    be e[id + 1] = x
+    be e[id + 2] = y
+    be e[id + 3] = w
+    be e[id + 4] = h
+    be e[id + 11] = 0 - 1
+    be e[id + 12] = 0 - 1
+    return id
+
+func winUkuran(e list int, id int) int
+    if e[id + 15] > 0
+        return e[id + 15]
+    return peek64(winB(), 64)
+
+func winLatar(e list int, id int) int
+    if e[id + 11] >= 0
+        return e[id + 11]
+    return peek64(winB(), 48)
+
+func winWarnaTeks(e list int, id int) int
+    if e[id + 12] >= 0
+        return e[id + 12]
+    return peek64(winB(), 56)
+
+func winKotor() int
+    poke64(winB(), 120, 1)
+    return 0
+
+# ---------------------------------------------------------------- jendela
+func winBuka(judul string, w int, h int) int
+    be b = winB()
+    if peek64(b, 192) != 0
+        _lempar("newWindow: only one window can be open at a time")
+    be dpy = callp(winX("XOpenDisplay"), 0)
+    if dpy == 0
+        _lempar("newWindow: cannot connect to the display (is DISPLAY set and an X server running?)")
+    be scr = sx32(callp(winX("XDefaultScreen"), dpy))
+    be root = callp(winX("XRootWindow"), dpy, scr)
+    be win = callp(winX("XCreateSimpleWindow"), dpy, root, 100, 100, w, h, 0, 0, wPix(peek64(b, 48)))
+    if win == 0
+        _lempar("newWindow: cannot create the window")
+    callp(winX("Xutf8SetWMProperties"), dpy, win, cstr(judul), cstr(judul), 0, 0, 0, 0, 0)
+    # ukuran tetap (tidak bisa diubah)
+    be sh = alloc(128)
+    poke64(sh, 0, 48)
+    poke(sh, 24, "int", w)
+    poke(sh, 28, "int", h)
+    poke(sh, 32, "int", w)
+    poke(sh, 36, "int", h)
+    callp(winX("XSetWMNormalHints"), dpy, win, sh)
+    free(sh)
+    be at = alloc(16)
+    poke64(at, 0, callp(winX("XInternAtom"), dpy, cstr("WM_DELETE_WINDOW"), 0))
+    callp(winX("XSetWMProtocols"), dpy, win, at, 1)
+    poke64(b, 144, peek64(at, 0))
+    free(at)
+    callp(winX("XSelectInput"), dpy, win, 32847)
+    callp(winX("XkbSetDetectableAutoRepeat"), dpy, 1, 0)
+    be gc = callp(winX("XCreateGC"), dpy, win, 0, 0)
+    be vis = callp(winX("XDefaultVisual"), dpy, scr)
+    be depth = sx32(callp(winX("XDefaultDepth"), dpy, scr))
+    be pix = alloc(w * h * 4 + 16)
+    be img = callp(winX("XCreateImage"), dpy, vis, depth, 2, 0, pix, w, h, 32, 0)
+    if img == 0
+        _lempar("newWindow: cannot create the window image")
+    poke64(b, 0, dpy)
+    poke64(b, 232, win)
+    poke64(b, 96, pix)
+    poke64(b, 104, img)
+    poke64(b, 136, gc)
+    poke64(b, 152, w)
+    poke64(b, 160, h)
+    be pf = peek64(b, 256)
+    be fdx = sx32(callp(winX("XConnectionNumber"), dpy))
+    poke(pf, 0, "int", fdx)
+    poke(pf, 4, "int16", 1)
+    poke64(b, 192, 1)
+    poke64(b, 72, 0)
+    winKotor()
+    return 1
+
+func winGayaWin(win int, k string, v string) int
+    be b = winB()
+    if k == "background"
+        poke64(b, 48, winWarna(v))
+    else if k == "color"
+        poke64(b, 56, winWarna(v))
+    else if k == "size"
+        poke64(b, 64, int(v))
+    return 0
+
+func winGayaEl(id int, k string, v string) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    if k == "background"
+        be e[id + 11] = winWarna(v)
+    else if k == "color"
+        be e[id + 12] = winWarna(v)
+    else if k == "size"
+        be e[id + 15] = int(v)
+    else if k == "height"
+        be e[id + 4] = int(v)
+    winKotor()
+    return 0
+
+func winCanvas(win int, nama string, x int, y int, w int, h int) int
+    be b = winB()
+    be id = winElemen(1, x, y, w, h)
+    be e = asListI(peek64(b, 8))
+    be buf = alloc(w * h * 4 + 16)
+    be e[id + 6] = buf
+    be e[id + 13] = asInt(nama)
+    wIsi(buf, w, h, 0, 0, w, h, wPix(peek64(b, 48)))
+    winKotor()
+    return id
+
+func winInput(win int, slot int, x int, y int, w int, size int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be id = winElemen(2, x, y, w, hs + 14)
+    be e = asListI(peek64(b, 8))
+    be e[id + 8] = slot
+    be e[id + 15] = size
+    be cur = asString(peek64(slot, 0))
+    be e[id + 14] = asInt(cur)
+    be e[id + 16] = len(cur)
+    return id
+
+func winText(win int, teks string, x int, y int, size int, warna string, fn int) int
+    be b = winB()
+    be id = winElemen(3, x, y, 0, 0)
+    be e = asListI(peek64(b, 8))
+    be e[id + 13] = asInt(teks)
+    be e[id + 14] = fn
+    be e[id + 15] = size
+    if warna != ""
+        be e[id + 12] = winWarna(warna)
+    return id
+
+func winTombol(win int, teks string, x int, y int, size int, fn int, ar int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be bw = idiv(len(teks) * hs * 6, 10) + 28
+    be id = winElemen(4, x, y, bw, hs + 14)
+    be e = asListI(peek64(b, 8))
+    be e[id + 13] = asInt(teks)
+    be e[id + 9] = fn
+    be e[id + 10] = ar
+    be e[id + 15] = size
+    return id
+
+func winPilih(kind int, slot int, lst list string, x int, y int, w int, h int, size int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be hh = h
+    if kind == 6
+        be hh = hs + 14
+    be id = winElemen(kind, x, y, w, hh)
+    be e = asListI(peek64(b, 8))
+    be e[id + 8] = slot
+    be e[id + 13] = asInt(lst)
+    be e[id + 15] = size
+    if asString(peek64(slot, 0)) == "" and len(lst) > 0
+        poke64(slot, 0, asInt(lst[0]))
+    be e[id + 14] = asInt(asString(peek64(slot, 0)))
+    return id
+
+func winSelect(win int, slot int, lst list string, x int, y int, w int, size int) int
+    return winPilih(6, slot, lst, x, y, w, 0, size)
+
+func winList(win int, slot int, lst list string, x int, y int, w int, h int, size int) int
+    be hh = h
+    if hh <= 0
+        be hh = 120
+    return winPilih(7, slot, lst, x, y, w, hh, size)
+
+func winCheck(win int, slot int, teks string, x int, y int, size int) int
+    be b = winB()
+    be hs = size
+    if hs <= 0
+        be hs = peek64(b, 64)
+    be bw = idiv(len(teks) * hs * 6, 10) + 36
+    be id = winElemen(5, x, y, bw, hs + 10)
+    be e = asListI(peek64(b, 8))
+    be e[id + 8] = slot
+    be e[id + 13] = asInt(teks)
+    be e[id + 15] = size
+    be e[id + 14] = peek64(slot, 0) % 256
+    return id
+
+func winOnKey(win int, fn int, ar int) int
+    be b = winB()
+    poke64(b, 16, fn)
+    poke64(b, 24, ar)
+    return 0
+
+func winOnMouse(win int, fn int, ar int) int
+    be b = winB()
+    poke64(b, 32, fn)
+    poke64(b, 40, ar)
+    return 0
+
+func winOnTimer(win int, fn int, ar int, detik double) int
+    be b = winB()
+    be tm = asListI(peek64(b, 80))
+    if len(tm) >= 12
+        _lempar("onTimer: at most 4 timers per window")
+    add(tm, fn)
+    add(tm, int(detik * 1000))
+    add(tm, linuxMs())
+    return 0
+
+func winMuncul(win int) int
+    be b = winB()
+    callp(winX("XMapWindow"), peek64(b, 0), peek64(b, 232))
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 2
+            poke64(b, 216, i + 1)
+            break
+        be i += 20
+    winKotor()
+    winLukisPenuh()
+    return 0
+
+# ---------------------------------------------------------------- menggambar di canvas
+func winCvBuf(fn string, cv int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    if cv < 0 or cv + 20 > len(e) or e[cv] != 1
+        _lempar(fn + ": the first argument must be a canvas")
+    poke64(b, 120, 1)
+    return e[cv + 6]
+
+func drawRect(cv int, x double, y double, w double, h double, warna string) int
+    be buf = winCvBuf("drawRect", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wIsi(buf, e[cv + 3], e[cv + 4], int(x), int(y), int(w), int(h), wPix(winWarna(warna)))
+
+func drawCircle(cv int, x double, y double, r double, warna string) int
+    be buf = winCvBuf("drawCircle", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wLingkaran(buf, e[cv + 3], e[cv + 4], int(x), int(y), int(r), wPix(winWarna(warna)))
+
+func drawLine_a6(cv int, x1 double, y1 double, x2 double, y2 double, warna string) int
+    be buf = winCvBuf("drawLine", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wGaris(buf, e[cv + 3], e[cv + 4], int(x1), int(y1), int(x2), int(y2), wPix(winWarna(warna)), 1)
+
+func drawLine_a7(cv int, x1 double, y1 double, x2 double, y2 double, warna string, tebal double) int
+    be buf = winCvBuf("drawLine", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wGaris(buf, e[cv + 3], e[cv + 4], int(x1), int(y1), int(x2), int(y2), wPix(winWarna(warna)), int(tebal))
+
+func drawText_a5(cv int, teks string, x double, y double, warna string) int
+    be buf = winCvBuf("drawText", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wTulis(buf, e[cv + 3], e[cv + 4], teks, int(x), int(y), winWarna(warna), 16)
+
+func drawText_a6(cv int, teks string, x double, y double, warna string, ukuran double) int
+    be buf = winCvBuf("drawText", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wTulis(buf, e[cv + 3], e[cv + 4], teks, int(x), int(y), winWarna(warna), int(ukuran))
+
+func clearCanvas_a1(cv int) int
+    be buf = winCvBuf("clearCanvas", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wIsi(buf, e[cv + 3], e[cv + 4], 0, 0, e[cv + 3], e[cv + 4], wPix(winLatar(e, cv)))
+
+func clearCanvas_a2(cv int, warna string) int
+    be buf = winCvBuf("clearCanvas", cv)
+    be e = asListI(peek64(winB(), 8))
+    return wIsi(buf, e[cv + 3], e[cv + 4], 0, 0, e[cv + 3], e[cv + 4], wPix(winWarna(warna)))
+
+# ---------------------------------------------------------------- gambar
+# cache gambar: daftar di blok [208], per gambar 4 slot: nama, buffer BGRA, lebar, tinggi. Hasil = indeks awal.
+# dibaca lewat gdk-pixbuf (PNG, JPG, BMP, ...); kalau tidak ada, PNG lewat libpng.
+func winMuatPixbuf(path string, o int) int
+    be fNew = dllFn("libgdk_pixbuf-2.0.so.0", "gdk_pixbuf_new_from_file")
+    if fNew == 0
+        return 0
+    be pb = callp(fNew, cstr(path), 0)
+    if pb == 0
+        return 0
+    be lib = "libgdk_pixbuf-2.0.so.0"
+    be w = sx32(callp(dllFn(lib, "gdk_pixbuf_get_width"), pb))
+    be h = sx32(callp(dllFn(lib, "gdk_pixbuf_get_height"), pb))
+    be rs = sx32(callp(dllFn(lib, "gdk_pixbuf_get_rowstride"), pb))
+    be nc = sx32(callp(dllFn(lib, "gdk_pixbuf_get_n_channels"), pb))
+    be px = callp(dllFn(lib, "gdk_pixbuf_get_pixels"), pb)
+    be bg = wPix(peek64(winB(), 48))
+    be buf = alloc(w * h * 4 + 16)
+    for y in range(h)
+        for x in range(w)
+            be s = px + y * rs + x * nc
+            be a = 255
+            if nc == 4
+                be a = peek8(s, 3)
+            be c = peek8(s, 0) * 65536 + peek8(s, 1) * 256 + peek8(s, 2)
+            if a < 255
+                be c = wMix(bg, c, a)
+            poke(buf, (y * w + x) * 4, "int", c)
+    callp(dllFn("libgobject-2.0.so.0", "g_object_unref"), pb)
+    poke64(o, 0, buf)
+    poke64(o, 8, w)
+    poke64(o, 16, h)
+    return 1
+
+func winMuatPng(path string, o int) int
+    be lp = "libpng16.so.16"
+    be fb = dllFn(lp, "png_image_begin_read_from_file")
+    if fb == 0
+        return 0
+    be im = alloc(112)
+    for k in range(14)
+        poke64(im, k * 8, 0)
+    poke(im, 8, "int", 1)
+    if callp(fb, im, cstr(path)) % 256 == 0
+        free(im)
+        return 0
+    poke(im, 20, "int", 19)
+    be w = peek(im, 12, "int")
+    be h = peek(im, 16, "int")
+    be tmp = alloc(w * h * 4 + 16)
+    if callp(dllFn(lp, "png_image_finish_read"), im, 0, tmp, 0, 0) % 256 == 0
+        free(tmp)
+        free(im)
+        return 0
+    be bg = wPix(peek64(winB(), 48))
+    for k in range(w * h)
+        be a = peek8(tmp, k * 4 + 3)
+        be c = peek(tmp, k * 4, "int") % 16777216
+        if a < 255
+            be c = wMix(bg, c, a)
+        poke(tmp, k * 4, "int", c)
+    free(im)
+    poke64(o, 0, tmp)
+    poke64(o, 8, w)
+    poke64(o, 16, h)
+    return 1
+
+func winGambar(path string) int
+    be b = winB()
+    if peek64(b, 208) == 0
+        be cl list int
+        poke64(b, 208, asInt(cl))
+    be c = asListI(peek64(b, 208))
+    be k = 0
+    loop k < len(c)
+        if asString(c[k]) == path
+            return k
+        be k += 4
+    be o = alloc(32)
+    be ok = 0
+    if fileExists(path)
+        be ok = winMuatPixbuf(path, o)
+        if ok == 0
+            be ok = winMuatPng(path, o)
+    if ok == 0
+        free(o)
+        _lemparK(199, "image " + path + " not found or its format is not supported (use PNG, JPG, or BMP)")
+    add(c, asInt(path))
+    add(c, peek64(o, 0))
+    add(c, peek64(o, 8))
+    add(c, peek64(o, 16))
+    free(o)
+    return len(c) - 4
+
+func winBlit(dst int, dw int, dh int, g int, x int, y int, w int, h int) int
+    be c = asListI(peek64(winB(), 208))
+    be tw = w
+    be th = h
+    if tw <= 0
+        be tw = c[g + 2]
+    if th <= 0
+        be th = c[g + 3]
+    return wSkala(dst, dw, dh, c[g + 1], c[g + 2], c[g + 3], x, y, tw, th)
+
+func winGambarEl(win int, path string, x int, y int, w int, h int) int
+    be g = winGambar(path)
+    be id = winElemen(8, x, y, w, h)
+    be e = asListI(peek64(winB(), 8))
+    be e[id + 13] = g
+    return id
+
+func drawImage_a4(cv int, path string, x double, y double) int
+    be buf = winCvBuf("drawImage", cv)
+    be e = asListI(peek64(winB(), 8))
+    return winBlit(buf, e[cv + 3], e[cv + 4], winGambar(path), int(x), int(y), 0, 0)
+
+func drawImage_a6(cv int, path string, x double, y double, w double, h double) int
+    be buf = winCvBuf("drawImage", cv)
+    be e = asListI(peek64(winB(), 8))
+    return winBlit(buf, e[cv + 3], e[cv + 4], winGambar(path), int(x), int(y), int(w), int(h))
+
+# ---------------------------------------------------------------- tampilan
+# teks yang berisi variabel: hitung ulang, tandai kotor kalau berubah
+func winTeksHidup(hw int) int
+    be e = asListI(peek64(winB(), 8))
+    be i = 0
+    loop i < len(e)
+        if e[i] == 3 and e[i + 14] != 0
+            be baru = asString(_callfn(e[i + 14]))
+            if baru != asString(e[i + 13])
+                be e[i + 13] = asInt(baru)
+                winKotor()
+        be i += 20
+    return 0
+
+func winBarisTinggi(e list int, id int) int
+    return winUkuran(e, id) + 8
+
+# warna dasar widget
+func wLatarWidget() int
+    return wRgb(225, 225, 225)
+
+func wTombolGambar(buf int, bw int, bh int, e list int, i int, b int)
+    be x = e[i + 1]
+    be y = e[i + 2]
+    be w = e[i + 3]
+    be h = e[i + 4]
+    be tekan = peek64(b, 240) == i + 1
+    be lat = wLatarWidget()
+    if e[i + 11] >= 0
+        be lat = e[i + 11]
+    if tekan
+        be lat = wRgb(200, 200, 200)
+    be gar = wRgb(173, 173, 173)
+    if peek64(b, 216) == i + 1 or tekan
+        be gar = wRgb(0, 120, 215)
+    wIsi(buf, bw, bh, x, y, w, h, wPix(lat))
+    wBingkai(buf, bw, bh, x, y, w, h, wPix(gar))
+    be wr = 0
+    if e[i + 12] >= 0
+        be wr = e[i + 12]
+    be u = winUkuran(e, i)
+    be teks = asString(e[i + 13])
+    be tw = wLebar(teks, u)
+    wTulis(buf, bw, bh, teks, x + idiv(w - tw, 2), y + idiv(h - u, 2) - 1, wr, u)
+
+func wInputGambar(buf int, bw int, bh int, e list int, i int, b int)
+    be x = e[i + 1]
+    be y = e[i + 2]
+    be w = e[i + 3]
+    be h = e[i + 4]
+    be lat = winLatar(e, i)
+    be fokus = peek64(b, 216) == i + 1
+    wIsi(buf, bw, bh, x, y, w, h, wPix(lat))
+    be gar = wRgb(122, 122, 122)
+    if fokus
+        be gar = wRgb(0, 120, 215)
+    wBingkai(buf, bw, bh, x, y, w, h, wPix(gar))
+    be u = winUkuran(e, i)
+    be teks = asString(peek64(e[i + 8], 0))
+    be ty = y + idiv(h - u, 2) - 1
+    # teks yang terlalu panjang: geser supaya kursor tetap terlihat
+    be kur = e[i + 16]
+    if kur > len(teks)
+        be kur = len(teks)
+    be awal = 0
+    loop wLebar(slice(teks, awal, kur), u) > w - 12 and awal < kur
+        be awal += 1
+    wTulis(buf, bw, bh, slice(teks, awal), x + 5, ty, winWarnaTeks(e, i), u)
+    if fokus
+        be cx = x + 5 + wLebar(slice(teks, awal, kur), u)
+        wIsi(buf, bw, bh, cx, y + 3, 1, h - 6, wPix(winWarnaTeks(e, i)))
+
+func wCheckGambar(buf int, bw int, bh int, e list int, i int, b int)
+    be x = e[i + 1]
+    be y = e[i + 2]
+    be u = winUkuran(e, i)
+    be sz = 14
+    be by = y + idiv(e[i + 4] - sz, 2)
+    be fokus = peek64(b, 216) == i + 1
+    wIsi(buf, bw, bh, x, by, sz, sz, wPix(wRgb(255, 255, 255)))
+    be gar = wRgb(51, 51, 51)
+    if fokus
+        be gar = wRgb(0, 120, 215)
+    wBingkai(buf, bw, bh, x, by, sz, sz, wPix(gar))
+    if peek64(e[i + 8], 0) % 256 != 0
+        wGaris(buf, bw, bh, x + 3, by + 7, x + 6, by + 10, wPix(wRgb(0, 0, 0)), 2)
+        wGaris(buf, bw, bh, x + 6, by + 10, x + 11, by + 3, wPix(wRgb(0, 0, 0)), 2)
+    wTulis(buf, bw, bh, asString(e[i + 13]), x + 22, y + idiv(e[i + 4] - u, 2) - 1, winWarnaTeks(e, i), u)
+
+func wSelectGambar(buf int, bw int, bh int, e list int, i int, b int)
+    be x = e[i + 1]
+    be y = e[i + 2]
+    be w = e[i + 3]
+    be h = e[i + 4]
+    be lat = winLatar(e, i)
+    wIsi(buf, bw, bh, x, y, w, h, wPix(lat))
+    be gar = wRgb(122, 122, 122)
+    if peek64(b, 216) == i + 1 or peek64(b, 224) == i + 1
+        be gar = wRgb(0, 120, 215)
+    wBingkai(buf, bw, bh, x, y, w, h, wPix(gar))
+    be u = winUkuran(e, i)
+    wTulis(buf, bw, bh, asString(peek64(e[i + 8], 0)), x + 5, y + idiv(h - u, 2) - 1, winWarnaTeks(e, i), u)
+    be ax = x + w - 14
+    be ay = y + idiv(h, 2) - 2
+    wGaris(buf, bw, bh, ax, ay, ax + 4, ay + 4, wPix(winWarnaTeks(e, i)), 1)
+    wGaris(buf, bw, bh, ax + 4, ay + 4, ax + 8, ay, wPix(winWarnaTeks(e, i)), 1)
+
+func wListGambar(buf int, bw int, bh int, e list int, i int, b int)
+    be x = e[i + 1]
+    be y = e[i + 2]
+    be w = e[i + 3]
+    be h = e[i + 4]
+    wIsi(buf, bw, bh, x, y, w, h, wPix(winLatar(e, i)))
+    be gar = wRgb(122, 122, 122)
+    if peek64(b, 216) == i + 1
+        be gar = wRgb(0, 120, 215)
+    wBingkai(buf, bw, bh, x, y, w, h, wPix(gar))
+    be u = winUkuran(e, i)
+    be rh = winBarisTinggi(e, i)
+    be lst = asListS(e[i + 13])
+    be cur = asString(peek64(e[i + 8], 0))
+    be tampak = idiv(h - 4, rh)
+    for r in range(tampak)
+        be k = e[i + 17] + r
+        if k < len(lst)
+            be ry = y + 2 + r * rh
+            be tc = winWarnaTeks(e, i)
+            if lst[k] == cur
+                wIsi(buf, bw, bh, x + 2, ry, w - 4, rh, wPix(wRgb(0, 120, 215)))
+                be tc = wRgb(255, 255, 255)
+            wTulis(buf, bw, bh, lst[k], x + 6, ry + idiv(rh - u, 2) - 1, tc, u)
+
+# daftar pilihan select yang terbuka (digambar paling atas)
+func wDropGambar(buf int, bw int, bh int, e list int, i int)
+    be x = e[i + 1]
+    be y = e[i + 2] + e[i + 4]
+    be w = e[i + 3]
+    be u = winUkuran(e, i)
+    be rh = winBarisTinggi(e, i)
+    be lst = asListS(e[i + 13])
+    be cur = asString(peek64(e[i + 8], 0))
+    be h = len(lst) * rh + 4
+    wIsi(buf, bw, bh, x, y, w, h, wPix(winLatar(e, i)))
+    wBingkai(buf, bw, bh, x, y, w, h, wPix(wRgb(122, 122, 122)))
+    for k in range(len(lst))
+        be ry = y + 2 + k * rh
+        be tc = winWarnaTeks(e, i)
+        if lst[k] == cur
+            wIsi(buf, bw, bh, x + 2, ry, w - 4, rh, wPix(wRgb(0, 120, 215)))
+            be tc = wRgb(255, 255, 255)
+        wTulis(buf, bw, bh, lst[k], x + 6, ry + idiv(rh - u, 2) - 1, tc, u)
+
+# gambar penuh ke buffer jendela lalu kirim ke layar
+func winLukisPenuh() int
+    be b = winB()
+    be pix = peek64(b, 96)
+    if pix == 0 or peek64(b, 72) != 0
+        return 0
+    poke64(b, 120, 0)
+    be bw = peek64(b, 152)
+    be bh = peek64(b, 160)
+    wIsi(pix, bw, bh, 0, 0, bw, bh, wPix(peek64(b, 48)))
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        be j = e[i]
+        if j == 3
+            wTulis(pix, bw, bh, asString(e[i + 13]), e[i + 1], e[i + 2], winWarnaTeks(e, i), winUkuran(e, i))
+        else if j == 8
+            winBlit(pix, bw, bh, e[i + 13], e[i + 1], e[i + 2], e[i + 3], e[i + 4])
+        else if j == 1
+            wSalin(pix, bw, bh, e[i + 6], e[i + 3], e[i + 4], e[i + 1], e[i + 2])
+        else if j == 4
+            wTombolGambar(pix, bw, bh, e, i, b)
+        else if j == 2
+            wInputGambar(pix, bw, bh, e, i, b)
+        else if j == 5
+            wCheckGambar(pix, bw, bh, e, i, b)
+        else if j == 6
+            wSelectGambar(pix, bw, bh, e, i, b)
+        else if j == 7
+            wListGambar(pix, bw, bh, e, i, b)
+        be i += 20
+    if peek64(b, 224) > 0
+        wDropGambar(pix, bw, bh, e, peek64(b, 224) - 1)
+    callp(winX("XPutImage"), peek64(b, 0), peek64(b, 232), peek64(b, 136), peek64(b, 104), 0, 0, 0, 0, bw, bh)
+    callp(winX("XFlush"), peek64(b, 0))
+    return 0
+
+func winTampil() int
+    be b = winB()
+    if peek64(b, 232) == 0 or peek64(b, 72) != 0
+        return 0
+    winTeksHidup(0)
+    winLukisPenuh()
+    return 0
+
+# ---------------------------------------------------------------- pesan
+func winCari(x int, y int) int
+    be e = asListI(peek64(winB(), 8))
+    be hasil = 0 - 1
+    be i = 0
+    loop i < len(e)
+        if e[i] == 1 and x >= e[i + 1] and y >= e[i + 2] and x < e[i + 1] + e[i + 3] and y < e[i + 2] + e[i + 4]
+            be hasil = i
+        be i += 20
+    return hasil
+
+# widget (bukan canvas) di bawah titik
+func winCariW(x int, y int) int
+    be e = asListI(peek64(winB(), 8))
+    be hasil = 0 - 1
+    be i = 0
+    loop i < len(e)
+        be j = e[i]
+        if j == 2 or j == 4 or j == 5 or j == 6 or j == 7
+            if x >= e[i + 1] and y >= e[i + 2] and x < e[i + 1] + e[i + 3] and y < e[i + 2] + e[i + 4]
+                be hasil = i
+        be i += 20
+    return hasil
+
+func winAntre(a int, b1 int, c int, d int, e5 int) int
+    be q = asListI(peek64(winB(), 88))
+    add(q, a)
+    add(q, b1)
+    add(q, c)
+    add(q, d)
+    add(q, e5)
+    return 0
+
+func winNamaTombol(vk int) string
+    if vk >= 65 and vk <= 90
+        return lower(chr(vk))
+    if vk >= 48 and vk <= 57
+        return chr(vk)
+    if vk >= 112 and vk <= 123
+        return "f" + str(vk - 111)
+    be nm = split("left right up down space enter escape tab backspace delete home end pageup pagedown")
+    be kd = split("37 39 38 40 32 13 27 9 8 46 36 35 33 34")
+    for i in range(len(nm))
+        if int(kd[i]) == vk
+            return nm[i]
+    return ""
+
+# keysym X11 -> kode tombol Windows (seperti yang dipakai nrx_keyboard dan onKey); 0 kalau tidak dikenal
+func winVk(ks int) int
+    if ks >= 97 and ks <= 122
+        return ks - 32
+    if (ks >= 65 and ks <= 90) or (ks >= 48 and ks <= 57)
+        return ks
+    if ks >= 65470 and ks <= 65481
+        return ks - 65470 + 112
+    if ks == 32
+        return 32
+    if ks == 65361
+        return 37
+    if ks == 65362
+        return 38
+    if ks == 65363
+        return 39
+    if ks == 65364
+        return 40
+    if ks == 65293 or ks == 65421
+        return 13
+    if ks == 65307
+        return 27
+    if ks == 65289 or ks == 65056
+        return 9
+    if ks == 65288
+        return 8
+    if ks == 65535
+        return 46
+    if ks == 65360
+        return 36
+    if ks == 65367
+        return 35
+    if ks == 65365
+        return 33
+    if ks == 65366
+        return 34
+    if ks == 65505 or ks == 65506
+        return 16
+    if ks == 65507 or ks == 65508
+        return 17
+    if ks == 65513 or ks == 65514
+        return 18
+    return 0
+
+func winKbBlok() int
+    be b = _gget(7)
+    if b == 0
+        be b = alloc(960)
+        _gset(7, b)
+    return b
+
+func winTombolBawah(vk int, diEdit bool) int
+    be kb = winKbBlok()
+    poke8(kb, vk, 1)
+    poke8(kb, 256 + vk, 1)
+    be b = winB()
+    if peek64(b, 16) == 0
+        return 0
+    be nm = winNamaTombol(vk)
+    if nm == "" or nm == "tab"
+        return 0
+    if diEdit and not (vk == 13 or vk == 27 or (vk >= 33 and vk <= 40))
+        return 0
+    winAntre(2, vk, 0, 0, 0)
+    return 0
+
+func winTombolNaik(vk int) int
+    be kb = winKbBlok()
+    poke8(kb, 256 + vk, 0)
+    poke8(kb, 512 + vk, 1)
+    return 0
+
+# nilai variabel widget diubah dari dalam jendela
+func winSetSlot(e list int, i int, teks string) int
+    poke64(e[i + 8], 0, asInt(teks))
+    be e[i + 14] = asInt(teks)
+    winKotor()
+    return 0
+
+# fokus ke widget berikutnya (Tab)
+func winFokusBerikut() int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be awal = peek64(b, 216)
+    be k = 0
+    loop k < idiv(len(e), 20)
+        be awal = awal + 1
+        if awal > idiv(len(e), 20)
+            be awal = 1
+        be j = e[(awal - 1) * 20]
+        if j == 2 or j == 4 or j == 5 or j == 6 or j == 7
+            poke64(b, 216, awal)
+            winKotor()
+            return 0
+        be k += 1
+    return 0
+
+# pindahkan kursor satu karakter UTF-8 mundur / maju
+func winMundur(s string, p int) int
+    be q = p - 1
+    loop q > 0 and ord(s, q) >= 128 and ord(s, q) < 192
+        be q -= 1
+    if q < 0
+        return 0
+    return q
+
+func winMaju(s string, p int) int
+    be q = p + 1
+    loop q < len(s) and ord(s, q) >= 128 and ord(s, q) < 192
+        be q += 1
+    if q > len(s)
+        return len(s)
+    return q
+
+# tombol ditekan saat fokus di kotak isian: sunting teks
+func winSuntingKey(e list int, i int, vk int, ks int, ev int) int
+    be s = asString(peek64(e[i + 8], 0))
+    be kur = e[i + 16]
+    if kur > len(s)
+        be kur = len(s)
+    if vk == 8
+        if kur > 0
+            be p = winMundur(s, kur)
+            winSetSlot(e, i, slice(s, 0, p) + slice(s, kur))
+            be e[i + 16] = p
+        return 0
+    if vk == 46
+        if kur < len(s)
+            winSetSlot(e, i, slice(s, 0, kur) + slice(s, winMaju(s, kur)))
+        return 0
+    if vk == 37
+        be e[i + 16] = winMundur(s, kur)
+        winKotor()
+        return 0
+    if vk == 39
+        be e[i + 16] = winMaju(s, kur)
+        winKotor()
+        return 0
+    if vk == 36
+        be e[i + 16] = 0
+        winKotor()
+        return 0
+    if vk == 35
+        be e[i + 16] = len(s)
+        winKotor()
+        return 0
+    # karakter biasa
+    be tb = alloc(64)
+    be n = sx32(callp(winX("XLookupString"), ev, tb, 32, 0, 0))
+    if n > 0
+        be teks = ""
+        for q in range(n)
+            be c = peek8(tb, q)
+            if c >= 32 and c != 127
+                if c < 128
+                    be teks = teks + chr(c)
+                else
+                    be teks = teks + chr(192 + idiv(c, 64)) + chr(128 + c % 64)
+        if teks != ""
+            winSetSlot(e, i, slice(s, 0, kur) + teks + slice(s, kur))
+            be e[i + 16] = kur + len(teks)
+    free(tb)
+    return 0
+
+func winKeyEvent(ev int, tekan bool) int
+    be b = winB()
+    be ks = callp(winX("XLookupKeysym"), ev, 0)
+    be vk = winVk(ks)
+    if not tekan
+        if vk != 0
+            winTombolNaik(vk)
+        return 0
+    be e = asListI(peek64(b, 8))
+    be fk = peek64(b, 216) - 1
+    be diEdit = fk >= 0 and e[fk] == 2
+    if peek64(b, 224) > 0 and vk == 27
+        poke64(b, 224, 0)
+        winKotor()
+    if vk == 9
+        winFokusBerikut()
+    if fk >= 0 and vk != 0
+        if e[fk] == 2
+            winSuntingKey(e, fk, vk, ks, ev)
+        else if e[fk] == 4 and (vk == 32 or vk == 13)
+            winAntre(3, fk, 0, 0, 0)
+        else if e[fk] == 5 and vk == 32
+            winSetSlot(e, fk, "")
+            poke64(e[fk + 8], 0, 1 - peek64(e[fk + 8], 0) % 256)
+            be e[fk + 14] = peek64(e[fk + 8], 0) % 256
+        else if e[fk] == 6 or e[fk] == 7
+            be lst = asListS(e[fk + 13])
+            be idx = indexOf(lst, asString(peek64(e[fk + 8], 0)))
+            if vk == 38 and idx > 0
+                winSetSlot(e, fk, lst[idx - 1])
+            else if vk == 40 and idx + 1 < len(lst)
+                winSetSlot(e, fk, lst[idx + 1])
+    if vk != 0
+        winTombolBawah(vk, diEdit)
+    return 0
+
+# klik / lepas / gerak mouse. m: 4 tekan, 5 lepas, 6 gerak
+func winMouseEvent(m int, mx int, my int, btn int) int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    # roda mouse: gulung list di bawah pointer
+    if m == 4 and (btn == 4 or btn == 5)
+        be w0 = winCariW(mx, my)
+        if w0 >= 0 and e[w0] == 7
+            be lst0 = asListS(e[w0 + 13])
+            be tampak = idiv(e[w0 + 4] - 4, winBarisTinggi(e, w0))
+            be g = e[w0 + 17]
+            if btn == 4
+                be g = g - 1
+            else
+                be g = g + 1
+            if g > len(lst0) - tampak
+                be g = len(lst0) - tampak
+            if g < 0
+                be g = 0
+            be e[w0 + 17] = g
+            winKotor()
+        return 0
+    # pilihan select yang terbuka
+    be od = peek64(b, 224) - 1
+    if od >= 0
+        if m == 4 and btn == 1
+            be rh = winBarisTinggi(e, od)
+            be lst = asListS(e[od + 13])
+            be dy = my - (e[od + 2] + e[od + 4]) - 2
+            if mx >= e[od + 1] and mx < e[od + 1] + e[od + 3] and dy >= 0 and idiv(dy, rh) < len(lst)
+                winSetSlot(e, od, lst[idiv(dy, rh)])
+            poke64(b, 224, 0)
+            winKotor()
+        return 0
+    # canvas (dengan tangkapan mouse)
+    be cap = peek64(b, 128)
+    be id = 0 - 1
+    if cap > 0
+        be id = cap - 1
+    else
+        be id = winCari(mx, my)
+    if m == 4 and (btn == 1 or btn == 3) and id >= 0
+        poke64(b, 128, id + 1)
+    if m == 5 and (btn == 1 or btn == 3)
+        poke64(b, 128, 0)
+    if id >= 0
+        be ak = 0 - 1
+        if m == 6
+            be ak = 0
+        else if m == 4 and btn == 1
+            be ak = 1
+        else if m == 4 and btn == 3
+            be ak = 2
+        else if m == 5 and (btn == 1 or btn == 3)
+            be ak = 3
+        if ak >= 0
+            winAntre(1, id, mx - e[id + 1], my - e[id + 2], ak)
+    # widget
+    if m == 4 and btn == 1
+        be wd = winCariW(mx, my)
+        poke64(b, 216, wd + 1)
+        if wd >= 0
+            be jw = e[wd]
+            if jw == 4 or jw == 5
+                poke64(b, 240, wd + 1)
+            else if jw == 6
+                poke64(b, 224, wd + 1)
+            else if jw == 7
+                be lst2 = asListS(e[wd + 13])
+                be k2 = e[wd + 17] + idiv(my - e[wd + 2] - 2, winBarisTinggi(e, wd))
+                if k2 >= 0 and k2 < len(lst2)
+                    winSetSlot(e, wd, lst2[k2])
+            else if jw == 2
+                be u = winUkuran(e, wd)
+                be s = asString(peek64(e[wd + 8], 0))
+                be p = 0
+                be q = 0
+                loop q < len(s) and wLebar(slice(s, 0, winMaju(s, q)), u) + e[wd + 1] + 5 <= mx
+                    be q = winMaju(s, q)
+                be e[wd + 16] = q
+        winKotor()
+    if m == 5 and btn == 1
+        be pr = peek64(b, 240) - 1
+        if pr >= 0
+            be wd2 = winCariW(mx, my)
+            if wd2 == pr
+                if e[pr] == 4
+                    winAntre(3, pr, 0, 0, 0)
+                else if e[pr] == 5
+                    poke64(e[pr + 8], 0, 1 - peek64(e[pr + 8], 0) % 256)
+                    be e[pr + 14] = peek64(e[pr + 8], 0) % 256
+            poke64(b, 240, 0)
+            winKotor()
+    return 0
+
+func winPanggil(fn int, ar int, a1 int, a2 int, a3 int, a4 int) int
+    if ar == 0
+        return _callfn(fn)
+    if ar == 1
+        return _callfn(fn, a1)
+    if ar == 2
+        return _callfn(fn, a1, a2)
+    if ar == 3
+        return _callfn(fn, a1, a2, a3)
+    return _callfn(fn, a1, a2, a3, a4)
+
+# ambil semua kejadian X11 yang menunggu
+func winSedot() int
+    be b = winB()
+    be dpy = peek64(b, 0)
+    if dpy == 0
+        return 0
+    be ev = peek64(b, 248)
+    loop sx32(callp(winX("XPending"), dpy)) > 0
+        callp(winX("XNextEvent"), dpy, ev)
+        be t = peek(ev, 0, "int")
+        if t == 12
+            winKotor()
+        else if t == 33
+            if peek64(ev, 56) == peek64(b, 144)
+                poke64(b, 72, 1)
+        else if t == 2
+            winKeyEvent(ev, true)
+        else if t == 3
+            winKeyEvent(ev, false)
+        else if t == 4
+            winMouseEvent(4, peek(ev, 64, "int"), peek(ev, 68, "int"), peek(ev, 84, "int"))
+        else if t == 5
+            winMouseEvent(5, peek(ev, 64, "int"), peek(ev, 68, "int"), peek(ev, 84, "int"))
+        else if t == 6
+            winMouseEvent(6, peek(ev, 64, "int"), peek(ev, 68, "int"), 0)
+    return 0
+
+# nilai variabel yang diubah program: tandai kotor
+func winSinkron() int
+    be b = winB()
+    be e = asListI(peek64(b, 8))
+    be i = 0
+    loop i < len(e)
+        be j = e[i]
+        if j == 2 or j == 6 or j == 7
+            be cur = asString(peek64(e[i + 8], 0))
+            if cur != asString(e[i + 14])
+                be e[i + 14] = asInt(cur)
+                if j == 2
+                    be e[i + 16] = len(cur)
+                winKotor()
+        else if j == 5
+            be cc = peek64(e[i + 8], 0) % 256
+            if cc != e[i + 14]
+                be e[i + 14] = cc
+                winKotor()
+        be i += 20
+    return 0
+
+func winKerja() int
+    be b = winB()
+    be q = asListI(peek64(b, 88))
+    loop len(q) > 0 and peek64(b, 72) == 0
+        be jenis = remove(q, 0)
+        be p1 = remove(q, 0)
+        be p2 = remove(q, 0)
+        be p3 = remove(q, 0)
+        be p4 = remove(q, 0)
+        if jenis == 1 and peek64(b, 32) != 0
+            be e = asListI(peek64(b, 8))
+            be aks = "move"
+            if p4 == 1
+                be aks = "left"
+            else if p4 == 2
+                be aks = "right"
+            else if p4 == 3
+                be aks = "release"
+            winPanggil(peek64(b, 32), peek64(b, 40), p2, p3, asInt(aks), e[p1 + 13])
+        else if jenis == 2 and peek64(b, 16) != 0
+            winPanggil(peek64(b, 16), peek64(b, 24), asInt(winNamaTombol(p1)), 0, 0, 0)
+        else if jenis == 3
+            be e4 = asListI(peek64(b, 8))
+            if e4[p1 + 9] != 0
+                winPanggil(e4[p1 + 9], e4[p1 + 10], 0, 0, 0, 0)
+    be tm = asListI(peek64(b, 80))
+    be now = linuxMs()
+    be t = 0
+    loop t < len(tm) and peek64(b, 72) == 0
+        if now - tm[t + 2] >= tm[t + 1]
+            be tm[t + 2] = now
+            winPanggil(tm[t], 0, 0, 0, 0, 0)
+        be t += 3
+    if peek64(b, 72) == 0
+        winSinkron()
+        winTeksHidup(0)
+        if peek64(b, 120) != 0
+            winTampil()
+    return 0
+
+# tunggu kejadian X11 paling lama ms milidetik
+func winMenunggu(ms int) int
+    be b = winB()
+    be pf = peek64(b, 256)
+    sysCall(7, pf, 1, ms, 0, 0, 0)
+    return 0
+
+func winPump(ms int) int
+    be b = winB()
+    if peek64(b, 192) == 0
+        if ms > 0
+            linuxTidur(ms)
+        return 0
+    be akhir = linuxMs() + ms
+    loop true
+        winSedot()
+        winKerja()
+        if peek64(b, 72) != 0
+            break
+        be sisa = akhir - linuxMs()
+        if ms >= 0 and sisa <= 0
+            break
+        be tunggu = 5
+        if ms >= 0 and sisa < tunggu
+            be tunggu = sisa
+        winMenunggu(tunggu)
+    return 0
+
+func winTunggu__int(n int) int
+    return winPump(n * 1000)
+
+func winTunggu__double(n double) int
+    return winPump(int(n * 1000))
+
+func winSelesai() int
+    be b = winB()
+    if peek64(b, 192) != 0 and peek64(b, 72) == 0
+        winPump(0 - 1)
+    return 0
+
+func closeWindow_a0() int
+    be b = winB()
+    if peek64(b, 192) != 0 and peek64(b, 72) == 0
+        callp(winX("XDestroyWindow"), peek64(b, 0), peek64(b, 232))
+        callp(winX("XFlush"), peek64(b, 0))
+        poke64(b, 72, 1)
+    return 0
+
+func closeWindow_a1(judul string) int
+    return closeWindow_a0()
+
+# ---------------------------------------------------------------- untuk uji: simpan isi jendela sebagai PNG (memakai libz)
+func winPngBlok(fd int, jenis string, data int, n int) int
+    be h = alloc(16)
+    poke8(h, 0, idiv(n, 16777216) % 256)
+    poke8(h, 1, idiv(n, 65536) % 256)
+    poke8(h, 2, idiv(n, 256) % 256)
+    poke8(h, 3, n % 256)
+    for k in range(4)
+        poke8(h, 4 + k, ord(jenis, k))
+    sysCall(1, fd, h, 8, 0, 0, 0)
+    if n > 0
+        sysCall(1, fd, data, n, 0, 0, 0)
+    be fz = dllFn("libz.so.1", "crc32")
+    be crc = callp(fz, 0, h + 4, 4)
+    if n > 0
+        be crc = callp(fz, crc, data, n)
+    be crc = crc % 4294967296
+    poke8(h, 8, idiv(crc, 16777216) % 256)
+    poke8(h, 9, idiv(crc, 65536) % 256)
+    poke8(h, 10, idiv(crc, 256) % 256)
+    poke8(h, 11, crc % 256)
+    sysCall(1, fd, h + 8, 4, 0, 0, 0)
+    free(h)
+    return 0
+
+func winDumpPng(path string) int
+    be b = winB()
+    winLukisPenuh()
+    be w = peek64(b, 152)
+    be h = peek64(b, 160)
+    be pix = peek64(b, 96)
+    be raw = alloc(h * (w * 3 + 1) + 16)
+    for y in range(h)
+        be o = y * (w * 3 + 1)
+        poke8(raw, o, 0)
+        for x in range(w)
+            be c = peek(pix, (y * w + x) * 4, "int") % 16777216
+            poke8(raw, o + 1 + x * 3, idiv(c, 65536) % 256)
+            poke8(raw, o + 2 + x * 3, idiv(c, 256) % 256)
+            poke8(raw, o + 3 + x * 3, c % 256)
+    be rn = h * (w * 3 + 1)
+    be cap = rn + idiv(rn, 1000) + 1024
+    be zb = alloc(cap)
+    be zl = alloc(8)
+    poke64(zl, 0, cap)
+    callp(dllFn("libz.so.1", "compress"), zb, zl, raw, rn)
+    be fd = sysCall(2, cstr(path), 577, 420, 0, 0, 0)
+    be sig = alloc(16)
+    be sg = split("137 80 78 71 13 10 26 10")
+    for k in range(8)
+        poke8(sig, k, int(sg[k]))
+    sysCall(1, fd, sig, 8, 0, 0, 0)
+    be ih = alloc(16)
+    poke8(ih, 0, idiv(w, 16777216) % 256)
+    poke8(ih, 1, idiv(w, 65536) % 256)
+    poke8(ih, 2, idiv(w, 256) % 256)
+    poke8(ih, 3, w % 256)
+    poke8(ih, 4, idiv(h, 16777216) % 256)
+    poke8(ih, 5, idiv(h, 65536) % 256)
+    poke8(ih, 6, idiv(h, 256) % 256)
+    poke8(ih, 7, h % 256)
+    poke8(ih, 8, 8)
+    poke8(ih, 9, 2)
+    poke8(ih, 10, 0)
+    poke8(ih, 11, 0)
+    poke8(ih, 12, 0)
+    winPngBlok(fd, "IHDR", ih, 13)
+    winPngBlok(fd, "IDAT", zb, peek64(zl, 0))
+    winPngBlok(fd, "IEND", 0, 0)
+    sysCall(3, fd, 0, 0, 0, 0, 0)
+    free(raw)
+    free(zb)
+    free(zl)
+    free(sig)
+    free(ih)
+    return 0
+# ---------------------------------------------------------------- untuk uji: kejadian X11 sungguhan lewat XSendEvent
+func winTesKirim(tipe int, x int, y int, kode int, mask int) int
+    be b = winB()
+    be ev = alloc(256)
+    for k in range(32)
+        poke64(ev, k * 8, 0)
+    poke(ev, 0, "int", tipe)
+    poke64(ev, 24, peek64(b, 0))
+    poke64(ev, 32, peek64(b, 232))
+    poke(ev, 64, "int", x)
+    poke(ev, 68, "int", y)
+    poke(ev, 84, "int", kode)
+    poke(ev, 88, "int", 1)
+    callp(winX("XSendEvent"), peek64(b, 0), peek64(b, 232), 0, mask, ev)
+    callp(winX("XFlush"), peek64(b, 0))
+    free(ev)
+    return 0
+
+func winTesKlik(x int, y int) int
+    winTesKirim(4, x, y, 1, 4)
+    winTesKirim(5, x, y, 1, 8)
+    return 0
+
+func winTesGerak(x int, y int) int
+    return winTesKirim(6, x, y, 0, 64)
+
+# tekan dan lepas satu tombol (keysym X11)
+func winTesKey(ks int) int
+    be b = winB()
+    be kc = sx32(callp(winX("XKeysymToKeycode"), peek64(b, 0), ks))
+    winTesKirim(2, 0, 0, kc, 1)
+    winTesKirim(3, 0, 0, kc, 2)
+    return 0

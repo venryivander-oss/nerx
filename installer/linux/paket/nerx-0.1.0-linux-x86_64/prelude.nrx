@@ -1,0 +1,364 @@
+# prelude.nrx0 - pustaka standar bahasa mini, ditulis DALAM bahasa mini itu sendiri.
+# nrxc otomatis mengompilasinya bersama setiap program.
+# Fungsi di sini memakai intrinsik: alloc, peek8, peek64, poke8, poke64, asString, asInt.
+# Tata letak memori: string = [panjang 8 byte][karakter][0]
+#                    list   = [jumlah 8 byte][kapasitas 8 byte][alamat data 8 byte]; elemen 8 byte
+
+# ---- list
+func listBaru() int
+    return alloc(24)
+
+func listTambah(l int, v int) int
+    be n = peek64(l, 0)
+    be kap = peek64(l, 8)
+    if n >= kap
+        be kb = kap * 2 + 4
+        be nd = alloc(kb * 8)
+        be lama = peek64(l, 16)
+        be i = 0
+        loop i < n
+            poke64(nd, i * 8, peek64(lama, i * 8))
+            be i = i + 1
+        poke64(l, 16, nd)
+        poke64(l, 8, kb)
+    poke64(peek64(l, 16), n * 8, v)
+    poke64(l, 0, n + 1)
+    return 0
+
+# bebaskan list: array data lalu kepalanya (dipanggil oleh delete(list))
+func listHapus(l int) int
+    if peek64(l, 16) != 0
+        free(peek64(l, 16))
+    free(l)
+    return 0
+
+# ---- string
+func strGabung(a string, b string) string
+    be pa = asInt(a)
+    be pb = asInt(b)
+    be la = peek64(pa, 0)
+    be lb = peek64(pb, 0)
+    be p = alloc(la + lb + 16)
+    poke64(p, 0, la + lb)
+    be i = 0
+    loop i < la
+        poke8(p, 8 + i, peek8(pa, 8 + i))
+        be i = i + 1
+    be j = 0
+    loop j < lb
+        poke8(p, 8 + la + j, peek8(pb, 8 + j))
+        be j = j + 1
+    return asString(p)
+
+func strSama(a string, b string) int
+    be pa = asInt(a)
+    be pb = asInt(b)
+    be la = peek64(pa, 0)
+    if la != peek64(pb, 0)
+        return 0
+    be i = 0
+    loop i < la
+        if peek8(pa, 8 + i) != peek8(pb, 8 + i)
+            return 0
+        be i = i + 1
+    return 1
+
+# bilangan -> teks desimal
+func str(n int) string
+    be p = alloc(48)
+    be neg = 0
+    be m = n
+    if m < 0
+        be neg = 1
+        be m = 0 - m
+    be digits = 0
+    be tmp = m
+    loop tmp > 0
+        be digits = digits + 1
+        be tmp = idiv(tmp, 10)
+    if digits == 0
+        be digits = 1
+    be total = digits + neg
+    poke64(p, 0, total)
+    if neg == 1
+        poke8(p, 8, 45)
+    be k = total - 1
+    if m == 0
+        poke8(p, 8 + k, 48)
+    loop m > 0
+        poke8(p, 8 + k, 48 + m % 10)
+        be m = idiv(m, 10)
+        be k = k - 1
+    return asString(p)
+
+# substr(s, mulai, panjang): batas dikoreksi otomatis
+func substr(s string, i int, n int) string
+    be ps = asInt(s)
+    be ls = peek64(ps, 0)
+    be mulai = i
+    if mulai < 0
+        be mulai = ls + mulai
+    if mulai < 0
+        be mulai = 0
+    if mulai > ls
+        be mulai = ls
+    be pjg = n
+    if pjg < 0
+        be pjg = 0
+    if mulai + pjg > ls
+        be pjg = ls - mulai
+    be p = alloc(pjg + 16)
+    poke64(p, 0, pjg)
+    be k = 0
+    loop k < pjg
+        poke8(p, 8 + k, peek8(ps, 8 + mulai + k))
+        be k = k + 1
+    return asString(p)
+
+# kode karakter ke-i (0..255), atau -1 kalau di luar
+func ord(s string, i int) int
+    be ps = asInt(s)
+    if i < 0
+        return 0 - 1
+    if i >= peek64(ps, 0)
+        return 0 - 1
+    return peek8(ps, 8 + i)
+
+# teks satu karakter dari kode
+func chr(c int) string
+    be p = alloc(24)
+    poke64(p, 0, 1)
+    poke8(p, 8, c)
+    return asString(p)
+
+# posisi pertama t di dalam s, atau -1
+func indexOf(s string, t string) int
+    be ls = len(s)
+    be lt = len(t)
+    be i = 0
+    loop i + lt <= ls
+        if strSama(substr(s, i, lt), t) == 1
+            return i
+        be i = i + 1
+    return 0 - 1
+
+# ---- pencarian di list string
+func cariS(xs list string, t string) int
+    be i = 0
+    be n = len(xs)
+    loop i < n
+        if strSama(xs[i], t) == 1
+            return i
+        be i = i + 1
+    return 0 - 1
+
+# ---- file (lewat api(): indeks 6 CreateFileA, 7 ReadFile, 8 GetFileSize, 9 CloseHandle, 1 WriteFile)
+# readFile: seluruh isi file sebagai string; galat kalau file tidak ada / tidak bisa dibuka
+func readFile(nama string) string
+    be h = api(6, asInt(nama) + 8, 2147483648, 1, 0, 3, 128, 0)
+    if h == 0 - 1
+        _lemparK(134, "readFile: file " + nama + " not found or cannot be opened")
+        return ""
+    be ukuran = api(8, h, 0, 0, 0, 0, 0, 0)
+    be p = alloc(ukuran + 16)
+    be buf = alloc(8)
+    api(7, h, p + 8, ukuran, buf, 0, 0, 0)
+    api(9, h, 0, 0, 0, 0, 0, 0)
+    poke64(p, 0, ukuran)
+    free(buf)
+    return asString(p)
+
+# writeFile: timpa isi file; 1 = berhasil, 0 = gagal
+func writeFile(nama string, isi string) int
+    be h = api(6, asInt(nama) + 8, 1073741824, 0, 0, 2, 128, 0)
+    if h == 0 - 1
+        _lemparK(135, "writeFile: file " + nama + " cannot be written")
+    be buf = alloc(8)
+    api(1, h, asInt(isi) + 8, len(isi), buf, 0, 0, 0)
+    api(9, h, 0, 0, 0, 0, 0, 0)
+    free(buf)
+    return 1
+
+# ---- argumen command-line
+func cmdLine() string
+    if _linux() == 1
+        return linuxCmd()
+    be p = api(10, 0, 0, 0, 0, 0, 0, 0)
+    be n = 0
+    loop peek8(p, n) != 0
+        be n = n + 1
+    be r = alloc(n + 16)
+    poke64(r, 0, n)
+    be i = 0
+    loop i < n
+        poke8(r, 8 + i, peek8(p, i))
+        be i = i + 1
+    return asString(r)
+
+# argKe(k): argumen ke-k (0 = nama program); "..." boleh berisi spasi; "" kalau tidak ada
+func argKe(k int) string
+    be s = cmdLine()
+    be n = len(s)
+    be i = 0
+    be no = 0
+    loop i < n
+        loop i < n and ord(s, i) == 32
+            be i = i + 1
+        if i >= n
+            return ""
+        be mulai = i
+        be akhir = i
+        if ord(s, i) == 34
+            be i = i + 1
+            be mulai = i
+            loop i < n and ord(s, i) != 34
+                be i = i + 1
+            be akhir = i
+            be i = i + 1
+        else
+            loop i < n and ord(s, i) != 32
+                be i = i + 1
+            be akhir = i
+        if no == k
+            return substr(s, mulai, akhir - mulai)
+        be no = no + 1
+    return ""
+
+# true / false sebagai teks (dipakai print untuk nilai bool)
+func boolStr(b bool) string
+    if b
+        return "true"
+    return "false"
+# keluar dari program dengan kode tertentu
+func exit(kode int) int
+    api(2, kode, 0, 0, 0, 0, 0, 0)
+    return 0
+
+# pembungkus kernel32 (nerx asli memakai blok ffi dengan nama yang sama)
+func CreateFileA(nama string, a int, b int, c int, d int, e int, f int) int
+    return api(6, asInt(nama) + 8, a, b, c, d, e, f)
+
+func WriteFile(h int, d int, n int, t int, o int) int
+    return api(1, h, d, n, t, o, 0, 0)
+
+func CloseHandle(h int) int
+    return api(9, h, 0, 0, 0, 0, 0, 0)
+# ---- input / konversi
+# askLine: cetak prompt, baca satu baris dari stdin (tanpa CR/LF)
+func askLine(prompt string) string
+    be ho = api(0, 4294967285, 0, 0, 0, 0, 0, 0)
+    be bo = alloc(8)
+    api(1, ho, asInt(prompt) + 8, len(prompt), bo, 0, 0, 0)
+    free(bo)
+    be h = api(0, 4294967286, 0, 0, 0, 0, 0, 0)
+    be buf = alloc(8)
+    be c = alloc(8)
+    be hasil = ""
+    be selesai = false
+    loop not selesai
+        be ok = api(7, h, c, 1, buf, 0, 0, 0)
+        if ok == 0 or peek64(buf, 0) == 0
+            be selesai = true
+        else
+            be k = peek8(c, 0)
+            if k == 10
+                be selesai = true
+            else if k != 13
+                be hasil = hasil + chr(k)
+    free(buf)
+    free(c)
+    return hasil
+
+# int(s): ubah teks angka (boleh diawali -) menjadi int
+func int__string(s string) int
+    # bentuk yang diterima (seperti nerx): spasi, tanda +/-, digit (minimal satu), pecahan .digit (dibuang), spasi
+    be n = 0
+    be neg = false
+    be i = 0
+    be m = len(s)
+    loop i < m and ord(s, i) == 32
+        be i += 1
+    if i < m and (ord(s, i) == 45 or ord(s, i) == 43)
+        be neg = ord(s, i) == 45
+        be i += 1
+    be awal = i
+    loop i < m and ord(s, i) >= 48 and ord(s, i) <= 57
+        if n > 922337203685477580 or (n == 922337203685477580 and ord(s, i) > 55)
+            _lemparK(362, "int(): \"" s "\" is too large for a whole number")
+        be n = n * 10 + ord(s, i) - 48
+        be i += 1
+    be ok = i > awal
+    if ok and i < m and ord(s, i) == 46
+        be i += 1
+        loop i < m and ord(s, i) >= 48 and ord(s, i) <= 57
+            be i += 1
+    loop i < m and ord(s, i) == 32
+        be i += 1
+    if not ok or i < m
+        _lemparK(42, "int(): \"" s "\" is not a number")
+    if neg
+        return 0 - n
+    return n
+# ---- pemanggilan fungsi DLL Windows secara dinamis (dipakai library lib\nrx_*.nrx)
+# alamat byte pertama isi string (string nerx selalu berakhir 0, jadi cocok sebagai teks C)
+func cstr(s string) int
+    return asInt(s) + 8
+
+# teks C (berakhir 0) di alamat p -> string nerx
+func fromC(p int) string
+    if p == 0
+        return ""
+    be n = 0
+    loop peek8(p, n) != 0
+        be n = n + 1
+    return fromCn(p, n)
+
+func fromCn(p int, n int) string
+    be r = alloc(n + 16)
+    poke64(r, 0, n)
+    be i = 0
+    loop i < n
+        poke8(r, 8 + i, peek8(p, i))
+        be i = i + 1
+    return asString(r)
+
+# alamat fungsi di dalam DLL: dllFn("winhttp.dll", "WinHttpOpen"); 0 kalau tidak ada
+func dllFn(dll string, fn string) int
+    be h = api(11, cstr(dll), 0, 0, 0, 0, 0, 0)
+    if h == 0
+        return 0
+    return api(12, h, cstr(fn), 0, 0, 0, 0, 0)
+# write(teks): cetak tanpa baris baru
+func write__string(s string) int
+    be h = api(0, 4294967285, 0, 0, 0, 0, 0, 0)
+    be buf = alloc(8)
+    api(1, h, asInt(s) + 8, len(s), buf, 0, 0, 0)
+    free(buf)
+    return 0
+
+func write__int(n int) int
+    return write__string(str(n))
+
+# ask.int: ulangi sampai bilangan bulat (teks dipangkas dulu)
+func askInt(prompt string) int
+    be selesai = false
+    be hasil = 0
+    loop not selesai
+        be s = trim(askLine(prompt))
+        be ok = len(s) > 0
+        be k = 0
+        if ok and substr(s, 0, 1) == "-"
+            be k = 1
+            if len(s) == 1
+                be ok = false
+        loop ok and k < len(s)
+            be c = ord(s, k)
+            if c < 48 or c > 57
+                be ok = false
+            be k += 1
+        if ok
+            be hasil = int(s)
+            be selesai = true
+        else
+            print "input must be a whole number (integer), try again"
+    return hasil

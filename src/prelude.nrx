@@ -181,6 +181,8 @@ func writeFile(nama string, isi string) int
 
 # ---- argumen command-line
 func cmdLine() string
+    if _linux() == 1
+        return linuxCmd()
     be p = api(10, 0, 0, 0, 0, 0, 0, 0)
     be n = 0
     loop peek8(p, n) != 0

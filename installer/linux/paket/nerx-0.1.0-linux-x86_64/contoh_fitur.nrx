@@ -1,0 +1,183 @@
+lib nrx_rand
+lib nrx_crudfile
+
+# --- lock: nilai yang tidak bisa diubah ---
+lock JUDUL = "Contoh Fitur nerx"
+lock MAX_SKOR = 100
+print JUDUL " (skor maksimal " MAX_SKOR ")"
+try
+    be MAX_SKOR = 999
+catch err
+    print "tidak bisa: " err
+
+# --- hitungan: + - * / % dan kurung ---
+be a = 10
+be b = 3
+print "a * b = " a * b
+print "a / b = " a / b
+print "sisa a / b = " a % b
+print "(a + b) * 2 = " (a + b) * 2
+be harga = 2.5 * 3
+be harga += 1
+print "harga: " harga
+
+# --- and / or / not ---
+be umur = 20
+be punyaKTP = true
+if umur >= 17 and punyaKTP
+    print "boleh bikin SIM"
+if not punyaKTP or umur < 17
+    print "belum boleh"
+
+# --- fungsi dengan parameter dan return ---
+func luas(p, l)
+    return p * l
+
+func faktorial(n)
+    if n <= 1
+        return 1
+    return n * faktorial(n - 1)
+
+print "luas 4x5 = " luas(4, 5)
+print "5! = " faktorial(5)
+
+# --- break dan continue ---
+be i = 0
+be ganjil = ""
+loop i < 20
+    be i += 1
+    if i % 2 == 0
+        continue
+    if i > 9
+        break
+    be ganjil = ganjil str(i) " "
+print "ganjil sampai 9: " ganjil
+
+# --- list ---
+be buah = ["apel", "jeruk"]
+add(buah, "mangga")
+be buah[0] = "anggur"
+print buah " (ada " len(buah) " buah)"
+be j = 0
+loop j < len(buah)
+    print "- " buah[j]
+    be j += 1
+
+# --- gabung teks ke variabel ---
+be nama = "Budi"
+be salam = "Halo " nama "!"
+print salam
+
+# --- fungsi teks ---
+be jawaban = "  YA "
+if lower(trim(jawaban)) == "ya"
+    print "user menjawab ya"
+be data = split("Budi,20,Jakarta", ",")
+print "nama: " data[0] ", kota: " upper(data[2])
+print join(["apel", "jeruk", "mangga"], " - ")
+print replace("saya suka kopi", "kopi", "teh")
+print "ada kata dunia? " contains("halo dunia", "dunia")
+
+# --- for: jalani isi list, teks, map, atau range ---
+for namaBuah in ["apel", "jeruk"]
+    print "buah: " namaBuah
+for i in range(1, 4)
+    print "hitungan " i
+
+# --- map: semua nilainya satu jenis ---
+be nilai = {"Sari": 85, "Budi": 78}
+be nilai["Andi"] = 90
+be nilai["Sari"] += 5
+print nilai
+for nama in nilai
+    print nama " = " nilai[nama]
+be jumlahKata map int
+for kata in split("aku suka kopi aku suka teh")
+    be jumlahKata[kata] += 1
+print jumlahKata
+
+# --- olah list dan potong teks ---
+be skor = [70, 95, 60, 85]
+print "urut: " sort(skor) ", terbesar dulu: " reverse(sort(skor))
+print "posisi 95: " indexOf(skor, 95)
+print substr("Halo Dunia", 0, 4) " / " slice(skor, 1, 3) " / " slice("Nerx", -4)
+print "jenis: " typeOf(5) ", " typeOf("teks") ", " typeOf(skor) ", " typeOf(5 > 3)
+
+# --- type: data dengan field bertipe ---
+type Player
+    nama string
+    hp int
+    x int
+    y int
+be p = Player("Budi", 100, 0, 0)
+be p.hp -= 30
+be p.x += 5
+print p " (jenis " typeOf(p) ")"
+print p.nama " sisa hp " p.hp
+
+# --- in / not in ---
+if "jeruk" in ["apel", "jeruk"]
+    print "ada jeruk"
+if "durian" not in ["apel", "jeruk"]
+    print "tidak ada durian"
+
+# --- options: pilih salah satu ---
+be pilihan = "2"
+options pilihan
+    option "1"
+        print "Main"
+    option "2", "3"
+        print "Keluar"
+    else
+        print "Pilihan tidak ada"
+
+# --- isi data bertingkat ---
+type Game
+    pemain list Player
+    level int
+be dunia = Game([Player("Sari", 100, 0, 0)], 1)
+be dunia.pemain[0].hp -= 25
+be dunia.level += 1
+print dunia
+
+# --- nilai bawaan parameter ---
+func sapa(nama, salam = "Halo")
+    return salam ", " nama "!"
+print sapa("Budi")
+print sapa("Budi", "Selamat pagi")
+
+# --- matematika ---
+print "akar 16 = " sqrt(16) ", 2^8 = " pow(2, 8) ", round(3.14159, 2) = " round(3.14159, 2)
+print "terkecil " min([7, 3, 9]) ", terbesar " max(7, 3, 9) ", abs(-4) = " abs(-4)
+
+# --- try / catch / throw ---
+try
+    be isiFile = readFile("tidak_ada.txt")
+catch err
+    print "gagal baca file: " err
+func cekUmur(u)
+    if u < 0
+        throw "umur tidak boleh negatif"
+    return u
+try
+    cekUmur(-1)
+catch err
+    print "error: " err
+
+# --- \n baris baru, \t tab, \" tanda kutip ---
+print "baris satu\nbaris dua\t(pakai tab) dan \"kutip\""
+
+# --- random (lib nrx_rand) dan waktu ---
+print "dadu: " random(1, 6)
+print "hari ini makan: " choice(["nasi goreng", "mie ayam", "bakso"])
+print "sekarang jam " time() ", tanggal " date()
+
+# --- file (lib nrx_crudfile) ---
+be file = "catatan.txt"
+writeFile(file, "")
+appendLine(file, "belajar nerx")
+appendLine(file, "bikin window")
+be isi = readLines(file)
+print "isi " file ": " isi
+deleteFile(file)
+print "file masih ada? " fileExists(file)

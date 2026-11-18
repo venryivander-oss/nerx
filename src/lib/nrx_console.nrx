@@ -14,6 +14,15 @@ func consKeluar(s string) int
 # nyalakan kode ANSI kalau output adalah console (bukan file / pipa)
 func consSiap() bool
     be k = _gget(4)
+    if k == 0 and _linux() == 1
+        # Linux: ANSI selalu aktif, tetapi hanya kalau stdout adalah terminal (ioctl TCGETS)
+        be tb = alloc(64)
+        if sysCall(16, 1, 21505, tb, 0, 0, 0) == 0
+            _gset(4, 1)
+        else
+            _gset(4, 2)
+        free(tb)
+        be k = _gget(4)
     if k == 0
         be h = api(0, 4294967285, 0, 0, 0, 0, 0, 0)
         be mode = alloc(8)
@@ -123,6 +132,10 @@ func color_a2(teks string, latar string) string
 
 # jalankan perintah lewat cmd.exe, hasil = stdout + stderr (CRLF -> LF)
 func runCommand(perintah string) string
+    if _linux() == 1
+        be hs = linuxSh(perintah + " 2>&1", 1)
+        _gset(5, _gget(20))
+        return hs
     be k32 = "kernel32.dll"
     be sa = alloc(32)
     poke64(sa, 0, 24)

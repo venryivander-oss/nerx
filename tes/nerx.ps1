@@ -29,4 +29,8 @@ Remove-Item $ut -Recurse -Force
 [IO.File]::WriteAllText("$env:TEMP\nerx_tr.nrx", "func a() int`n    return 1`nprint a()`n")
 $tr = ((& $comp run --trace "$env:TEMP\nerx_tr.nrx" 2>&1 | Out-String) -replace "`r", "")
 if ($tr -match "\[trace\] a\(\)" -and $tr -match "1\n") { "SAMA   trace"; $lulus++ } else { "BEDA   trace"; $gagal++ }
+# debugger
+[IO.File]::WriteAllText("$env:TEMP\nerx_dbg.nrx", "be a = 5`nbe b = a + 1`nprint b`n"); [IO.File]::WriteAllText("$env:TEMP\nerx_dbg.txt", "s`ns`nv`nc`n")
+$dg = ((cmd /c "type `"$env:TEMP\nerx_dbg.txt`" | `"$comp`" debug `"$env:TEMP\nerx_dbg.nrx`"" | Out-String) -replace "`r", "")
+if ($dg -match "a=5" -and $dg -match "->    3" -and $dg -match "6\n") { "SAMA   debug"; $lulus++ } else { "BEDA   debug: $($dg -replace "`n",'|')"; $gagal++ }
 "lulus $lulus, gagal $gagal"

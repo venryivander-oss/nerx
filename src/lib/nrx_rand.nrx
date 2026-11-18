@@ -4,7 +4,12 @@
 func randNext() int
     be x = _gget(0)
     if x == 0
-        be x = callp(dllFn("kernel32.dll", "GetTickCount64")) * 2654435761 + 88172645463325251
+        be tk = 0
+        if _linux() == 1
+            be tk = linuxMs()
+        else
+            be tk = callp(dllFn("kernel32.dll", "GetTickCount64"))
+        be x = tk * 2654435761 + 88172645463325251
     be x = x * (6364136223 * 1000000000 + 846793005) + (1442695040 * 1000000000 + 888963407)
     _gset(0, x)
     be r = idiv(x, 8589934592)

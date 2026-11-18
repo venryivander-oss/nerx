@@ -1,0 +1,30 @@
+lib nrx_thread
+
+func kuadrat(n int) int
+    return n * n
+
+func lambat(n int) int
+    sleep(200)
+    return n + 1
+
+func tambah(c int) int
+    for i in range(10000)
+        cellAdd(c, 1)
+    return 0
+
+be f1 = async(callback("kuadrat"), 7)
+be f2 = async(callback("kuadrat"), 12)
+print await(f1) + await(f2)
+be f3 = async(callback("lambat"), 41)
+print isDone(f3)
+print await(f3)
+print isDone(f3)
+print await(f3)
+
+be c = cellNew(0)
+be hs list int
+for i in range(4)
+    add(hs, async(callback("tambah"), c))
+for h in hs
+    await(h)
+print cellGet(c)

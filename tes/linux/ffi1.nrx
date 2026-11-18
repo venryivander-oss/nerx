@@ -1,0 +1,12 @@
+ffi "libc.so.6" (
+    func getpid() int
+    func strlen(s string) int
+    func abs(n int) int
+    func atoi(s string) int
+    func toupper(c int) int
+)
+print getpid() > 0
+print strlen("halo dunia")
+print abs(0 - 42)
+print atoi("-123")
+print toupper(97)

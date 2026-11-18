@@ -15,12 +15,22 @@ for i in range(5)
 ```
 
 The compiler, `Nerx`, is written in nerx itself. It produces native Windows
-executables directly: no virtual machine, no extra toolchain, nothing else to install.
+and Linux (x86-64) executables directly: no virtual machine, no extra toolchain, nothing else to install.
 
 ## Install
 
 Run the installer `nerx-setup.exe`. It installs `Nerx` and, if you tick the
 option, adds it to your PATH so you can use it from any folder.
+
+On Linux (x86-64), download `nerx-<version>-linux-x86_64.tar.gz`, then:
+
+```
+tar xzf nerx-0.1.0-linux-x86_64.tar.gz
+cd nerx-0.1.0-linux-x86_64
+./install.sh                  # ~/.local, or /usr/local as root; --prefix DIR, --uninstall
+```
+
+Arch Linux: `packaging/aur/PKGBUILD` (package `nerx-bin`).
 
 ## Usage
 
@@ -28,11 +38,13 @@ option, adds it to your PATH so you can use it from any folder.
 nerx run program.nrx                     run it (compiled to a temporary exe, then deleted)
 nerx build program.nrx                   build program.exe
 nerx build program.nrx -o game.exe
+nerx build program.nrx -o game           no .exe in the name = Linux program (like gcc); .exe = Windows
 nerx program.nrx                         same as build
 nerx repl                                 type code and see the result (also just "nerx")
 nerx test [file|folder]                   run test_*.nrx / *_test.nrx files (use assert)
 nerx check file.nrx                       look for errors without building
 nerx run --trace file.nrx                 print every call of your functions
+nerx debug file.nrx                       step through the program, set breakpoints, look at variables
 ```
 
 - The resulting `.exe` is standalone: the `.nrx` file does not need to be shipped with it.
@@ -67,15 +79,18 @@ nrxc.exe nrxc.nrx nerx_new.exe
 
 The full test suite (output comparison against the previous implementation in
 `history\`, plus a check that the compiler reproduces itself byte for byte):
-`powershell -NoProfile -File tes\semua.ps1`. The installer is built with
-`installer\buat.bat` (requires Inno Setup 6). Earlier versions of the project
+`powershell -NoProfile -File tes\semua.ps1` (the Linux part runs in WSL).
+The Windows installer is built with `installer\buat.bat` (requires Inno Setup 6),
+the Linux package with `installer\linux\siapkan_linux.ps1`. Earlier versions of the project
 are kept in [history\](history/README.md).
 
 ## Status and known limitations
 
 Nerx is an early version. Expect bugs, and please report them.
 
-- Windows 10/11, 64-bit only. No Linux or macOS yet.
+- Windows 10/11 and Linux x86-64 (glibc). No macOS yet. On Linux the 3D
+  library is not available yet; the window library works through X11; ffi and the other libraries work (some need
+  `libsqlite3` or `libcurl`).
 - Recursive function calls are slower than loops (about 4x slower than an
   optimizing native compiler on a naive Fibonacci).
 - Whole numbers beyond about 2^62 become floating point numbers instead of

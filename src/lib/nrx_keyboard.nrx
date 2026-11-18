@@ -35,12 +35,113 @@ func kbCari(nama string) int
 func kbBlok() int
     be b = _gget(7)
     if b == 0
-        be b = alloc(800)
+        be b = alloc(960)
         _gset(7, b)
     return b
 
+# ---- Linux: terminal mode mentah (tanpa ICANON dan ECHO, read tidak menunggu). Blok: [784..820) termios asli,
+# [824] jumlah byte tertunda, [832] posisi baca, [840..904) byte tertunda dari stdin.
+func kbSelesai() int
+    be b = _gget(7)
+    if _linux() == 1 and b != 0 and peek64(b, 768) == 1
+        sysCall(16, 0, 21506, b + 784, 0, 0, 0)
+        poke64(b, 768, 2)
+    return 0
+
+# satu tombol dari stdin: kode tombol Windows (37 kiri, 38 atas, 13 enter, huruf besar A-Z, ...), 1000 + kode karakter untuk tanda baca, 0 kalau tidak ada
+func kbLinuxLe(b int) int
+    be pos = peek64(b, 832)
+    be n = peek64(b, 824)
+    if pos >= n
+        be r = sysCall(0, 0, b + 840, 64, 0, 0, 0)
+        if r <= 0
+            return 0
+        poke64(b, 824, r)
+        poke64(b, 832, 0)
+        be n = r
+        be pos = 0
+    be c = peek8(b, 840 + pos)
+    be pos += 1
+    be vk = 1
+    if c == 27
+        be vk = 27
+        if pos < n and (peek8(b, 840 + pos) == 91 or peek8(b, 840 + pos) == 79)
+            be pos += 1
+            be num = 0
+            be akhir = 0
+            loop pos < n and akhir == 0
+                be d = peek8(b, 840 + pos)
+                be pos += 1
+                if d >= 48 and d <= 57
+                    be num = num * 10 + d - 48
+                else if d != 59
+                    be akhir = d
+            be vk = 1
+            if akhir == 65
+                be vk = 38
+            else if akhir == 66
+                be vk = 40
+            else if akhir == 67
+                be vk = 39
+            else if akhir == 68
+                be vk = 37
+            else if akhir == 72
+                be vk = 36
+            else if akhir == 70
+                be vk = 35
+            else if akhir >= 80 and akhir <= 83
+                be vk = 112 + akhir - 80
+            else if akhir == 126
+                if num == 1
+                    be vk = 36
+                else if num == 3
+                    be vk = 46
+                else if num == 4
+                    be vk = 35
+                else if num == 5
+                    be vk = 33
+                else if num == 6
+                    be vk = 34
+                else if num >= 15 and num <= 24
+                    be fi = num - 15
+                    if num >= 17
+                        be fi -= 1
+                    if num >= 23
+                        be fi -= 1
+                    be vk = 116 + fi
+    else if c == 13 or c == 10
+        be vk = 13
+    else if c == 9
+        be vk = 9
+    else if c == 127 or c == 8
+        be vk = 8
+    else if c == 32
+        be vk = 32
+    else if c >= 97 and c <= 122
+        be vk = c - 32
+    else if (c >= 65 and c <= 90) or (c >= 48 and c <= 57)
+        be vk = c
+    else if c > 32 and c < 127
+        be vk = 1000 + c
+    poke64(b, 832, pos)
+    return vk
+
 func kbSiap() bool
     be b = kbBlok()
+    if peek64(b, 768) == 0 and _linux() == 1
+        if sysCall(16, 0, 21505, b + 784, 0, 0, 0) == 0
+            be t = alloc(64)
+            for i in range(36)
+                poke8(t, i, peek8(b, 784 + i))
+            be lb = peek8(b, 796)
+            poke8(t, 12, lb - (idiv(lb, 2) % 2) * 2 - (idiv(lb, 8) % 2) * 8)       # matikan ICANON dan ECHO
+            poke8(t, 23, 0)
+            poke8(t, 22, 0)
+            sysCall(16, 0, 21506, t, 0, 0, 0)
+            free(t)
+            poke64(b, 768, 1)
+        else
+            poke64(b, 768, 2)
     if peek64(b, 768) == 0
         be h = api(0, 4294967286, 0, 0, 0, 0, 0, 0)
         poke64(b, 776, h)
@@ -57,6 +158,13 @@ func kbKuras() int
     if not kbSiap()
         return 0
     be b = kbBlok()
+    if _linux() == 1
+        be vk = kbLinuxLe(b)
+        loop vk != 0
+            if vk != 1 and vk < 256
+                poke8(b, vk, 1)
+            be vk = kbLinuxLe(b)
+        return 0
     be h = peek64(b, 776)
     be jumlah = alloc(8)
     be rec = alloc(64 * 20 + 16)
@@ -97,6 +205,23 @@ func getKey() string
         _lempar("getKey needs a console (it cannot be used when input is redirected from a file)")
     kbKuras()
     be b = kbBlok()
+    if _linux() == 1
+        be nmL = kbNama()
+        be kdL = kbKode()
+        loop true
+            be v = kbLinuxLe(b)
+            if v == 0
+                linuxTidur(10)
+            else if v >= 1000
+                return chr(v - 1000)
+            else if v != 1
+                if (v >= 65 and v <= 90) or (v >= 48 and v <= 57)
+                    return lower(chr(v))
+                if v >= 112 and v <= 123
+                    return "f" + str(v - 111)
+                for i in range(len(nmL))
+                    if kdL[i] == v
+                        return nmL[i]
     be h = peek64(b, 776)
     be jumlah = alloc(8)
     be rec = alloc(32)

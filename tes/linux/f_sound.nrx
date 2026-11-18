@@ -1,0 +1,6 @@
+lib nrx_sound
+print playSound("bip.wav")
+print playMusic("bip.wav")
+print stopMusic()
+print stopSound()
+print "selesai"

@@ -7,7 +7,7 @@ $names = if ($list) { $list -split "[ ,]+" | ? { $_ } } else { Get-ChildItem "$d
 $sama = 0; $beda = 0
 foreach ($n in $names) {
     $asli = (cmd /c "`"$nrxlang`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim() -replace '(nrx_\w+)\.h\b','$1'; $ka = $LASTEXITCODE
-    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim() -replace ', nrx_os, nrx_db, nrx_net','' -replace '(nrx_\w+)\.h\b','$1'; $km = $LASTEXITCODE
+    $mini = (cmd /c "`"$nrxc`" run $dir\$n.nrx <NUL 2>&1" | Out-String).Trim() -replace ', nrx_os, nrx_db, nrx_net, nrx_big, nrx_thread','' -replace '(nrx_\w+)\.h\b','$1'; $km = $LASTEXITCODE
     if ($asli -eq $mini -and $ka -eq $km) { $sama++ }
     else { $beda++; "BEDA $n (exit $ka vs $km)"; "   real: $asli"; "   nrxc: $mini" }
 }

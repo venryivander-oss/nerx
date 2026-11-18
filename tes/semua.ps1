@@ -20,3 +20,6 @@ powershell -NoProfile -File cmp_err.ps1 -dir uji_err_id 2>&1 | Out-String | Add-
 "== nerx (sh, f-teks, args, repl, os, db)" | Add-Content $o
 powershell -NoProfile -File nerx.ps1 2>&1 | Out-String | Add-Content $o
 "SELESAI" | Add-Content $o
+# Linux (WSL): ELF hasil build dijalankan di WSL
+"== linux" | Add-Content "$PSScriptRoot\$o"
+powershell -NoProfile -File "$PSScriptRoot\linux.ps1" | Add-Content "$PSScriptRoot\$o"

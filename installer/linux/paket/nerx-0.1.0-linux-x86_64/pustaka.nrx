@@ -1,0 +1,1579 @@
+# pustaka.nrx - fungsi string/list tambahan, ditulis dalam subset nerx yang didukung nrxc.
+# Nama dengan akhiran __tipe = overload menurut tipe argumen pertama; _aN = menurut jumlah argumen.
+
+func contains__string(s string, t string) bool
+    return indexOf(s, t) >= 0
+
+func contains__list_string(xs list string, t string) bool
+    return cariS(xs, t) >= 0
+
+func indexOf__list_string(xs list string, t string) int
+    return cariS(xs, t)
+
+func ruangKosong(c int) bool
+    return c == 32 or c == 9 or c == 10 or c == 13
+
+func trim(s string) string
+    be i = 0
+    be n = len(s)
+    loop i < n and ruangKosong(ord(s, i))
+        be i += 1
+    be j = n
+    loop j > i and ruangKosong(ord(s, j - 1))
+        be j -= 1
+    return substr(s, i, j - i)
+
+func slice_a2(s string, a int) string
+    return slice_a3(s, a, len(s))
+
+func slice_a3(s string, a int, b int) string
+    be n = len(s)
+    be x = a
+    be y = b
+    if x < 0
+        be x = n + x
+    if y < 0
+        be y = n + y
+    if x < 0
+        be x = 0
+    if y > n
+        be y = n
+    if y <= x
+        return ""
+    return substr(s, x, y - x)
+
+func slice_a2__list_string(xs list string, a int) list string
+    return slice_a3__list_string(xs, a, len(xs))
+
+func slice_a3__list_string(xs list string, a int, b int) list string
+    be r list string
+    be n = len(xs)
+    be x = a
+    be y = b
+    if x < 0
+        be x = n + x
+    if y < 0
+        be y = n + y
+    if x < 0
+        be x = 0
+    if y > n
+        be y = n
+    for i in range(x, y)
+        add(r, xs[i])
+    return r
+
+# split(s): pisah menurut spasi/tab/baris baru, buang bagian kosong
+func split_a1(s string) list string
+    be r list string
+    be mulai = 0 - 1
+    for i in range(len(s))
+        if ruangKosong(ord(s, i))
+            if mulai >= 0
+                add(r, substr(s, mulai, i - mulai))
+                be mulai = 0 - 1
+        else if mulai < 0
+            be mulai = i
+    if mulai >= 0
+        add(r, substr(s, mulai, len(s) - mulai))
+    return r
+
+func split(s string, sep string) list string
+    be r list string
+    be m = len(sep)
+    if m == 0
+        # per byte (seperti nerx asli)
+        for k in range(len(s))
+            add(r, substr(s, k, 1))
+        return r
+    be i = 0
+    be mulai = 0
+    loop i + m <= len(s)
+        if substr(s, i, m) == sep
+            add(r, substr(s, mulai, i - mulai))
+            be i += m
+            be mulai = i
+        else
+            be i += 1
+    add(r, substr(s, mulai, len(s) - mulai))
+    return r
+
+func join(xs list string, sep string) string
+    be r = ""
+    for i in range(len(xs))
+        if i > 0
+            be r = r + sep
+        be r = r + xs[i]
+    return r
+
+func join_a2__list_int(xs list int, sep string) string
+    be r = ""
+    for i in range(len(xs))
+        if i > 0
+            be r = r + sep
+        be r = r + str(xs[i])
+    return r
+
+func join_a2__list_double(xs list double, sep string) string
+    be r = ""
+    for i in range(len(xs))
+        if i > 0
+            be r = r + sep
+        be r = r + str(xs[i])
+    return r
+
+func replace(s string, a string, b string) string
+    be m = len(a)
+    if m == 0
+        _lemparK(56, "replace: the text to find cannot be empty")
+    be r = ""
+    be i = 0
+    be mulai = 0
+    loop i + m <= len(s)
+        if substr(s, i, m) == a
+            be r = r + substr(s, mulai, i - mulai) + b
+            be i += m
+            be mulai = i
+        else
+            be i += 1
+    return r + substr(s, mulai, len(s) - mulai)
+
+func reverse(s string) string
+    be r = ""
+    for i in range(len(s))
+        be r = r + substr(s, len(s) - 1 - i, 1)
+    return r
+
+func upper(s string) string
+    be r = ""
+    for i in range(len(s))
+        be c = ord(s, i)
+        if c >= 97 and c <= 122
+            be c -= 32
+        be r = r + chr(c)
+    return r
+
+func lower(s string) string
+    be r = ""
+    for i in range(len(s))
+        be c = ord(s, i)
+        if c >= 65 and c <= 90
+            be c += 32
+        be r = r + chr(c)
+    return r
+
+# assert(kondisi) / assert(kondisi, "pesan"): hentikan program kalau kondisi salah (dipakai nerx test)
+func assert_a1(c bool)
+    if not c
+        _lemparK(371, "assertion failed")
+
+func assert_a2(c bool, pesan string)
+    if not c
+        _lemparK(370, "assertion failed: " + pesan)
+
+func startsWith(s string, t string) bool
+    return len(t) <= len(s) and substr(s, 0, len(t)) == t
+
+func endsWith(s string, t string) bool
+    return len(t) <= len(s) and substr(s, len(s) - len(t), len(t)) == t
+
+# repeat(s, n): s diulang n kali ("" kalau n <= 0)
+func repeat(s string, n int) string
+    be r = ""
+    be i = 0
+    loop i < n
+        be r = r + s
+        be i += 1
+    return r
+
+# padLeft(s, lebar) / padLeft(s, lebar, isi): rata kanan; padRight: rata kiri
+func padLeft_a2(s string, w int) string
+    return padLeft_a3(s, w, " ")
+
+func padLeft_a3(s string, w int, isi string) string
+    if len(isi) == 0 or len(s) >= w
+        return s
+    be r = s
+    loop len(r) < w
+        be r = isi + r
+    return r
+
+func padRight_a2(s string, w int) string
+    return padRight_a3(s, w, " ")
+
+func padRight_a3(s string, w int, isi string) string
+    if len(isi) == 0 or len(s) >= w
+        return s
+    be r = s
+    loop len(r) < w
+        be r = r + isi
+    return r
+
+# count(s, t): berapa kali t muncul di s (tidak tumpang tindih)
+func count__string(s string, t string) int
+    if len(t) == 0
+        return 0
+    be n = 0
+    be i = 0
+    loop i + len(t) <= len(s)
+        if substr(s, i, len(t)) == t
+            be n += 1
+            be i += len(t)
+        else
+            be i += 1
+    return n
+
+func capitalize(s string) string
+    if len(s) == 0
+        return s
+    return upper(substr(s, 0, 1)) + lower(substr(s, 1, len(s) - 1))
+
+func fileExists(nama string) bool
+    if _linux() == 1
+        be fd = sysCall(2, asInt(nama) + 8, 0, 0, 0, 0, 0)
+        if fd < 0
+            return false
+        be bf = alloc(16)
+        be rd = sysCall(0, fd, bf, 1, 0, 0, 0)
+        free(bf)
+        sysCall(3, fd, 0, 0, 0, 0, 0)
+        return rd != 0 - 21
+    be h = api(6, asInt(nama) + 8, 2147483648, 1, 0, 3, 128, 0)
+    if h == 0 - 1
+        return false
+    api(9, h, 0, 0, 0, 0, 0, 0)
+    return true
+
+# floor pada int: pembagian int di nrxc sudah membulat ke bawah
+func floor(x int) int
+    return x
+
+func int__int(x int) int
+    return x
+
+# takeLast: ambil elemen terakhir sekaligus membuangnya dari list (kepala list: [panjang][kapasitas][data])
+func idxGalat(i int, n int) int
+    _lemparK(26, "index " i " is outside the list (the list has " n " items)")
+    return 0
+
+func takeLast__list_int(xs list int) int
+    be p = asInt(xs)
+    be n = peek64(p, 0)
+    if n == 0
+        _lemparK(46, "takeLast: the list is already empty")
+    be v = peek64(peek64(p, 16), 8 * (n - 1))
+    poke64(p, 0, n - 1)
+    return v
+# ---------------------------------------------------------------- double
+# 10^k sebagai double (tepat untuk k sampai 22)
+func p10d(k int) double
+    be r double = 1
+    for i in range(k)
+        be r = r * 10
+    return r
+
+# pecah double jadi bagian atas (Veltkamp): a = hi + lo, tanpa galat
+func splitHi(a double) double
+    be t double = 134217729 * a
+    return t - (t - a)
+
+# bulatkan(x * 10^kk) ke int terdekat; kalau tepat di tengah, pakai galat perkalian eksak (lalu genap)
+func bulatkan(x double, kk int) int
+    be y double = x
+    be err double = 0
+    if kk >= 0 and kk <= 22
+        be c double = p10d(kk)
+        be pr double = x * c
+        be xh double = splitHi(x)
+        be xl double = x - xh
+        be ch double = splitHi(c)
+        be cl double = c - ch
+        be err = ((xh * ch - pr) + xh * cl + xl * ch) + xl * cl
+        be y = pr
+    else if kk < 0 and kk >= 0 - 22
+        be c2 double = p10d(0 - kk)
+        be q double = x / c2
+        be qh double = splitHi(q)
+        be ql double = q - qh
+        be ch2 double = splitHi(c2)
+        be cl2 double = c2 - ch2
+        be pq double = q * c2
+        be eprod double = ((qh * ch2 - pq) + qh * cl2 + ql * ch2) + ql * cl2
+        be r double = (x - pq) - eprod
+        be err = r / c2
+        be y = q
+    else
+        # di luar jangkauan eksak: skala bertahap (kurang tepat, jarang terjadi)
+        be k2 = kk
+        if kk >= 0
+            loop k2 > 0
+                be langkah = k2
+                if langkah > 22
+                    be langkah = 22
+                be y = y * p10d(langkah)
+                be k2 -= langkah
+        else
+            be k2 = 0 - kk
+            loop k2 > 0
+                be langkah2 = k2
+                if langkah2 > 22
+                    be langkah2 = 22
+                be y = y / p10d(langkah2)
+                be k2 -= langkah2
+    be d = int(y)
+    be f0 double = y - d
+    if f0 > 0.5 or (f0 == 0.5 and (err > 0 or (err == 0 and d % 2 == 1)))
+        be d += 1
+    return d
+func hapusNolBelakang(s string) string
+    be j = len(s)
+    loop j > 0 and substr(s, j - 1, 1) == "0"
+        be j -= 1
+    return substr(s, 0, j)
+
+# double -> teks seperti nerx asli: bilangan bulat di bawah 1e15 jadi "5.0", selain itu gaya %.10g
+func dblStr(x double) string
+    if x != x
+        return "nan"
+    if x - x != 0
+        if x > 0
+            return "inf"
+        return "-inf"
+    if x < 0
+        return "-" + dblStr(0 - x)
+    if x == 0
+        return "0.0"
+    if x < 1e15
+        be iv = int(x)
+        if x == iv
+            return str(iv) + ".0"
+    # eksponen desimal e: 10^e <= x < 10^(e+1)
+    be e = 0
+    if x >= 1
+        if x < 1e22
+            loop x >= p10d(e + 1)
+                be e += 1
+        else
+            be z double = x / 1e22
+            be e = 22
+            loop z >= 10
+                be z = z / 10
+                be e += 1
+    else
+        if x >= 1e-22
+            be e = 0 - 1
+            loop x < 1 / p10d(0 - e)
+                be e -= 1
+        else
+            be z2 double = x * 1e22
+            be e = 0 - 22
+            loop z2 < 1
+                be z2 = z2 * 10
+                be e -= 1
+    # 10 angka penting: d = bulatkan(x * 10^(9 - e)), pembulatan setengah ke genap (dihitung eksak)
+    be d = bulatkan(x, 9 - e)
+    if d >= 10000000000
+        be d = 1000000000
+        be e += 1
+    be ds = str(d)
+    if e < 0 - 4 or e >= 10
+        be mant = substr(ds, 0, 1)
+        be sisa = hapusNolBelakang(slice(ds, 1))
+        if sisa != ""
+            be mant = mant + "." + sisa
+        be ee = e
+        be tanda = "+"
+        if e < 0
+            be ee = 0 - e
+            be tanda = "-"
+        be es = str(ee)
+        if len(es) < 2
+            be es = "0" + es
+        return mant + "e" + tanda + es
+    if e >= 0
+        be ip = substr(ds, 0, e + 1)
+        be fp = hapusNolBelakang(slice(ds, e + 1))
+        if fp == ""
+            return ip
+        return ip + "." + fp
+    be nol = ""
+    for i in range(0 - e - 1)
+        be nol = nol + "0"
+    return "0." + nol + hapusNolBelakang(ds)
+
+func str__double(x double) string
+    return dblStr(x)
+
+func floor__double(x double) int
+    be i = int(x)
+    if x < i
+        return i - 1
+    return i
+
+func ceil__double(x double) int
+    be i = int(x)
+    if x > i
+        return i + 1
+    return i
+
+func float__string(s string) double
+    be t = trim(s)
+    be i = 0
+    be neg = false
+    if len(t) > 0 and (substr(t, 0, 1) == "-" or substr(t, 0, 1) == "+")
+        be neg = substr(t, 0, 1) == "-"
+        be i = 1
+    be m = 0
+    be k = 0
+    be nd = 0
+    loop i < len(t) and ord(t, i) >= 48 and ord(t, i) <= 57
+        be m = m * 10 + (ord(t, i) - 48)
+        be i += 1
+        be nd += 1
+    if i < len(t) and substr(t, i, 1) == "."
+        be i += 1
+        loop i < len(t) and ord(t, i) >= 48 and ord(t, i) <= 57
+            be m = m * 10 + (ord(t, i) - 48)
+            be k += 1
+            be i += 1
+            be nd += 1
+    be ex = 0
+    if nd > 0 and i < len(t) and (substr(t, i, 1) == "e" or substr(t, i, 1) == "E")
+        be i += 1
+        be eneg = false
+        if i < len(t) and (substr(t, i, 1) == "-" or substr(t, i, 1) == "+")
+            be eneg = substr(t, i, 1) == "-"
+            be i += 1
+        be ed = 0
+        loop i < len(t) and ord(t, i) >= 48 and ord(t, i) <= 57
+            be ex = ex * 10 + (ord(t, i) - 48)
+            be i += 1
+            be ed += 1
+        if ed == 0
+            be nd = 0
+        if eneg
+            be ex = 0 - ex
+    if nd == 0 or i != len(t)
+        _lemparK(42, "float(): \"" + s + "\" is not a number")
+    be r double = m
+    be e10 = ex - k
+    if e10 < 0
+        be r = r / p10d(0 - e10)
+    else
+        be r = r * p10d(e10)
+    if neg
+        return 0.0 - r
+    return r
+
+func fmodD(a double, b double) double
+    if b == 0
+        _lemparK(24, "cannot divide by zero")
+    be q = int(a / b)
+    return a - b * q
+
+func round_a2__double(x double, d int) double
+    be f double = 1
+    if d >= 0
+        for i in range(d)
+            be f = f * 10
+        if x >= 0
+            return int(x * f + 0.5) / f
+        return int(x * f - 0.5) / f
+    for i in range(0 - d)
+        be f = f * 10
+    if x >= 0
+        return int(x / f + 0.5) * f
+    return int(x / f - 0.5) * f
+
+func round_a2__int(x int, d int) double
+    be y double = x
+    return round_a2__double(y, d)
+
+func round__double(x double) int
+    if x >= 0
+        return int(x + 0.5)
+    return int(x - 0.5)
+
+func round__int(x int) int
+    return x
+
+# s[i]: satu huruf, galat kalau indeks di luar teks
+func idxTeks(s string, i int) string
+    if i < 0 or i >= len(s)
+        _lemparK(29, "index " i " is outside the text (text length is " len(s) ")")
+    return substr(s, i, 1)
+
+func max_a2__int(a int, b int) int
+    if a >= b
+        return a
+    return b
+
+func max_a2__double(a double, b double) double
+    if a >= b
+        return a
+    return b
+
+func min_a2__int(a int, b int) int
+    if a <= b
+        return a
+    return b
+
+func min_a2__double(a double, b double) double
+    if a <= b
+        return a
+    return b
+
+# urutan teks per byte (seperti perbandingan nerx)
+func strKurang(a string, b string) bool
+    be n = len(a)
+    if len(b) < n
+        be n = len(b)
+    for i in range(n)
+        be x = ord(a, i)
+        be y = ord(b, i)
+        if x != y
+            return x < y
+    return len(a) < len(b)
+
+func sort__list_int(xs list int) list int
+    be r list int
+    for x in xs
+        add(r, x)
+    be i = 1
+    loop i < len(r)
+        be v = r[i]
+        be j = i - 1
+        loop j >= 0 and r[j] > v
+            be r[j + 1] = r[j]
+            be j -= 1
+        be r[j + 1] = v
+        be i += 1
+    return r
+
+func sort__list_double(xs list double) list double
+    be r list double
+    for x in xs
+        add(r, x)
+    be i = 1
+    loop i < len(r)
+        be v = r[i]
+        be j = i - 1
+        loop j >= 0 and r[j] > v
+            be r[j + 1] = r[j]
+            be j -= 1
+        be r[j + 1] = v
+        be i += 1
+    return r
+
+func sort__list_string(xs list string) list string
+    be r list string
+    for x in xs
+        add(r, x)
+    be i = 1
+    loop i < len(r)
+        be v = r[i]
+        be j = i - 1
+        loop j >= 0 and strKurang(v, r[j])
+            be r[j + 1] = r[j]
+            be j -= 1
+        be r[j + 1] = v
+        be i += 1
+    return r
+
+func max_a3__int(a int, b int, c int) int
+    return max_a2__int(max_a2__int(a, b), c)
+
+func max_a3__double(a double, b double, c double) double
+    return max_a2__double(max_a2__double(a, b), c)
+
+func max_a4__int(a int, b int, c int, d int) int
+    return max_a2__int(max_a2__int(a, b), max_a2__int(c, d))
+
+func max_a4__double(a double, b double, c double, d double) double
+    return max_a2__double(max_a2__double(a, b), max_a2__double(c, d))
+
+func min_a3__int(a int, b int, c int) int
+    return min_a2__int(min_a2__int(a, b), c)
+
+func min_a3__double(a double, b double, c double) double
+    return min_a2__double(min_a2__double(a, b), c)
+
+func min_a4__int(a int, b int, c int, d int) int
+    return min_a2__int(min_a2__int(a, b), min_a2__int(c, d))
+
+func min_a4__double(a double, b double, c double, d double) double
+    return min_a2__double(min_a2__double(a, b), min_a2__double(c, d))
+
+func max__list_int(xs list int) int
+    if len(xs) == 0
+        _lempar("max: the list is empty")
+    be r = xs[0]
+    for x in xs
+        if x > r
+            be r = x
+    return r
+
+func max__list_double(xs list double) double
+    if len(xs) == 0
+        _lempar("max: the list is empty")
+    be r = xs[0]
+    for x in xs
+        if x > r
+            be r = x
+    return r
+
+func min__list_int(xs list int) int
+    if len(xs) == 0
+        _lempar("min: the list is empty")
+    be r = xs[0]
+    for x in xs
+        if x < r
+            be r = x
+    return r
+
+func min__list_double(xs list double) double
+    if len(xs) == 0
+        _lempar("min: the list is empty")
+    be r = xs[0]
+    for x in xs
+        if x < r
+            be r = x
+    return r
+
+# ---- list generik (isi 8 byte; compiler mengatur tipe hasil)
+func filledRaw(n int, v int) list int
+    be r list int
+    for i in range(n)
+        add(r, v)
+    return r
+
+func sliceList2(xs list int, a int, b int) list int
+    be n = len(xs)
+    be s = a
+    if s < 0
+        be s = n + s
+    if s < 0
+        be s = 0
+    if s > n
+        be s = n
+    be e = b
+    if e < 0
+        be e = n + e
+    if e < 0
+        be e = 0
+    if e > n
+        be e = n
+    be r list int
+    be i = s
+    loop i < e
+        add(r, xs[i])
+        be i += 1
+    return r
+
+func sliceList1(xs list int, a int) list int
+    return sliceList2(xs, a, len(xs))
+
+func reverseList(xs list int) list int
+    be r list int
+    be i = len(xs) - 1
+    loop i >= 0
+        add(r, xs[i])
+        be i -= 1
+    return r
+
+func cariI(xs list int, t int) int
+    for i in range(len(xs))
+        if xs[i] == t
+            return i
+    return 0 - 1
+
+func range_a1(n int) list int
+    return range_a3(0, n, 1)
+
+func range_a2(a int, b int) list int
+    return range_a3(a, b, 1)
+
+func range_a3(a int, b int, st int) list int
+    if st == 0
+        _lemparK(49, "range: step cannot be 0")
+    be r list int
+    be i = a
+    if st > 0
+        loop i < b
+            add(r, i)
+            be i += st
+    else
+        loop i > b
+            add(r, i)
+            be i += st
+    return r
+
+func peekText_a1(p int) string
+    return fromC(p)
+
+func peekText_a2(p int, off int) string
+    return fromC(p + off)
+
+func exit_a0() int
+    return exit(0)
+
+func join_a1(xs list string) string
+    return join(xs, "")
+
+func substr_a2(s string, i int) string
+    return substr(s, i, len(s))
+
+# ---- matematika
+func pi() double
+    return 3.141592653589793
+
+func sqrt__double(x double) double
+    if x < 0
+        _lemparK(51, "sqrt: cannot take the square root of a negative number")
+    return _sqrt(x)
+
+func sqrt__int(x int) double
+    return sqrt__double(x)
+
+func sin__double(x double) double
+    return _sin(x)
+
+func sin__int(x int) double
+    return _sin(x)
+
+func cos__double(x double) double
+    return _cos(x)
+
+func cos__int(x int) double
+    return _cos(x)
+
+func tan__double(x double) double
+    return _tan(x)
+
+func tan__int(x int) double
+    return _tan(x)
+
+func atan2_a2__double(y double, x double) double
+    return _atan2(y, x)
+
+func atan2_a2__int(y int, x int) double
+    return _atan2(y, x)
+
+func pow_a2__int(a int, b int) int
+    if b < 0
+        _lemparK(360, "pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
+    be r = 1
+    be base = a
+    be e = b
+    loop e > 0
+        if e % 2 == 1
+            be ar = r
+            if ar < 0
+                be ar = 0 - ar
+            be ab = base
+            if ab < 0
+                be ab = 0 - ab
+            if ab != 0 and ar > idiv(9223372036854775807, ab)
+                _lemparK(361, "pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+            be r = r * base
+        be e = idiv(e, 2)
+        if e > 0
+            be ab2 = base
+            if ab2 < 0
+                be ab2 = 0 - ab2
+            if ab2 > 3037000499
+                _lemparK(361, "pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+            be base = base * base
+    return r
+
+func pow_a2__double(a double, b double) double
+    if b == 0
+        return 1.0
+    if a == 0
+        return 0.0
+    be bi = int(b)
+    if bi == b and bi > 0 - 1000000 and bi < 1000000
+        be neg = bi < 0
+        be e = bi
+        if neg
+            be e = 0 - e
+        be r double = 1
+        be base = a
+        loop e > 0
+            if e % 2 == 1
+                be r = r * base
+            be base = base * base
+            be e = idiv(e, 2)
+        if neg
+            return 1.0 / r
+        return r
+    if a < 0
+        _lempar("pow: a negative number cannot be raised to a decimal power")
+    return _fpow(a, b)
+
+# ---- waktu
+func wkt2(n int) string
+    if n < 10
+        return "0" + str(n)
+    return str(n)
+
+func sysWord(b int, o int) int
+    return peek8(b, o) + 256 * peek8(b, o + 1)
+
+func time() string
+    be b = alloc(32)
+    if _linux() == 1
+        linuxWaktu(b)
+    else
+        callp(dllFn("kernel32.dll", "GetLocalTime"), b)
+    be r = wkt2(sysWord(b, 8)) + ":" + wkt2(sysWord(b, 10)) + ":" + wkt2(sysWord(b, 12))
+    free(b)
+    return r
+
+func date() string
+    be b = alloc(32)
+    if _linux() == 1
+        linuxWaktu(b)
+    else
+        callp(dllFn("kernel32.dll", "GetLocalTime"), b)
+    be r = str(sysWord(b, 0)) + "-" + wkt2(sysWord(b, 2)) + "-" + wkt2(sysWord(b, 6))
+    free(b)
+    return r
+
+func timer() double
+    if _linux() == 1
+        return linuxTimer()
+    be b = alloc(64)
+    callp(dllFn("kernel32.dll", "GetProcessTimes"), 0 - 1, b, b + 8, b + 16, b + 24)
+    callp(dllFn("kernel32.dll", "GetSystemTimeAsFileTime"), b + 40)
+    be r double = peek64(b, 40) - peek64(b, 0)
+    free(b)
+    return r / 10000000.0
+
+func abs__int(a int) int
+    if a < 0
+        return 0 - a
+    return a
+
+func abs__double(a double) double
+    if a < 0
+        return 0.0 - a
+    return a
+# ---------------------------------------------------------------- map
+# Map = blok 16 byte: [penunjuk list key (list string)] [penunjuk list nilai (8 byte per nilai)]. Urutan key = urutan dimasukkan.
+func mapBaru() int
+    be p = alloc(16)
+    poke64(p, 0, listBaru())
+    poke64(p, 8, listBaru())
+    return p
+
+# indeks key di map, atau -1
+func mapCari(m int, k string) int
+    be kp = asListS(peek64(m, 0))
+    for i in range(len(kp))
+        if strSama(kp[i], k) == 1
+            return i
+    return 0 - 1
+
+func mapGalat(k string) int
+    _lemparK(28, "key \"" k "\" is not in the map (check first with contains(map, \"" k "\"))")
+    return 0
+
+func mapGet(m int, k string) int
+    be i = mapCari(m, k)
+    if i < 0
+        mapGalat(k)
+    return peek64(peek64(peek64(m, 8), 16), 8 * i)
+
+func mapSet(m int, k string, v int) int
+    be i = mapCari(m, k)
+    if i >= 0
+        poke64(peek64(peek64(m, 8), 16), 8 * i, v)
+    else
+        listTambah(peek64(m, 0), asInt(k))
+        listTambah(peek64(m, 8), v)
+    return 0
+
+# key yang belum ada dibuat dengan nilai awal v (untuk be m[k] += x)
+func mapDefault(m int, k string, v int) int
+    if mapCari(m, k) < 0
+        mapSet(m, k, v)
+    return 0
+
+func contains__map(m map, k string) bool
+    return mapCari(asInt(m), k) >= 0
+
+func keys__map(m map) list string
+    be r list string
+    be kp = asListS(peek64(asInt(m), 0))
+    for i in range(len(kp))
+        add(r, kp[i])
+    return r
+
+# tipe hasil sebenarnya (list <jenis nilai>) ditentukan compiler
+func values__map(m map) list int
+    be r list int
+    be vl = asListI(peek64(asInt(m), 8))
+    for i in range(len(vl))
+        add(r, vl[i])
+    return r
+
+# keluarkan key, kembalikan nilainya (tipe hasil ditentukan compiler)
+func remove__map(m map, k string) int
+    be mm = asInt(m)
+    be i = mapCari(mm, k)
+    if i < 0
+        mapGalat(k)
+    be kl = peek64(mm, 0)
+    be vl = peek64(mm, 8)
+    be kd = peek64(kl, 16)
+    be vd = peek64(vl, 16)
+    be n = peek64(kl, 0)
+    be v = peek64(vd, 8 * i)
+    for j in range(i, n - 1)
+        poke64(kd, 8 * j, peek64(kd, 8 * (j + 1)))
+        poke64(vd, 8 * j, peek64(vd, 8 * (j + 1)))
+    poke64(kl, 0, n - 1)
+    poke64(vl, 0, n - 1)
+    return v
+
+# remove(list, i): keluarkan isi index i, kembalikan isinya
+func remove__list(xs list, i int) int
+    be p = asInt(xs)
+    be n = peek64(p, 0)
+    if i < 0 or i >= n
+        idxGalat(i, n)
+    be d = peek64(p, 16)
+    be v = peek64(d, 8 * i)
+    for j in range(i, n - 1)
+        poke64(d, 8 * j, peek64(d, 8 * (j + 1)))
+    poke64(p, 0, n - 1)
+    return v
+
+func contains__list_double(xs list double, v double) bool
+    for x in xs
+        if x == v
+            return true
+    return false
+
+func contains__list_int(xs list int, v int) bool
+    for x in xs
+        if x == v
+            return true
+    return false
+
+# ---------------------------------------------------------------- cetak list dan map: [a, b] dan {k: v}
+func koleksiStr__list_int(xs list int) string
+    be r = "["
+    for i in range(len(xs))
+        if i > 0
+            be r = r + ", "
+        be r = r + str(xs[i])
+    return r + "]"
+
+func koleksiStr__list_string(xs list string) string
+    be r = "["
+    for i in range(len(xs))
+        if i > 0
+            be r = r + ", "
+        be r = r + xs[i]
+    return r + "]"
+
+func koleksiStr__list_double(xs list double) string
+    be r = "["
+    for i in range(len(xs))
+        if i > 0
+            be r = r + ", "
+        be r = r + dblStr(xs[i])
+    return r + "]"
+
+func koleksiStr__list_bool(xs list bool) string
+    be r = "["
+    for i in range(len(xs))
+        if i > 0
+            be r = r + ", "
+        be r = r + boolStr(xs[i])
+    return r + "]"
+
+func koleksiStr__map_int(m map int) string
+    be ks = keys(m)
+    be vs = values(m)
+    be r = "{"
+    for i in range(len(ks))
+        if i > 0
+            be r = r + ", "
+        be r = r + ks[i] + ": " + str(vs[i])
+    return r + "}"
+
+func koleksiStr__map_string(m map string) string
+    be ks = keys(m)
+    be vs = values(m)
+    be r = "{"
+    for i in range(len(ks))
+        if i > 0
+            be r = r + ", "
+        be r = r + ks[i] + ": " + vs[i]
+    return r + "}"
+
+func koleksiStr__map_double(m map double) string
+    be ks = keys(m)
+    be vs = values(m)
+    be r = "{"
+    for i in range(len(ks))
+        if i > 0
+            be r = r + ", "
+        be r = r + ks[i] + ": " + dblStr(vs[i])
+    return r + "}"
+
+func koleksiStr__map_bool(m map bool) string
+    be ks = keys(m)
+    be vs = values(m)
+    be r = "{"
+    for i in range(len(ks))
+        if i > 0
+            be r = r + ", "
+        be r = r + ks[i] + ": " + boolStr(vs[i])
+    return r + "}"
+# wait(detik): tidur
+func wait__int(s int) int
+    if _linux() == 1
+        linuxTidur(s * 1000)
+        return 0
+    callp(dllFn("kernel32.dll", "Sleep"), s * 1000)
+    return 0
+
+func wait__double(s double) int
+    if _linux() == 1
+        linuxTidur(int(s * 1000))
+        return 0
+    callp(dllFn("kernel32.dll", "Sleep"), int(s * 1000))
+    return 0
+# str(x) untuk tipe selain int
+func str__string(s string) string
+    return s
+
+func str__bool(b bool) string
+    return boolStr(b)
+
+func str__list_int(xs list int) string
+    return koleksiStr__list_int(xs)
+
+func str__list_string(xs list string) string
+    return koleksiStr__list_string(xs)
+
+func str__list_double(xs list double) string
+    return koleksiStr__list_double(xs)
+
+func str__list_bool(xs list bool) string
+    return koleksiStr__list_bool(xs)
+
+func str__map_int(m map int) string
+    return koleksiStr__map_int(m)
+
+func str__map_string(m map string) string
+    return koleksiStr__map_string(m)
+
+func str__map_double(m map double) string
+    return koleksiStr__map_double(m)
+
+func str__map_bool(m map bool) string
+    return koleksiStr__map_bool(m)
+# cetak galat yang tidak tertangkap, format sama dengan Nerx: error E#### in berkas:baris: pesan
+
+# terjemahan pesan error ke Indonesia (errlang = id): tabel "kode|indonesia|inggris" dari src\nrx_msgs
+func nrxIsiTemplate(idT string, enT string, pesan string) string
+    be segs list string
+    be cur = ""
+    be i = 0
+    loop i < len(enT)
+        if substr(enT, i, 1) == "%" and i + 1 < len(enT) and contains("sdc", substr(enT, i + 1, 1))
+            add(segs, cur)
+            be cur = ""
+            be i += 2
+        else
+            be cur = cur + substr(enT, i, 1)
+            be i += 1
+    add(segs, cur)
+    if len(segs) == 1
+        return idT
+    if substr(pesan, 0, len(segs[0])) != segs[0]
+        return pesan
+    be args list string
+    be pos = len(segs[0])
+    for k in range(1, len(segs))
+        be nxt = segs[k]
+        if k == len(segs) - 1
+            if nxt != "" and slice(pesan, len(pesan) - len(nxt)) != nxt
+                return pesan
+            add(args, slice(pesan, pos, len(pesan) - len(nxt)))
+        else
+            be ix = indexOf(slice(pesan, pos), nxt)
+            if ix < 0
+                return pesan
+            add(args, slice(pesan, pos, pos + ix))
+            be pos = pos + ix + len(nxt)
+    be hasil = ""
+    be j = 0
+    be ai = 0
+    loop j < len(idT)
+        if substr(idT, j, 1) == "%" and j + 1 < len(idT) and contains("sdc", substr(idT, j + 1, 1))
+            be hasil = hasil + args[ai]
+            be ai += 1
+            be j += 2
+        else
+            be hasil = hasil + substr(idT, j, 1)
+            be j += 1
+    return hasil
+
+func nrxTerjemahTabel(tabel list string, kode int, pesan string) string
+    be pref = str(kode) + "|"
+    for e in tabel
+        if substr(e, 0, len(pref)) == pref
+            be bag = split(e, "|")
+            return nrxIsiTemplate(bag[1], bag[2], pesan)
+    return pesan
+func nrxTabelId() list string
+    be r list string
+    add(r, "5|%s di-lock, nilainya tidak bisa diubah|%s is locked, its value cannot be changed")
+    add(r, "24|tidak bisa dibagi dengan nol|cannot divide by zero")
+    add(r, "241|fungsi %s harus mengembalikan %s, tapi tidak ada return|function %s must return %s, but there is no return")
+    add(r, "26|index %d di luar list (isi list ada %d)|index %d is outside the list (the list has %d items)")
+    add(r, "29|index %d di luar teks (panjang teks %d)|index %d is outside the text (text length is %d)")
+    add(r, "360|pow: bilangan bulat dengan pangkat negatif menghasilkan pecahan, pakai basis desimal, misalnya pow(2.0, -1)|pow: a whole-number base with a negative exponent gives a fraction, use a decimal base, for example pow(2.0, -1)")
+    add(r, "361|pow: hasilnya terlalu besar untuk bilangan bulat, pakai basis desimal, misalnya pow(2.0, 70)|pow: the result is too large for a whole number, use a decimal base, for example pow(2.0, 70)")
+    add(r, "362|%s(): \"%s\" terlalu besar untuk bilangan bulat|%s(): \"%s\" is too large for a whole number")
+    add(r, "370|asersi gagal: %s|assertion failed: %s")
+    add(r, "371|asersi gagal|assertion failed")
+    add(r, "28|key \"%s\" tidak ada di map (cek dulu dengan contains(map, \"%s\"))|key \"%s\" is not in the map (check first with contains(map, \"%s\"))")
+    add(r, "42|%s(): \"%s\" bukan angka|%s(): \"%s\" is not a number")
+    add(r, "44|%s: isinya di-lock, tidak bisa diubah|%s: its contents are locked and cannot be changed")
+    add(r, "46|takeLast: list sudah kosong|takeLast: the list is already empty")
+    add(r, "49|range: langkah tidak boleh 0|range: step cannot be 0")
+    add(r, "51|sqrt: tidak bisa akar dari angka negatif|sqrt: cannot take the square root of a negative number")
+    add(r, "56|replace: teks yang dicari tidak boleh kosong|replace: the text to find cannot be empty")
+    add(r, "81|%s di-lock, isinya tidak bisa diubah|%s is locked, its contents cannot be changed")
+    add(r, "134|%s: file %s tidak ditemukan atau tidak bisa dibuka|%s: file %s not found or cannot be opened")
+    add(r, "135|%s: file %s tidak bisa ditulis|%s: file %s cannot be written")
+    add(r, "152|choice: list masih kosong|choice: the list is empty")
+    add(r, "199|gambar %s tidak ditemukan atau formatnya tidak didukung (pakai PNG, JPG, atau BMP)|image %s not found or its format is not supported (use PNG, JPG, or BMP)")
+    add(r, "319|listFiles: folder %s tidak ditemukan|listFiles: folder %s not found")
+    add(r, "321|replaceInFile: teks yang dicari tidak boleh kosong|replaceInFile: the text to find cannot be empty")
+    return r
+
+# errlang: slot tersembunyi 15 = 1 (id) / 2 (en) kalau diatur di sumber, 0 = ikut bahasa Windows
+func nrxBahasaId() bool
+    be m = _gget(15)
+    if m == 1
+        return true
+    if m == 2
+        return false
+    be fb = dllFn("kernel32.dll", "GetUserDefaultUILanguage")
+    if fb == 0
+        return false                      # bukan Windows: pesan bahasa Inggris
+    return callp(fb) % 1024 == 33
+
+func nrxTerjemah(pesan string, kode int) string
+    if kode <= 0 or not nrxBahasaId()
+        return pesan
+    return nrxTerjemahTabel(nrxTabelId(), kode, pesan)
+
+func nrxTrace(pesan string)
+    print pesan
+
+# ---- debugger (nerx debug file.nrx): compiler menyisipkan nrxDbgCek di tiap pernyataan program
+# Keadaan disimpan di blok memori beralamat tetap: [0] mode (0 = langkah, 1 = jalan terus), [8] jumlah breakpoint, [16..] nomor baris
+func dbgAlamat() int
+    return 274877906944
+
+func dbgAda() bool
+    return callp(dllFn("kernel32.dll", "IsBadReadPtr"), dbgAlamat(), 8) == 0
+
+# nilai string yang aman dibaca (variabel yang belum diisi bisa berisi sampah)
+func dbgS(s string) string
+    be p = asInt(s)
+    if p == 0 or callp(dllFn("kernel32.dll", "IsBadReadPtr"), p, 8) != 0
+        return "<unset>"
+    be n = peek64(p, 0)
+    if n < 0 or n > 1000000 or callp(dllFn("kernel32.dll", "IsBadReadPtr"), p, n + 9) != 0
+        return "<unset>"
+    return "\"" + s + "\""
+
+# 1 = berhenti di baris ini
+func nrxDbgCek(baris int) int
+    be st = dbgAlamat()
+    if not dbgAda()
+        callp(dllFn("kernel32.dll", "VirtualAlloc"), st, 4096, 12288, 4)
+        return 1
+    if peek64(st, 0) == 0
+        return 1
+    for i in range(peek64(st, 8))
+        if peek64(st, 16 + 8 * i) == baris
+            return 1
+    return 0
+
+func dbgBantuan()
+    print "  s / Enter     step to the next statement"
+    print "  c             continue until a breakpoint (or the end)"
+    print "  b N / d N     add / remove a breakpoint at line N     bl  list breakpoints"
+    print "  v             show variables      p NAME   show one variable"
+    print "  l             show the source around the current line"
+    print "  q             quit the program"
+
+func dbgTampilSumber(berkas string, baris int, lebar int)
+    if not fileExists(berkas)
+        return
+    be bs = split(replace(readFile(berkas), "\r", ""), "\n")
+    for i in range(len(bs))
+        if i + 1 >= baris - lebar and i + 1 <= baris + lebar
+            be tanda = "   "
+            if i + 1 == baris
+                be tanda = "-> "
+            print tanda + padLeft(str(i + 1), 4) + "  " + bs[i]
+
+func nrxDbgBerhenti(vars string, baris int, berkas string)
+    be st = dbgAlamat()
+    print ""
+    dbgTampilSumber(berkas, baris, 0)
+    be selesai = false
+    loop not selesai
+        be cmd = trim(askLine("(nerx-debug) "))
+        be kata = split(cmd)
+        be c = ""
+        if len(kata) > 0
+            be c = kata[0]
+        if c == "" or c == "s"
+            poke64(st, 0, 0)
+            be selesai = true
+        else if c == "c"
+            poke64(st, 0, 1)
+            be selesai = true
+        else if c == "q"
+            exit(0)
+        else if c == "v"
+            print trim(vars)
+        else if c == "p" and len(kata) > 1
+            be nilai = "no such variable: " + kata[1]
+            for ln in split(vars, "\n")
+                if startsWith(ln, kata[1] + "=")
+                    be nilai = ln
+            print nilai
+        else if c == "l"
+            dbgTampilSumber(berkas, baris, 4)
+        else if c == "b" and len(kata) > 1
+            be n = peek64(st, 8)
+            if n < 400
+                poke64(st, 16 + 8 * n, int(kata[1]))
+                poke64(st, 8, n + 1)
+                print "breakpoint at line " + kata[1]
+        else if c == "d" and len(kata) > 1
+            for i in range(peek64(st, 8))
+                if peek64(st, 16 + 8 * i) == int(kata[1])
+                    poke64(st, 16 + 8 * i, 0 - 1)
+            print "removed"
+        else if c == "bl"
+            for i in range(peek64(st, 8))
+                if peek64(st, 16 + 8 * i) >= 0
+                    print "  line " + str(peek64(st, 16 + 8 * i))
+        else
+            dbgBantuan()
+
+func nrxGalat(pesan string, kode int, baris int, berkas string)
+    be s = "error"
+    if kode > 0
+        be ks = str(kode)
+        loop len(ks) < 4
+            be ks = "0" + ks
+        be s = s + " E" + ks
+    if baris > 0
+        if nrxBahasaId()
+            be s = s + " di " + berkas + ":" + str(baris)
+        else
+            be s = s + " in " + berkas + ":" + str(baris)
+    be s = s + ": " + pesan
+    print s
+func arrayDariI(l list int) list double
+    be r list double = array(len(l))
+    for i in range(len(l))
+        be r[i] = l[i]
+    return r
+
+func arrayDariD(l list double) list double
+    be r list double = array(len(l))
+    for i in range(len(l))
+        be r[i] = l[i]
+    return r
+
+# ---- Linux (target ELF): syscall mentah lewat stub di IAT slot 13. Slot tersembunyi _gget: 16 = penunjuk alokasi,
+# 17 = batas potongan, 18 = stack awal (argc, argv, envp), 19 = awal timer, 20 = kode keluar sh, 25..40 = daftar blok bebas per kelas
+func sysCall(nr int, a int, b int, c int, d int, e int, f int) int
+    return api(13, nr, a, b, c, d, e, f)
+
+# alloc untuk Linux: blok berukuran 2^kelas (16 byte pertama = kepala [kelas][berikutnya]); isi selalu nol
+func nrxMalloc(size int) int
+    be need = size + 16
+    be c = 5
+    be cap = 32
+    loop cap < need
+        be cap = cap * 2
+        be c += 1
+    if c > 20
+        be ln = idiv(need + 4095, 4096) * 4096
+        be b = sysCall(9, 0, ln, 3, 34, 0 - 1, 0)
+        if b < 0 and b > 0 - 4096
+            return 0
+        poke64(b, 0, 100)
+        poke64(b, 8, ln)
+        return b + 16
+    be h = _gget(20 + c)
+    if h != 0
+        _gset(20 + c, peek64(h, 8))
+        be n = idiv(cap - 16, 8)
+        be i = 0
+        loop i < n
+            poke64(h, 16 + 8 * i, 0)
+            be i += 1
+        return h + 16
+    be cur = _gget(16)
+    if cur == 0 or cur + cap > _gget(17)
+        be ch = 1048576
+        be b2 = sysCall(9, 0, ch, 3, 34, 0 - 1, 0)
+        if b2 < 0 and b2 > 0 - 4096
+            return 0
+        be cur = b2
+        _gset(17, b2 + ch)
+    poke64(cur, 0, c)
+    _gset(16, cur + cap)
+    return cur + 16
+
+func nrxFree(p int) int
+    be c = peek64(p - 16, 0)
+    if c >= 100
+        sysCall(11, p - 16, peek64(p - 16, 8), 0, 0, 0, 0)
+    else if c >= 5 and c <= 20
+        poke64(p - 16, 8, _gget(20 + c))
+        _gset(20 + c, p - 16)
+    return 0
+
+# argumen program disusun seperti command line Windows (yang berspasi diberi tanda kutip)
+func linuxCmd() string
+    be sp = _gget(18)
+    be r = ""
+    for i in range(peek64(sp, 0))
+        be a = fromC(peek64(sp, 8 + 8 * i))
+        if i > 0
+            be r = r + " "
+        if a == "" or contains(a, " ") or contains(a, "\t")
+            be r = r + "\"" + a + "\""
+        else
+            be r = r + a
+    return r
+
+func linuxMs() int
+    be ts = alloc(16)
+    sysCall(228, 1, ts, 0, 0, 0, 0)
+    be ms = peek64(ts, 0) * 1000 + idiv(peek64(ts, 8), 1000000)
+    free(ts)
+    return ms
+
+# nilai environment variable (Linux): cari "NAMA=" di envp
+func linuxEnv(nama string) string
+    be sp = _gget(18)
+    be p = sp + 8 * (peek64(sp, 0) + 2)
+    be i = 0
+    loop peek64(p, 8 * i) != 0
+        be e = fromC(peek64(p, 8 * i))
+        if startsWith(e, nama + "=")
+            return slice(e, len(nama) + 1)
+        be i += 1
+    return ""
+
+func linuxTidur(ms int)
+    be ts = alloc(16)
+    poke64(ts, 0, idiv(ms, 1000))
+    poke64(ts, 8, (ms % 1000) * 1000000)
+    sysCall(35, ts, 0, 0, 0, 0, 0)
+    free(ts)
+
+# detik sejak panggilan timer() pertama (jam monoton)
+func linuxTimer() double
+    be ts = alloc(16)
+    sysCall(228, 1, ts, 0, 0, 0, 0)
+    be ns = peek64(ts, 0) * 1000000000 + peek64(ts, 8)
+    free(ts)
+    be b0 = _gget(19)
+    if b0 == 0
+        _gset(19, ns)
+        be b0 = ns
+    be r double = ns - b0
+    return r / 1000000000.0
+
+func linuxKata(b int, o int, v int)
+    poke8(b, o, v % 256)
+    poke8(b, o + 1, idiv(v, 256))
+
+# isi struktur SYSTEMTIME dengan waktu sekarang (UTC)
+func linuxWaktu(b int)
+    be ts = alloc(16)
+    sysCall(228, 0, ts, 0, 0, 0, 0)
+    be s = peek64(ts, 0)
+    free(ts)
+    be hari = idiv(s, 86400)
+    be sisa = s - hari * 86400
+    be z = hari + 719468
+    be era = idiv(z, 146097)
+    be doe = z - era * 146097
+    be yoe = idiv(doe - idiv(doe, 1460) + idiv(doe, 36524) - idiv(doe, 146096), 365)
+    be y = yoe + era * 400
+    be doy = doe - (365 * yoe + idiv(yoe, 4) - idiv(yoe, 100))
+    be mp = idiv(5 * doy + 2, 153)
+    be d = doy - idiv(153 * mp + 2, 5) + 1
+    be m = mp + 3
+    if mp >= 10
+        be m = mp - 9
+    if m <= 2
+        be y += 1
+    linuxKata(b, 0, y)
+    linuxKata(b, 2, m)
+    linuxKata(b, 4, (hari + 4) % 7)
+    linuxKata(b, 6, d)
+    linuxKata(b, 8, idiv(sisa, 3600))
+    linuxKata(b, 10, idiv(sisa % 3600, 60))
+    linuxKata(b, 12, sisa % 60)
+
+# jalankan lewat /bin/sh -c; hasil teks keluaran kalau tangkap = 1; kode keluar di _gget(20)
+func linuxSh(perintah string, tangkap int) string
+    be fds = alloc(16)
+    if tangkap == 1
+        sysCall(22, fds, 0, 0, 0, 0, 0)
+    be rfd = peek8(fds, 0) + 256 * peek8(fds, 1)
+    be wfd = peek8(fds, 4) + 256 * peek8(fds, 5)
+    be pid = sysCall(57, 0, 0, 0, 0, 0, 0)
+    if pid == 0
+        if tangkap == 1
+            sysCall(33, wfd, 1, 0, 0, 0, 0)
+            sysCall(3, rfd, 0, 0, 0, 0, 0)
+            sysCall(3, wfd, 0, 0, 0, 0, 0)
+        be av = alloc(32)
+        poke64(av, 0, cstr("/bin/sh"))
+        poke64(av, 8, cstr("-c"))
+        poke64(av, 16, cstr(perintah))
+        be sp = _gget(18)
+        sysCall(59, cstr("/bin/sh"), av, sp + 8 * (peek64(sp, 0) + 2), 0, 0, 0)
+        sysCall(231, 127, 0, 0, 0, 0, 0)
+    be hasil = ""
+    if tangkap == 1
+        sysCall(3, wfd, 0, 0, 0, 0, 0)
+        be buf = alloc(4200)
+        be lagi = true
+        loop lagi
+            be n = sysCall(0, rfd, buf, 4096, 0, 0, 0)
+            if n <= 0
+                be lagi = false
+            else
+                be hasil = hasil + fromCn(buf, n)
+        sysCall(3, rfd, 0, 0, 0, 0, 0)
+        free(buf)
+    be st = alloc(8)
+    sysCall(61, pid, st, 0, 0, 0, 0)
+    _gset(20, idiv(peek64(st, 0), 256) % 256)
+    free(st)
+    free(fds)
+    return hasil
+# ---- sh: menjalankan perintah shell (dipakai kata kunci "sh" dan fungsi shText / shCode)
+# cd dikerjakan sendiri supaya pindah foldernya menetap; mengembalikan -1 kalau bukan perintah cd
+func shCd(perintah string) int
+    be c = trim(perintah)
+    if c != "cd" and substr(c, 0, 3) != "cd "
+        return -1
+    be p = trim(slice(c, 2))
+    if lower(substr(p, 0, 3)) == "/d "
+        be p = trim(slice(p, 3))
+    if len(p) >= 2 and substr(p, 0, 1) == "\"" and substr(p, len(p) - 1, 1) == "\""
+        be p = substr(p, 1, len(p) - 2)
+    if p == ""
+        be buf = alloc(1100)
+        if _linux() == 1
+            be n = sysCall(79, buf, 1024, 0, 0, 0, 0) - 1
+        else
+            be n = callp(dllFn("kernel32.dll", "GetCurrentDirectoryA"), 1024, buf)
+        print fromCn(buf, n)
+        free(buf)
+        return 0
+    if _linux() == 1
+        if sysCall(80, cstr(p), 0, 0, 0, 0, 0) != 0
+            print "cd: no such directory: " + p
+            return 1
+        return 0
+    if callp(dllFn("kernel32.dll", "SetCurrentDirectoryA"), cstr(p)) == 0
+        print "The system cannot find the path specified."
+        return 1
+    return 0
+
+# jalankan perintah; hasilnya tampil di layar; kembalikan kode keluar (0 = berhasil)
+func shCode(perintah string) int
+    be k = shCd(perintah)
+    if k >= 0
+        return k
+    if _linux() == 1
+        linuxSh(perintah, 0)
+        return _gget(20)
+    return callp(dllFn("msvcrt.dll", "system"), cstr(perintah))
+
+# jalankan perintah dan kembalikan keluarannya sebagai teks (galat ikut, tanpa \r)
+func shText(perintah string) string
+    be k = shCd(perintah)
+    if k >= 0
+        return ""
+    if _linux() == 1
+        return replace(linuxSh(perintah + " 2>&1", 1), "\r", "")
+    be f = callp(dllFn("msvcrt.dll", "_popen"), cstr(perintah + " 2>&1"), cstr("r"))
+    if f == 0
+        return ""
+    be buf = alloc(4200)
+    be hasil = ""
+    be lagi = true
+    loop lagi
+        be n = callp(dllFn("msvcrt.dll", "fread"), buf, 1, 4096, f)
+        if n <= 0
+            be lagi = false
+        else
+            be hasil = hasil + fromCn(buf, n)
+    callp(dllFn("msvcrt.dll", "_pclose"), f)
+    free(buf)
+    return replace(hasil, "\r", "")
+
+# teks berformat f"...": isinya sudah digabung oleh compiler, fungsi ini hanya meneruskan hasilnya
+func fmtTeks(s string) string
+    return s
+
+# argumen perintah program: nerx run skrip.nrx a b  ->  args() = ["a", "b"]
+func args() list string
+    be semua list string
+    be cmd = cmdLine()
+    be n = len(cmd)
+    be i = 0
+    be pos = 0
+    loop i < n
+        loop i < n and (substr(cmd, i, 1) == " " or substr(cmd, i, 1) == "\t")
+            be i += 1
+        if i < n
+            be tok = ""
+            be dlm = false
+            loop i < n and (dlm or (substr(cmd, i, 1) != " " and substr(cmd, i, 1) != "\t"))
+                be ch = substr(cmd, i, 1)
+                if ch == "\""
+                    be dlm = not dlm
+                else
+                    be tok = tok + ch
+                be i += 1
+            if pos > 0
+                add(semua, tok)
+            be pos += 1
+    return semua
+# int 32-bit hasil fungsi C (Linux: bagian atas rax tidak terjamin) menjadi int bertanda
+func sx32(v int) int
+    be x = v % 4294967296
+    if x < 0
+        be x += 4294967296
+    if x >= 2147483648
+        be x -= 4294967296
+    return x

@@ -1,0 +1,14 @@
+lib nrx_net
+be srv = tcpListen(45871)
+print srv != 0 - 1
+be c = tcpConnect("localhost", 45871)
+print c != 0 - 1
+be k = tcpAccept(srv)
+tcpSend(c, "ping")
+print tcpRecv(k, 100)
+tcpSend(k, "pong")
+print tcpRecv(c, 100)
+tcpClose(c)
+tcpClose(k)
+tcpClose(srv)
+print tcpConnect("localhost", 45872)

@@ -1,0 +1,69 @@
+# nrx_sound.nrx - suara lewat winmm.dll (MCI + PlaySound), ditulis dalam nrxl.
+# Slot tersembunyi: 3 = musik sedang diputar lewat MCI (mp3), 8 = daftar file efek yang sudah dibuka (alias sfx0, sfx1, ...).
+
+func sndMci(perintah string) bool
+    return callp(dllFn("winmm.dll", "mciSendStringA"), cstr(perintah), 0, 0, 0) == 0
+
+func sndAdaFile(fn string, path string) int
+    if not fileExists(path)
+        _lempar(fn + ": sound file " + path + " not found")
+    return 0
+
+func sndWav(path string) bool
+    return lower(slice(path, -4)) == ".wav"
+
+func sndDaftar() list string
+    if _gget(8) == 0
+        be baru list string
+        _gset(8, asInt(baru))
+    return asListS(_gget(8))
+
+func sndHentiMusik() int
+    callp(dllFn("winmm.dll", "PlaySoundA"), 0, 0, 0)
+    if _gget(3) == 1
+        sndMci("close music")
+        _gset(3, 0)
+    return 0
+
+func playSound(path string) string
+    sndAdaFile("playSound", path)
+    be daftar = sndDaftar()
+    be id = indexOf(daftar, path)
+    if id < 0
+        if len(daftar) >= 64
+            _lempar("playSound: too many different sound files (maximum 64)")
+        be id = len(daftar)
+        be jenis = "mpegvideo"
+        if sndWav(path)
+            be jenis = "waveaudio"
+        if not sndMci("open \"" + path + "\" type " + jenis + " alias sfx" + str(id))
+            _lempar("playSound: " + path + " cannot be played (use WAV or MP3)")
+        add(daftar, path)
+    if not sndMci("play sfx" + str(id) + " from 0")
+        _lempar("playSound: " + path + " cannot be played")
+    return ""
+
+func playMusic(path string) string
+    sndAdaFile("playMusic", path)
+    sndHentiMusik()
+    if sndWav(path)
+        # WAV diulang lewat PlaySound: SND_FILENAME | SND_ASYNC | SND_LOOP | SND_NODEFAULT
+        if callp(dllFn("winmm.dll", "PlaySoundA"), cstr(path), 0, 131083) == 0
+            _lempar("playMusic: " + path + " cannot be played")
+        return ""
+    if not sndMci("open \"" + path + "\" type mpegvideo alias music")
+        _lempar("playMusic: " + path + " cannot be played (use WAV or MP3)")
+    _gset(3, 1)
+    if not sndMci("play music repeat")
+        _lempar("playMusic: " + path + " cannot be played")
+    return ""
+
+func stopMusic() string
+    sndHentiMusik()
+    return ""
+
+func stopSound() string
+    be daftar = sndDaftar()
+    for i in range(len(daftar))
+        sndMci("stop sfx" + str(i))
+    return ""

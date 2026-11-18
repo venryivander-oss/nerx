@@ -1,0 +1,25 @@
+# Maintainer: Nerxelity
+pkgname=nerx-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Nerx programming language: compiler that writes native executables directly'
+arch=('x86_64')
+url='https://github.com/venryivander-oss/Nerx'
+license=('MIT')
+depends=('glibc')
+optdepends=('sqlite: nrx_db' 'curl: nrx_http (HTTP and HTTPS)')
+provides=('nerx')
+conflicts=('nerx')
+options=('!strip')
+source=("nerx-$pkgver-linux-x86_64.tar.gz::https://github.com/venryivander-oss/Nerx/releases/download/v$pkgver/nerx-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('a159ac29982720d47cd44c4d28813076a8517d79a0866f0ce6c90949c78f98b5')
+
+package() {
+    cd "$srcdir/nerx-$pkgver-linux-x86_64"
+    install -dm755 "$pkgdir/usr/lib/nerx" "$pkgdir/usr/bin"
+    install -m755 nerx "$pkgdir/usr/lib/nerx/nerx"
+    install -m644 prelude.nrx pustaka.nrx SYNTAX.txt SYNTAX.en.txt README.md contoh_fitur.nrx "$pkgdir/usr/lib/nerx/"
+    cp -r lib "$pkgdir/usr/lib/nerx/lib"
+    ln -s /usr/lib/nerx/nerx "$pkgdir/usr/bin/nerx"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
