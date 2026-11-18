@@ -109,27 +109,33 @@ if (heroSrc && heroOut && !reduceMotion) {
   io.observe(heroSrc);
 }
 
-// tabs: click, arrow keys, Home/End
-const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
-function select(tab) {
-  tabs.forEach((t) => {
-    const on = t === tab;
-    t.setAttribute("aria-selected", on);
-    t.tabIndex = on ? 0 : -1;
-    document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+// tabs: click, arrow keys, Home/End. Each tablist works on its own.
+document.querySelectorAll('[role="tablist"]').forEach((list) => {
+  const tabs = Array.from(list.querySelectorAll('[role="tab"]'));
+  function select(tab) {
+    tabs.forEach((t) => {
+      const on = t === tab;
+      t.setAttribute("aria-selected", on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+  }
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => select(tab));
+    tab.addEventListener("keydown", (e) => {
+      let j = null;
+      if (e.key === "ArrowRight") j = (i + 1) % tabs.length;
+      if (e.key === "ArrowLeft") j = (i - 1 + tabs.length) % tabs.length;
+      if (e.key === "Home") j = 0;
+      if (e.key === "End") j = tabs.length - 1;
+      if (j === null) return;
+      e.preventDefault();
+      select(tabs[j]);
+      tabs[j].focus();
+    });
   });
-}
-tabs.forEach((tab, i) => {
-  tab.addEventListener("click", () => select(tab));
-  tab.addEventListener("keydown", (e) => {
-    let j = null;
-    if (e.key === "ArrowRight") j = (i + 1) % tabs.length;
-    if (e.key === "ArrowLeft") j = (i - 1 + tabs.length) % tabs.length;
-    if (e.key === "Home") j = 0;
-    if (e.key === "End") j = tabs.length - 1;
-    if (j === null) return;
-    e.preventDefault();
-    select(tabs[j]);
-    tabs[j].focus();
-  });
+  // the download tabs open on the visitor's own system
+  if (list.classList.contains("os-tabs") && /Linux|X11/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent)) {
+    select(tabs[1]);
+  }
 });

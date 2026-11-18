@@ -240,47 +240,79 @@ true</pre>
   </section>
 
   <section id="download" aria-labelledby="dl-title">
-    <div class="wrap dl">
+    <div class="wrap">
       <div>
         <h2 id="dl-title">Download</h2>
-        <p class="sub">One small installer with everything needed to run and build. There is no separate compiler to set up.</p>
-        <dl>
-          <dt>File</dt><dd><code>nerx-setup.exe</code>, 2.2 MB</dd>
-          <dt>System</dt><dd>Windows 10 or 11, 64-bit</dd>
-          <dt>Includes</dt><dd>Nerx (the compiler), libraries, syntax docs</dd>
-          <dt>License</dt><dd>MIT</dd>
-          <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">b6e0244022686f3cb069fc9c926b31af13515fdb2a04ef3151d32acc38ab508e</code></dd>
-        </dl>
-        <p>
-          <a class="btn primary" href="download/nerx-setup.exe" download>Get now</a>
-          <a class="btn" href="https://github.com/venryivander-oss/Nerx">Get from GitHub</a>
-        </p>
-        <h3 style="margin-top:28px">Linux</h3>
-        <dl>
-          <dt>File</dt><dd><code>nerx-0.1.0-linux-x86_64.tar.gz</code></dd>
-          <dt>System</dt><dd>Linux x86-64 with glibc. the 3D library is not available yet; sound needs a PulseAudio/PipeWire server; windows need X11 (or XWayland)</dd>
-          <dt>SHA-256</dt><dd><code id="sha256-linux" style="word-break:break-all;font-size:.82em">a159ac29982720d47cd44c4d28813076a8517d79a0866f0ce6c90949c78f98b5</code></dd>
-        </dl>
-        <p><a class="btn primary" href="download/nerx-0.1.0-linux-x86_64.tar.gz" download>Get for Linux</a></p>
-        <figure class="code" aria-label="Install on Linux">
-          <pre>tar xzf nerx-0.1.0-linux-x86_64.tar.gz
-cd nerx-0.1.0-linux-x86_64
-./install.sh</pre>
-        </figure>
-        <p class="note">Windows may show an "unknown publisher" warning, because the installer is not code-signed yet. Prefer to build it yourself? The steps are on the right. To verify your download, run <code>certutil -hashfile nerx-setup.exe SHA256</code> and compare it with the SHA-256 above.</p>
-      </div>
-      <div>
-        <h3>Build from source</h3>
-        <p><code>nrxc</code>, the compiler inside <code>nerx.exe</code>, builds itself from a seed copy of <code>nrxc.exe</code> that is kept in the repository. The original interpreter and earlier code are archived in <code>history/</code>.</p>
-        <figure class="code" aria-label="Commands to build nerx from source">
-          <pre>git clone https://github.com/venryivander-oss/Nerx
+        <p class="sub">One small package with everything needed to run and build. There is no separate compiler to set up.</p>
+        <div class="tabs os-tabs" role="tablist" aria-label="Operating system">
+          <button role="tab" id="t-win" aria-controls="p-win" aria-selected="true">Windows</button>
+          <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="false" tabindex="-1">Linux</button>
+          <button role="tab" id="t-mac" aria-controls="p-mac" aria-selected="false" tabindex="-1">macOS <span class="soon">soon</span></button>
+        </div>
+        <div class="os-panel" role="tabpanel" id="p-win" aria-labelledby="t-win" tabindex="0">
+          <div>
+          <dl>
+            <dt>File</dt><dd><code>nerx-setup.exe</code>, 2.2 MB</dd>
+            <dt>System</dt><dd>Windows 10 or 11, 64-bit</dd>
+            <dt>Includes</dt><dd>Nerx (the compiler), libraries, syntax docs</dd>
+            <dt>License</dt><dd>MIT</dd>
+            <dt>SHA-256</dt><dd><code id="sha256" style="word-break:break-all;font-size:.82em">b6e0244022686f3cb069fc9c926b31af13515fdb2a04ef3151d32acc38ab508e</code></dd>
+          </dl>
+          <p>
+            <a class="btn primary" href="download/nerx-setup.exe" download>Get for Windows</a>
+            <a class="btn" href="https://github.com/venryivander-oss/Nerx">Get from GitHub</a>
+          </p>
+          <p class="note">Windows may show an "unknown publisher" warning, because the installer is not code-signed yet. Prefer to build it yourself? The steps are below. To verify your download, run <code>certutil -hashfile nerx-setup.exe SHA256</code> and compare it with the SHA-256 above.</p>
+          </div>
+          <div>
+            <h3>Build from source</h3>
+            <p><code>nrxc</code>, the compiler inside <code>nerx.exe</code>, builds itself from a seed copy of <code>nrxc.exe</code> that is kept in the repository. The original interpreter and earlier code are archived in <code>history/</code>.</p>
+            <figure class="code" aria-label="Commands to build nerx from source on Windows">
+              <pre>git clone https://github.com/venryivander-oss/Nerx
 cd Nerx
 cd src
 nrxc.exe nrxc.nrx nerx_new.exe
 nerx_new.exe run ..\contoh\contoh_fitur.nrx</pre>
-        </figure>
-        <h3 style="margin-top:28px">Then</h3>
-        <p><code>nerx run file.nrx</code> runs a script. <code>nerx build file.nrx</code> (or <code>nerx file.nrx</code>) makes <code>file.exe</code>. The full language, every built-in function, and every library are on the <a href="docs.html">syntax page</a>.</p>
+            </figure>
+            <h3 style="margin-top:28px">Then</h3>
+            <p><code>nerx run file.nrx</code> runs a script. <code>nerx build file.nrx</code> (or <code>nerx file.nrx</code>) makes <code>file.exe</code>. The full language, every built-in function, and every library are on the <a href="docs.html">syntax page</a>.</p>
+          </div>
+        </div>
+        <div class="os-panel" role="tabpanel" id="p-linux" aria-labelledby="t-linux" tabindex="0" hidden>
+          <div>
+          <dl>
+            <dt>File</dt><dd><code>nerx-0.1.0-linux-x86_64.tar.gz</code></dd>
+            <dt>System</dt><dd>Linux x86-64 with glibc. The 3D library is not available yet; sound needs a PulseAudio/PipeWire server; windows need X11 (or XWayland)</dd>
+            <dt>License</dt><dd>MIT</dd>
+            <dt>SHA-256</dt><dd><code id="sha256-linux" style="word-break:break-all;font-size:.82em">a159ac29982720d47cd44c4d28813076a8517d79a0866f0ce6c90949c78f98b5</code></dd>
+          </dl>
+          <p>
+            <a class="btn primary" href="download/nerx-0.1.0-linux-x86_64.tar.gz" download>Get for Linux</a>
+            <a class="btn" href="https://github.com/venryivander-oss/Nerx">Get from GitHub</a>
+          </p>
+          <figure class="code" aria-label="Install on Linux">
+            <pre>tar xzf nerx-0.1.0-linux-x86_64.tar.gz
+cd nerx-0.1.0-linux-x86_64
+./install.sh</pre>
+          </figure>
+          <p class="note">The script installs to <code>~/.local</code> (or <code>/usr/local</code> as root). Remove it with <code>./install.sh --uninstall</code>. To verify your download, run <code>sha256sum</code> on the file and compare it with the SHA-256 above.</p>
+          </div>
+          <div>
+            <h3>Build from source</h3>
+            <p>The compiler builds itself with the <code>nerx</code> you installed above, from the source in <code>src/nrxc.nrx</code>.</p>
+            <figure class="code" aria-label="Commands to build nerx from source on Linux">
+              <pre>git clone https://github.com/venryivander-oss/Nerx
+cd Nerx/src
+nerx build nrxc.nrx -o nerx_new
+./nerx_new run ../contoh/contoh_fitur.nrx</pre>
+            </figure>
+            <h3 style="margin-top:28px">Then</h3>
+            <p><code>nerx run file.nrx</code> runs a script. <code>nerx build file.nrx</code> makes a Linux program named <code>file</code>; <code>nerx build file.nrx -o file.exe</code> makes a Windows one. The full language, every built-in function, and every library are on the <a href="docs.html">syntax page</a>.</p>
+          </div>
+        </div>
+        <div class="os-panel" role="tabpanel" id="p-mac" aria-labelledby="t-mac" tabindex="0" hidden>
+          <p class="note">macOS is not supported yet. It is planned after Linux. Until then, use Windows or Linux.</p>
+        </div>
       </div>
     </div>
   </section>

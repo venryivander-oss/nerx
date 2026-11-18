@@ -153,10 +153,14 @@ h3 { font-size: 20px; margin: 0 0 8px; }
 .panel p { margin: 0 0 12px; }
 
 /* download */
+.os-panel[hidden] { display: none; }
+.os-tabs { margin-top: 20px; }
+.os-tabs .soon { font: 600 12px/1 var(--sans); color: var(--ink-muted); border: 1px solid var(--line); border-radius: 99px; padding: 3px 7px; margin-left: 4px; }
+.os-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; padding-top: 4px; }
 .dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
-.dl dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 20px 0 28px; }
-.dl dt { color: var(--ink-muted); }
-.dl dd { margin: 0; }
+.dl dl, .os-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 20px 0 28px; }
+.dl dt, .os-panel dt { color: var(--ink-muted); }
+.dl dd, .os-panel dd { margin: 0; }
 .note { border: 1px solid var(--line); background: var(--paper); border-radius: var(--r); padding: 14px 16px; font-size: 15px; margin-top: 20px; }
 
 /* footer */
@@ -191,6 +195,7 @@ mark { background: #f7d9c9; color: var(--ink); }
 
 /* narrow screens */
 @media (max-width: 900px) {
+  .os-panel { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .hero .wrap, .speed, .check, .panel, .dl, .docs { grid-template-columns: minmax(0, 1fr); gap: 32px; }
   .hero { padding: 40px 0 56px; }
   .hero .code pre { min-height: 0; }
