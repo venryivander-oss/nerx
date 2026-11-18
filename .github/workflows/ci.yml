@@ -9,10 +9,11 @@ jobs:
         shell: pwsh
         working-directory: src
         run: |
+          Copy-Item nrxc.exe nerx.exe
           ./nerx.exe build nrxc.nrx -o nrxa.exe
           ./nrxa.exe build nrxc.nrx -o nrxb.exe
           if ((Get-FileHash nrxa.exe).Hash -ne (Get-FileHash nrxb.exe).Hash) { throw "bukan fixed-point" }
-          if ((Get-FileHash nrxa.exe).Hash -ne (Get-FileHash nerx.exe).Hash) { throw "nerx.exe di repo tidak sesuai nrxc.nrx" }
+          if ((Get-FileHash nrxa.exe).Hash -ne (Get-FileHash nrxc.exe).Hash) { throw "nrxc.exe di repo tidak sesuai nrxc.nrx" }
       - name: Tes fitur nerx
         shell: pwsh
         run: ./tes/nerx.ps1
